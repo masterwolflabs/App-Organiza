@@ -1,0 +1,711 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #09090b;
+    --foreground: #f4f4f5;
+    --card: #18181b;
+    --card-foreground: #f4f4f5;
+    --accent: #0284c7;
+    --accent-hover: #0369a1;
+    --accent-cyan: #38bdf8;
+    --border: #27272a;
+  }
+}
+
+body {
+  background-color: #09090b;
+  color: #f4f4f5;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Utilities for Finance Dashboard */
+.bg-deep-black {
+  background-color: #09090b;
+}
+
+.bg-dark-card {
+  background-color: #18181b;
+}
+
+.border-dark-border {
+  border-color: #27272a;
+}
+
+.text-accent-cyan {
+  color: #38bdf8;
+}
+
+.text-accent-blue {
+  color: #0284c7;
+}
+
+.bg-accent-blue {
+  background-color: #0284c7;
+}
+
+.border-accent-blue {
+  border-color: #0284c7;
+}
+
+/* Subtle glow utilities */
+.glow-accent {
+  box-shadow: 0 0 35px -5px rgba(2, 132, 199, 0.25);
+}
+
+.glow-accent-hover:hover {
+  box-shadow: 0 0 45px 0px rgba(2, 132, 199, 0.35);
+}
+
+.glass-card {
+  background: rgba(24, 24, 27, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0284c7;
+}
+
+/* Rich-text body of a note (TipTap). Unlayered on purpose so it wins over
+   Tailwind's preflight resets for lists/headings. Dark text: notes are
+   light post-it colors. */
+.note-prose {
+  min-height: 55vh;
+  color: #18181b;
+  font-size: 1rem;
+  line-height: 1.65;
+  outline: none;
+  caret-color: #18181b;
+  overflow-wrap: anywhere;
+}
+.note-prose p { margin: 0 0 0.35rem; }
+.note-prose h1 { font-size: 1.85rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.01em; margin: 0.7rem 0 0.35rem; }
+.note-prose h2 { font-size: 1.45rem; font-weight: 700; line-height: 1.25; margin: 0.6rem 0 0.3rem; }
+.note-prose h3 { font-size: 1.18rem; font-weight: 700; line-height: 1.3; margin: 0.5rem 0 0.25rem; }
+.note-prose ul { list-style: disc; padding-left: 1.5rem; margin: 0.25rem 0; }
+.note-prose ol { list-style: decimal; padding-left: 1.5rem; margin: 0.25rem 0; }
+.note-prose li > p { margin: 0; }
+.note-prose ul[data-type='taskList'] { list-style: none; padding-left: 0.1rem; }
+.note-prose ul[data-type='taskList'] li { display: flex; align-items: flex-start; gap: 0.55rem; }
+.note-prose ul[data-type='taskList'] li > label { flex: none; margin-top: 0.34rem; user-select: none; }
+.note-prose ul[data-type='taskList'] li > div { flex: 1; min-width: 0; }
+.note-prose ul[data-type='taskList'] li[data-checked='true'] > div { text-decoration: line-through; opacity: 0.5; }
+.note-prose input[type='checkbox'] { width: 1.05rem; height: 1.05rem; accent-color: #18181b; cursor: pointer; }
+.note-prose a { color: #1d4ed8; text-decoration: underline; cursor: pointer; }
+.note-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+}
+.note-prose pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  margin: 0.4rem 0;
+  overflow-x: auto;
+}
+.note-prose pre code { background: none; padding: 0; }
+.note-prose blockquote { border-left: 3px solid rgba(0, 0, 0, 0.3); padding-left: 0.8rem; margin: 0.4rem 0; color: rgba(24, 24, 27, 0.75); }
+.note-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgba(24, 24, 27, 0.35);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Notes attached to a movement use the app's own minimal graphite look
+   (instead of a pastel post-it) so they're easy to tell apart from regular
+   notes. The editor keeps the same markup; this scope just re-maps the
+   "paper" colors it uses (dark ink on pastel) to light-on-graphite. */
+.note-dark { color: #e4e4e7; }
+.note-dark .text-zinc-900 { color: #f4f4f5; }
+.note-dark .text-zinc-900\/80 { color: rgba(244, 244, 245, 0.8); }
+.note-dark .text-zinc-900\/75 { color: rgba(228, 228, 231, 0.75); }
+.note-dark .text-zinc-900\/70 { color: rgba(228, 228, 231, 0.65); }
+.note-dark .text-zinc-900\/60 { color: rgba(228, 228, 231, 0.55); }
+.note-dark .text-zinc-900\/55 { color: rgba(228, 228, 231, 0.5); }
+.note-dark .text-zinc-900\/50 { color: rgba(228, 228, 231, 0.45); }
+.note-dark .hover\:text-zinc-900:hover { color: #ffffff; }
+.note-dark .placeholder\:text-zinc-900\/35::placeholder,
+.note-dark .placeholder\:text-zinc-900\/40::placeholder { color: rgba(228, 228, 231, 0.3); }
+.note-dark .bg-black\/5 { background-color: rgba(255, 255, 255, 0.02); }
+.note-dark .bg-black\/10 { background-color: rgba(255, 255, 255, 0.06); }
+.note-dark .bg-black\/15 { background-color: rgba(255, 255, 255, 0.1); }
+.note-dark .hover\:bg-black\/10:hover { background-color: rgba(255, 255, 255, 0.06); }
+.note-dark .border-black\/10 { border-color: rgba(255, 255, 255, 0.07); }
+.note-dark .border-black\/15 { border-color: rgba(255, 255, 255, 0.1); }
+.note-dark .bg-white\/40 { background-color: rgba(255, 255, 255, 0.03); }
+.note-dark .bg-white\/60 { background-color: rgba(0, 0, 0, 0.3); }
+.note-dark .bg-zinc-900 { background-color: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
+.note-dark .ring-zinc-900\/80 { --tw-ring-color: rgba(56, 189, 248, 0.8); }
+.note-dark .ring-white\/70 { --tw-ring-color: #16171b; }
+.note-dark .note-prose { color: #e4e4e7; caret-color: #38bdf8; }
+.note-dark .note-prose a { color: #38bdf8; }
+.note-dark .note-prose code,
+.note-dark .note-prose pre { background: rgba(255, 255, 255, 0.06); }
+.note-dark .note-prose blockquote { border-left-color: rgba(255, 255, 255, 0.2); color: rgba(228, 228, 231, 0.75); }
+.note-dark .note-prose input[type='checkbox'] { accent-color: #0ea5e9; }
+.note-dark .note-prose p.is-editor-empty:first-child::before { color: rgba(228, 228, 231, 0.3); }
+
+/* IA — display type + entrance/ambient motion (Dato random card, chat). */
+.font-display {
+  font-family: var(--font-display), var(--font-inter), system-ui, sans-serif;
+}
+@keyframes fx-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.fx-rise {
+  animation: fx-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes fx-float {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-8px) rotate(3deg); }
+}
+.fx-float {
+  display: inline-block;
+  animation: fx-float 4s ease-in-out infinite;
+}
+@keyframes fx-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.fx-twinkle {
+  animation: fx-twinkle 2.6s ease-in-out infinite;
+}
+@keyframes fx-caret {
+  50% { opacity: 0; }
+}
+.fx-caret::after {
+  content: "▍";
+  margin-left: 2px;
+  color: #38bdf8;
+  animation: fx-caret 0.9s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-rise, .fx-float, .fx-twinkle { animation: none; }
+}
+
+/* Ambient light of the whole app (components/AmbientBackdrop.tsx): corner
+   lights that breathe slowly (individual `scale`/`translate` properties) and
+   brighten with scroll speed (`--mf-energy`, set from JS, 0…1). */
+.mf-light {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: calc(0.62 + var(--mf-energy, 0) * 0.38);
+  transform: scale(calc(1 + var(--mf-energy, 0) * 0.08));
+  will-change: transform, opacity;
+  animation: mf-breathe-a 16s ease-in-out infinite alternate;
+}
+.mf-light.b { animation-name: mf-breathe-b; animation-duration: 19s; }
+.mf-light.c { animation-name: mf-breathe-c; animation-duration: 13s; }
+@keyframes mf-breathe-a {
+  from { scale: 0.92; translate: 0 0; }
+  to { scale: 1.1; translate: -2vw 3vh; }
+}
+@keyframes mf-breathe-b {
+  from { scale: 1.06; translate: 0 0; }
+  to { scale: 0.9; translate: 2vw -2vh; }
+}
+@keyframes mf-breathe-c {
+  from { scale: 0.9; translate: 0 0; }
+  to { scale: 1.14; translate: 1.5vw 2vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-light { animation: none; }
+}
+
+/* Neon totals (AnimatedNumber): a soft glow in the number's own color. */
+.neon-num {
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 38%, transparent), 0 0 20px color-mix(in srgb, currentColor 20%, transparent);
+}
+/* For the big white patrimonio figure: a cool blue halo. */
+.neon-num-sky {
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.25), 0 0 30px rgba(56, 189, 248, 0.13);
+}
+
+/* "Compatible con" logo strip at the end of the dashboard (DashboardShowcase). */
+@keyframes mf-marquee {
+  to { transform: translateX(calc(-50% - 0.5rem)); }
+}
+.mf-marquee { animation: mf-marquee 32s linear infinite; }
+.mf-marquee:hover { animation-play-state: paused; }
+.mf-marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-marquee { animation: none; flex-wrap: wrap; width: auto; }
+}
+
+/* Roadmap (DashboardShowcase): drifting aurora, a comet running along the lit
+   track, and a "building" shimmer on the in-progress items. */
+.mf-aurora {
+  background:
+    radial-gradient(40% 60% at 15% 20%, rgba(52, 211, 153, 0.18), transparent 70%),
+    radial-gradient(45% 60% at 50% 80%, rgba(56, 189, 248, 0.22), transparent 70%),
+    radial-gradient(40% 60% at 85% 25%, rgba(167, 139, 250, 0.2), transparent 70%);
+  background-size: 200% 200%;
+  animation: mf-aurora 18s ease-in-out infinite alternate;
+}
+@keyframes mf-aurora {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 30% 100%; }
+}
+.mf-comet { animation: mf-comet 2.6s cubic-bezier(0.45, 0, 0.55, 1) 1.6s infinite; left: 0; opacity: 0; }
+@keyframes mf-comet {
+  0% { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: calc(100% - 2.5rem); opacity: 0; }
+}
+.mf-building { animation: mf-building 1.8s ease-in-out infinite; }
+@keyframes mf-building {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-aurora, .mf-comet, .mf-building { animation: none; }
+}
+
+/* Plans (DashboardShowcase): spinning neon border on the recommended plan + a
+   light sweeping across its button. */
+.mf-spin-border { translate: -50% -50%; animation: mf-spin 5s linear infinite; }
+@keyframes mf-spin { to { rotate: 360deg; } }
+.mf-sheen { left: -40%; animation: mf-sheen 3.2s ease-in-out infinite; }
+@keyframes mf-sheen {
+  0%, 55% { left: -40%; }
+  100% { left: 120%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-spin-border, .mf-sheen { animation: none; }
+}
+
+/* Growth chart end point (DashboardShowcase "Vamos en serio"). */
+.mf-pulse-dot { transform-box: fill-box; transform-origin: center; animation: mf-pulse-dot 2s ease-out infinite; }
+@keyframes mf-pulse-dot {
+  0% { transform: scale(0.6); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .mf-pulse-dot { animation: none; } }
+
+
+/* ============================================================================
+   LIGHT THEME (Emanuel, 2026-10-15) — Configuración → Apariencia
+   (Sistema / Claro / Oscuro; utils/theme.ts, applied before paint by the
+   inline script in app/layout.tsx as <html data-theme="light|dark">).
+   The app was built dark with Tailwind classes, so instead of rewriting every
+   component this layer translates colors when data-theme="light":
+   - Tailwind's palette variables: zinc/slate inverted (50 <-> 950), light
+     accent shades (100-400) darkened so they read on white, and --color-white
+     becomes ink, so text-white / bg-white/5 / border-white/10 turn into dark
+     text and subtle dark overlays.
+   - the dark hex surfaces written inline (bg-[#18181b], from-[#070b14]…) and
+     the dark linear-gradient shells become light surfaces.
+   - .theme-fixed restores the original palette inside things that are
+     already "paper" (notes / post-its) so they look exactly as before.
+   New dark hex colors starting with #0 or #1 are covered automatically; any
+   other new dark color needs a rule here.
+   ============================================================================ */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --mf-page: #ffffff;
+  --mf-surface: #f4f5f7;
+  --mf-surface-2: #eceef2;
+  --mf-ink: #0f1115;
+  --color-white: var(--mf-ink);
+  --color-zinc-50: oklch(14.1% 0.005 285.823);
+  --color-zinc-100: oklch(21% 0.006 285.885);
+  --color-zinc-200: oklch(27.4% 0.006 286.033);
+  --color-zinc-300: oklch(37% 0.013 285.805);
+  --color-zinc-400: oklch(44.2% 0.017 285.786);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(70.5% 0.015 286.067);
+  --color-zinc-700: oklch(87.1% 0.006 286.286);
+  --color-zinc-800: oklch(92% 0.004 286.32);
+  --color-zinc-900: oklch(96.7% 0.001 286.375);
+  --color-zinc-950: oklch(98.5% 0 none);
+  --color-sky-100: oklch(44.3% 0.11 240.79);
+  --color-sky-200: oklch(50% 0.134 242.749);
+  --color-sky-300: oklch(50% 0.134 242.749);
+  --color-sky-400: oklch(58.8% 0.158 241.966);
+  --color-blue-100: oklch(42.4% 0.199 265.638);
+  --color-blue-200: oklch(48.8% 0.243 264.376);
+  --color-blue-300: oklch(48.8% 0.243 264.376);
+  --color-blue-400: oklch(54.6% 0.245 262.881);
+  --color-emerald-100: oklch(43.2% 0.095 166.913);
+  --color-emerald-200: oklch(50.8% 0.118 165.612);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(59.6% 0.145 163.225);
+  --color-green-100: oklch(44.8% 0.119 151.328);
+  --color-green-200: oklch(52.7% 0.154 150.069);
+  --color-green-300: oklch(52.7% 0.154 150.069);
+  --color-green-400: oklch(62.7% 0.194 149.214);
+  --color-rose-100: oklch(45.5% 0.188 13.697);
+  --color-rose-200: oklch(51.4% 0.222 16.935);
+  --color-rose-300: oklch(51.4% 0.222 16.935);
+  --color-rose-400: oklch(58.6% 0.253 17.585);
+  --color-red-100: oklch(44.4% 0.177 26.899);
+  --color-red-200: oklch(50.5% 0.213 27.518);
+  --color-red-300: oklch(50.5% 0.213 27.518);
+  --color-red-400: oklch(57.7% 0.245 27.325);
+  --color-amber-100: oklch(47.3% 0.137 46.201);
+  --color-amber-200: oklch(55.5% 0.163 48.998);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-amber-400: oklch(66.6% 0.179 58.318);
+  --color-yellow-100: oklch(47.6% 0.114 61.907);
+  --color-yellow-200: oklch(55.4% 0.135 66.442);
+  --color-yellow-300: oklch(55.4% 0.135 66.442);
+  --color-yellow-400: oklch(68.1% 0.162 75.834);
+  --color-violet-100: oklch(43.2% 0.232 292.759);
+  --color-violet-200: oklch(49.1% 0.27 292.581);
+  --color-violet-300: oklch(49.1% 0.27 292.581);
+  --color-violet-400: oklch(54.1% 0.281 293.009);
+  --color-purple-100: oklch(43.8% 0.218 303.724);
+  --color-purple-200: oklch(49.6% 0.265 301.924);
+  --color-purple-300: oklch(49.6% 0.265 301.924);
+  --color-purple-400: oklch(55.8% 0.288 302.321);
+  --color-fuchsia-100: oklch(45.2% 0.211 324.591);
+  --color-fuchsia-200: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-300: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-400: oklch(59.1% 0.293 322.896);
+  --color-pink-100: oklch(45.9% 0.187 3.815);
+  --color-pink-200: oklch(52.5% 0.223 3.958);
+  --color-pink-300: oklch(52.5% 0.223 3.958);
+  --color-pink-400: oklch(59.2% 0.249 0.584);
+  --color-teal-100: oklch(43.7% 0.078 188.216);
+  --color-teal-200: oklch(51.1% 0.096 186.391);
+  --color-teal-300: oklch(51.1% 0.096 186.391);
+  --color-teal-400: oklch(60% 0.118 184.704);
+  --color-cyan-100: oklch(45% 0.085 224.283);
+  --color-cyan-200: oklch(52% 0.105 223.128);
+  --color-cyan-300: oklch(52% 0.105 223.128);
+  --color-cyan-400: oklch(60.9% 0.126 221.723);
+  --color-indigo-100: oklch(39.8% 0.195 277.366);
+  --color-indigo-200: oklch(45.7% 0.24 277.023);
+  --color-indigo-300: oklch(45.7% 0.24 277.023);
+  --color-indigo-400: oklch(51.1% 0.262 276.966);
+  --color-orange-100: oklch(47% 0.157 37.304);
+  --color-orange-200: oklch(55.3% 0.195 38.402);
+  --color-orange-300: oklch(55.3% 0.195 38.402);
+  --color-orange-400: oklch(64.6% 0.222 41.116);
+  --color-lime-100: oklch(45.3% 0.124 130.933);
+  --color-lime-200: oklch(53.2% 0.157 131.589);
+  --color-lime-300: oklch(53.2% 0.157 131.589);
+  --color-lime-400: oklch(64.8% 0.2 131.684);
+  --color-slate-50: oklch(12.9% 0.042 264.695);
+  --color-slate-100: oklch(20.8% 0.042 265.755);
+  --color-slate-200: oklch(27.9% 0.041 260.031);
+  --color-slate-300: oklch(37.2% 0.044 257.287);
+  --color-slate-400: oklch(44.6% 0.043 257.281);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(70.4% 0.04 256.788);
+  --color-slate-700: oklch(86.9% 0.022 252.894);
+  --color-slate-800: oklch(92.9% 0.013 255.508);
+  --color-slate-900: oklch(96.8% 0.007 247.896);
+  --color-slate-950: oklch(98.4% 0.003 247.858);
+}
+:root[data-theme='dark'] { color-scheme: dark; }
+
+/* Inside "paper" components keep the original (dark-theme) palette. */
+:root[data-theme='light'] .theme-fixed {
+  --color-white: #fff;
+  --color-zinc-50: oklch(98.5% 0 none);
+  --color-zinc-100: oklch(96.7% 0.001 286.375);
+  --color-zinc-200: oklch(92% 0.004 286.32);
+  --color-zinc-300: oklch(87.1% 0.006 286.286);
+  --color-zinc-400: oklch(70.5% 0.015 286.067);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(44.2% 0.017 285.786);
+  --color-zinc-700: oklch(37% 0.013 285.805);
+  --color-zinc-800: oklch(27.4% 0.006 286.033);
+  --color-zinc-900: oklch(21% 0.006 285.885);
+  --color-zinc-950: oklch(14.1% 0.005 285.823);
+  --color-sky-100: oklch(95.1% 0.026 236.824);
+  --color-sky-200: oklch(90.1% 0.058 230.902);
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+  --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-blue-100: oklch(93.2% 0.032 255.585);
+  --color-blue-200: oklch(88.2% 0.059 254.128);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-emerald-100: oklch(95% 0.052 163.051);
+  --color-emerald-200: oklch(90.5% 0.093 164.15);
+  --color-emerald-300: oklch(84.5% 0.143 164.978);
+  --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-green-100: oklch(96.2% 0.044 156.743);
+  --color-green-200: oklch(92.5% 0.084 155.995);
+  --color-green-300: oklch(87.1% 0.15 154.449);
+  --color-green-400: oklch(79.2% 0.209 151.711);
+  --color-rose-100: oklch(94.1% 0.03 12.58);
+  --color-rose-200: oklch(89.2% 0.058 10.001);
+  --color-rose-300: oklch(81% 0.117 11.638);
+  --color-rose-400: oklch(71.2% 0.194 13.428);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-amber-100: oklch(96.2% 0.059 95.617);
+  --color-amber-200: oklch(92.4% 0.12 95.746);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-yellow-100: oklch(97.3% 0.071 103.193);
+  --color-yellow-200: oklch(94.5% 0.129 101.54);
+  --color-yellow-300: oklch(90.5% 0.182 98.111);
+  --color-yellow-400: oklch(85.2% 0.199 91.936);
+  --color-violet-100: oklch(94.3% 0.029 294.588);
+  --color-violet-200: oklch(89.4% 0.057 293.283);
+  --color-violet-300: oklch(81.1% 0.111 293.571);
+  --color-violet-400: oklch(70.2% 0.183 293.541);
+  --color-purple-100: oklch(94.6% 0.033 307.174);
+  --color-purple-200: oklch(90.2% 0.063 306.703);
+  --color-purple-300: oklch(82.7% 0.119 306.383);
+  --color-purple-400: oklch(71.4% 0.203 305.504);
+  --color-fuchsia-100: oklch(95.2% 0.037 318.852);
+  --color-fuchsia-200: oklch(90.3% 0.076 319.62);
+  --color-fuchsia-300: oklch(83.3% 0.145 321.434);
+  --color-fuchsia-400: oklch(74% 0.238 322.16);
+  --color-pink-100: oklch(94.8% 0.028 342.258);
+  --color-pink-200: oklch(89.9% 0.061 343.231);
+  --color-pink-300: oklch(82.3% 0.12 346.018);
+  --color-pink-400: oklch(71.8% 0.202 349.761);
+  --color-teal-100: oklch(95.3% 0.051 180.801);
+  --color-teal-200: oklch(91% 0.096 180.426);
+  --color-teal-300: oklch(85.5% 0.138 181.071);
+  --color-teal-400: oklch(77.7% 0.152 181.912);
+  --color-cyan-100: oklch(95.6% 0.045 203.388);
+  --color-cyan-200: oklch(91.7% 0.08 205.041);
+  --color-cyan-300: oklch(86.5% 0.127 207.078);
+  --color-cyan-400: oklch(78.9% 0.154 211.53);
+  --color-indigo-100: oklch(93% 0.034 272.788);
+  --color-indigo-200: oklch(87% 0.065 274.039);
+  --color-indigo-300: oklch(78.5% 0.115 274.713);
+  --color-indigo-400: oklch(67.3% 0.182 276.935);
+  --color-orange-100: oklch(95.4% 0.038 75.164);
+  --color-orange-200: oklch(90.1% 0.076 70.697);
+  --color-orange-300: oklch(83.7% 0.128 66.29);
+  --color-orange-400: oklch(75% 0.183 55.934);
+  --color-lime-100: oklch(96.7% 0.067 122.328);
+  --color-lime-200: oklch(93.8% 0.127 124.321);
+  --color-lime-300: oklch(89.7% 0.196 126.665);
+  --color-lime-400: oklch(84.1% 0.238 128.85);
+  --color-slate-50: oklch(98.4% 0.003 247.858);
+  --color-slate-100: oklch(96.8% 0.007 247.896);
+  --color-slate-200: oklch(92.9% 0.013 255.508);
+  --color-slate-300: oklch(86.9% 0.022 252.894);
+  --color-slate-400: oklch(70.4% 0.04 256.788);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(44.6% 0.043 257.281);
+  --color-slate-700: oklch(37.2% 0.044 257.287);
+  --color-slate-800: oklch(27.9% 0.041 260.031);
+  --color-slate-900: oklch(20.8% 0.042 265.755);
+  --color-slate-950: oklch(12.9% 0.042 264.695);
+}
+
+/* White text stays white on solid / gradient colored backgrounds. */
+:root[data-theme='light'] :is(
+  .bg-sky-500, .bg-sky-600, .bg-sky-700, .bg-blue-500, .bg-blue-600, .bg-blue-700,
+  .bg-emerald-500, .bg-emerald-600, .bg-rose-500, .bg-rose-600, .bg-red-500, .bg-red-600,
+  .bg-violet-500, .bg-violet-600, .bg-fuchsia-500, .bg-fuchsia-600, .bg-indigo-500, .bg-indigo-600,
+  [class*='bg-gradient-to-'], [class*='bg-linear-to-']
+) {
+  --color-white: #fff;
+}
+/* …and a solid white stays white. */
+:root[data-theme='light'] .bg-white { background-color: #fff; }
+
+/* Page + body */
+:root[data-theme='light'] body,
+:root[data-theme='light'] body.antialiased {
+  /* !important: the body's own bg-[#09090b] class also matches the surface rule below. */
+  background-color: var(--mf-page) !important;
+  color: var(--mf-ink);
+}
+
+/* Dark hex surfaces written inline → light surfaces. */
+:root[data-theme='light'] :is([class*='bg-[#0'], [class*='bg-[#1'], [class*='bg-[rgba(3,4,8']):not(.theme-fixed, .theme-fixed *) {
+  background-color: var(--mf-surface);
+}
+:root[data-theme='light'] :is([class*='border-[#0'], [class*='border-[#1']):not(.theme-fixed, .theme-fixed *) {
+  border-color: var(--mf-page);
+}
+:root[data-theme='light'] :is([class*='ring-[#0'], [class*='ring-[#1']):not(.theme-fixed, .theme-fixed *) {
+  --tw-ring-color: var(--mf-page);
+}
+:root[data-theme='light'] :is([class*='from-[#0'], [class*='from-[#1'], [class*='from-[#2']):not(.theme-fixed, .theme-fixed *) {
+  --tw-gradient-from: var(--mf-surface);
+}
+:root[data-theme='light'] :is([class*='via-[#0'], [class*='via-[#1']):not(.theme-fixed, .theme-fixed *) {
+  --tw-gradient-via: var(--mf-surface);
+}
+:root[data-theme='light'] :is([class*='to-[#0'], [class*='to-[#1']):not(.theme-fixed, .theme-fixed *) {
+  --tw-gradient-to: var(--mf-surface);
+}
+/* Dark gradient shells (patrimonio, glass, cards) → light surface;
+   the blue ones (Asistente, Pro plan, Solución) → a soft blue. */
+:root[data-theme='light'] [class*='bg-[linear-gradient(']:not(.theme-fixed, .theme-fixed *) {
+  background-image: none;
+  background-color: var(--mf-surface);
+}
+:root[data-theme='light'] :is([class*='bg-[linear-gradient(160deg,#143357'], [class*='bg-[linear-gradient(160deg,rgba(20,51,87']):not(.theme-fixed, .theme-fixed *) {
+  background-color: #e8f1fd;
+}
+:root[data-theme='light'] [class*='bg-[radial-gradient(rgba(255,255,255']:not(.theme-fixed, .theme-fixed *) {
+  background-image: radial-gradient(rgba(15, 17, 21, 0.08) 1px, transparent 1px);
+}
+/* Light grays written inline as text colors → readable gray. */
+:root[data-theme='light'] :is([class*='text-[#B'], [class*='text-[#C'], [class*='text-[#D'], [class*='text-[#E'], [class*='text-[#F'], [class*='text-[#7cc0ff]']):not(.theme-fixed, .theme-fixed *) {
+  color: #52525b;
+}
+/* Dark insets (inputs, wells) → very light gray. Modal backdrops (/50+) stay. */
+:root[data-theme='light'] :is(.bg-black\/10, .bg-black\/20, .bg-black\/25, .bg-black\/30, .bg-black\/40):not(.theme-fixed, .theme-fixed *) {
+  background-color: rgba(15, 17, 21, 0.04);
+}
+/* Glows and lights are softer on white. */
+:root[data-theme='light'] .mf-ambient { opacity: 0.35; }
+:root[data-theme='light'] :is(.neon-num, .neon-num-sky) { text-shadow: none; }
+:root[data-theme='light'] [class*='backdrop-blur'] { --tw-backdrop-saturate: saturate(1); }
+
+/* Light theme: tiles inside the big containers (bg-white/[0.0x]) a bit grayer
+   so they stand out from the container (Emanuel, 2026-10-15). */
+:root[data-theme='light'] .bg-white\/\[0\.01\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.05); }
+:root[data-theme='light'] .bg-white\/\[0\.02\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.05); }
+:root[data-theme='light'] .bg-white\/\[0\.025\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.05); }
+:root[data-theme='light'] .bg-white\/\[0\.03\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.055); }
+:root[data-theme='light'] .bg-white\/\[0\.04\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.06); }
+:root[data-theme='light'] .bg-white\/\[0\.05\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.065); }
+:root[data-theme='light'] .bg-white\/5:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.065); }
+:root[data-theme='light'] .bg-white\/\[0\.06\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.075); }
+:root[data-theme='light'] .bg-white\/\[0\.07\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.08); }
+:root[data-theme='light'] .bg-white\/\[0\.08\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.085); }
+:root[data-theme='light'] .bg-white\/\[0\.09\]:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.09); }
+:root[data-theme='light'] .bg-white\/10:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.095); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.01\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.075); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.02\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.075); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.025\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.075); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.03\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.08); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.04\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.085); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.05\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.09); }
+:root[data-theme='light'] .hover\:bg-white\/5:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.09); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.06\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.1); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.07\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.105); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.08\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.11); }
+:root[data-theme='light'] .hover\:bg-white\/\[0\.09\]:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.115); }
+:root[data-theme='light'] .hover\:bg-white\/10:hover:not(.theme-fixed, .theme-fixed *, [class*='bg-gradient-to-'] *, .bg-sky-500 *, .bg-sky-600 *, .bg-blue-600 *) { background-color: rgba(15, 17, 21, 0.12); }
+
+/* Light theme: a dark surface INSIDE another surface (debt / subscription /
+   account / tool tiles inside their section) is a step grayer than its
+   container (Emanuel, 2026-10-15). Fixed overlays (modals) keep the plain
+   surface. Hover a little darker. */
+:root[data-theme='light'] :is([class*='bg-[#0'], [class*='bg-[#1'], [class*='bg-[linear-gradient(']) :is([class*='bg-[#0'], [class*='bg-[#1']):not(.theme-fixed, .theme-fixed *, .fixed, .fixed *) {
+  background-color: #e8eaee;
+}
+:root[data-theme='light'] :is([class*='bg-[#0'], [class*='bg-[#1'], [class*='bg-[linear-gradient(']) :is([class*='bg-[#0'], [class*='bg-[#1']):hover:not(.theme-fixed, .theme-fixed *, .fixed, .fixed *) {
+  background-color: #e1e4ea;
+}
+
+/* Simulador de crédito → "PDF": print only the generated document (#mf-print). */
+@media print {
+  body * { visibility: hidden !important; }
+  #mf-print, #mf-print * { visibility: visible !important; }
+  #mf-print { position: absolute; inset: 0 auto auto 0; width: 100%; display: block !important; }
+}
+
+/* ── Empresa: a section with a custom LIGHT background (any theme) gets dark
+   text — same idea as the light theme, scoped (components/company/section.tsx).
+   Dark custom backgrounds use .theme-fixed instead. */
+.mf-ink-light {
+  --color-white: #0f1115;
+  --color-zinc-50: oklch(14.1% 0.005 285.823);
+  --color-zinc-100: oklch(21% 0.006 285.885);
+  --color-zinc-200: oklch(27.4% 0.006 286.033);
+  --color-zinc-300: oklch(37% 0.013 285.805);
+  --color-zinc-400: oklch(44.2% 0.017 285.786);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(70.5% 0.015 286.067);
+  --color-zinc-700: oklch(87.1% 0.006 286.286);
+  --color-zinc-800: oklch(92% 0.004 286.32);
+  --color-zinc-900: oklch(96.7% 0.001 286.375);
+  --color-sky-200: oklch(50% 0.134 242.749);
+  --color-sky-300: oklch(50% 0.134 242.749);
+  --color-emerald-200: oklch(50.8% 0.118 165.612);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-rose-200: oklch(51.4% 0.222 16.935);
+  --color-rose-300: oklch(51.4% 0.222 16.935);
+  --color-amber-200: oklch(55.5% 0.163 48.998);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-violet-300: oklch(49.1% 0.27 292.581);
+  color: #0f1115;
+}
+.mf-ink-light :is([class*='bg-[#0'], [class*='bg-[#1']) {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+.mf-ink-light :is([class*='border-white'], [class*='border-[#']) {
+  border-color: rgba(15, 17, 21, 0.12);
+}
+
+/* Scroll without a visible bar (Emanuel: the black scrollbar "está fea"). The
+   area still scrolls with wheel / trackpad / touch / drag. */
+.mf-noscroll { scrollbar-width: none; -ms-overflow-style: none; }
+.mf-noscroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+
+/* Empresa tables: vertical lines between columns (table setting "Líneas entre
+   columnas", on by default). --color-white is ink in the light theme, so the
+   line works in both themes. Off = the header's resize line only on hover. */
+table.mf-col-lines > tbody > tr > td:not(:last-child) {
+  border-right: 1px solid color-mix(in srgb, var(--color-white) 9%, transparent);
+}
+table.mf-no-col-lines > thead .cursor-col-resize:not(:hover)::after {
+  background: transparent;
+}
+
+/* "Negative" help box (table column tips, Emanuel 2026-10-26): the opposite of the page —
+   light on the dark app, dark on the light theme. Raw colors on purpose (not palette vars). */
+.mf-negative { background: #f4f4f5; color: #0b0d12; border: 1px solid rgba(0, 0, 0, 0.08); }
+[data-theme='light'] .mf-negative { background: #0b0d12; color: #ffffff; border-color: rgba(255, 255, 255, 0.08); }
+
+/* Every dropdown (select) draws its own chevron INSIDE the rounded border, with room on the
+   right (Emanuel, 2026-10-26: the native arrow touched the edge of the pill-shaped ones). */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b93a1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 0.9rem;
+  padding-right: 2.25rem !important;
+}
+select:not([multiple]):not([size]).rounded-full { background-position: right 1rem center; padding-right: 2.5rem !important; }
+
+/* "Aprende a usarme" tutorials (components/company/LearnTutorial.tsx): a changed cell flashes, the card text slides in. */
+@keyframes mf-tt-flash {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); background: rgba(52, 211, 153, 0); transform: scale(1); }
+  30% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.18); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); background: rgba(52, 211, 153, 0); transform: scale(1); }
+}
+.mf-tt-flash { animation: mf-tt-flash 1.2s ease-out 0.6s both; }
+@keyframes mf-tt-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.mf-tt-in { animation: mf-tt-in 0.35s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .mf-tt-flash, .mf-tt-in { animation: none; } }
