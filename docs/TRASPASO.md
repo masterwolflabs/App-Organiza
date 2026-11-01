@@ -12,9 +12,9 @@ agenda.
 
 ## Enlaces
 
-- App publicada: PENDIENTE_URL
+- App publicada: https://app-organiza-six.vercel.app
 - Código: https://github.com/masterwolflabs/App-Organiza
-- Publicación: Vercel, proyecto `app-organiza`
+- Publicación: Vercel, equipo `Masterwolf`, proyecto `app-organiza`
 - Base de datos: Supabase, proyecto `sistema financiero` (`uxozatzegnoczgiilvvc`)
 
 ## Estado
@@ -35,6 +35,10 @@ Pendientes concretos:
   que el calendario de la nube muestre bien un día cambiado.
 - Los SQL `24` y `25` ya están aplicados en Supabase. Sus copias están en
   `docs/sql/` y faltan en la carpeta `supabase/` de `App-Master-Cloud`.
+- La app ya está registrada en la nube (`docs/sql/26-registrar-organiza.sql`) y
+  su dirección está autorizada en Supabase para entrar con Google. Si cambia la
+  dirección, hay que actualizar ambas cosas.
+- `app-organiza.vercel.app` es de otra persona. No la uses como enlace.
 - Quedan textos que dicen "Master Finanzas" en notas y compartir. Conviene
   corregirlos en la plantilla.
 
