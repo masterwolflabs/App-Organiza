@@ -1,5 +1,36 @@
 @AGENTS.md
 
+# Organiza
+
+App de Master Wolf Labs creada desde la plantilla (más abajo). Pedido
+(2026-11-01): calendario y horario que hablen el mismo idioma, con filtros tipo
+Notion por áreas de vida, y agendar por voz.
+- **Un solo motor**: tabla compartida `calendar_events` con `app = 'organiza'`.
+  Calendario y Horario son el mismo `CalendarView`; `horario` muestra solo lo
+  que se repite (diario o semanal) y lo nuevo nace semanal.
+- `components/calendar/` = COPIA de `src/components/calendar/` de la nube (más
+  `McAvatar` y `EntityPicker`), con `cyan-` → `sky-` para seguir el acento.
+  Agregados de Organiza: prop `horario`, `lockApp` en `EventEditor`.
+- **Áreas y metas** (`components/calendar/organiza.ts`, SQL 24 de la nube):
+  `organiza_areas` y `organiza_goals`, más `area_id` y `goal_id` en
+  `calendar_events`. Fijo = evento sin `goal_id`. Variable = meta sin fecha
+  ("una vez al mes"); al agendarla nace un evento con `goal_id`, y su avance se
+  cuenta con esos eventos. Sin el SQL 24, el calendario cae a los tipos de la
+  nube y `acomodar` avisa que falta activarlo.
+- `acomodar` no va en el dock: con 9 botones las etiquetas se pegan en celular.
+  Se llega por el menú lateral y por el bloque "Por acomodar" de Hoy.
+- **Una sola repetición** (SQL 25): `exdates` son los días que la serie salta;
+  mover o editar "solo este día" suma el día a `exdates` y crea un evento suelto
+  con `series_id`. El `expand` de la nube aún no lee `exdates`: si la Mente
+  muestra eventos de Organiza, ahí se vería la serie y el evento suelto.
+- Horario: muestra horas libres de 6:00 a 23:00 y avisa rutinas que se cruzan.
+  Mover ahí siempre mueve la serie, porque es la semana tipo.
+- Plan: 1 base ✅, 2 áreas y fijo/variable ✅, 3 horario y excepciones ✅, 4 voz con tarjeta de confirmación (toca el repo de la nube), 5
+  revisión.
+- Guía para quien sigue el proyecto: `docs/TRASPASO.md`. SQL 24 y 25: `docs/sql/`.
+- Modo claro: `bg-white` significa oscuro (la plantilla invierte `--color-white`);
+  para blanco real usar `bg-[#fff]`.
+
 # Plantilla Master Wolf (master-wolf-app-template)
 
 Base de las apps de Master Wolf Labs, sacada de **Master Wolf Finance**

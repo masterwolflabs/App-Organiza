@@ -1,6 +1,6 @@
 {
-  "name": "master-wolf-app-template",
-  "version": "0.6.1-alpha.1",
+  "name": "app-organiza",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,5 +1,6 @@
 'use client';
 
+import { APP } from '@/app.config';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CornerDownLeft, Search, X } from 'lucide-react';
@@ -140,7 +141,7 @@ export const GlobalSearch: React.FC<{
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Buscar en Master Finanzas…"
+          placeholder={`Buscar en ${APP.name}…`}
           aria-label="Buscar en toda la app"
           className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 py-2.5 pl-10 pr-14 text-sm text-white placeholder:text-zinc-500 transition-colors focus:border-sky-500/50 focus:bg-zinc-900 focus:outline-none"
         />
@@ -173,7 +174,7 @@ export const GlobalSearch: React.FC<{
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Buscar en Master Finanzas…"
+                placeholder={`Buscar en ${APP.name}…`}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-10 pr-3 text-base text-white placeholder:text-zinc-500 focus:border-sky-500/50 focus:outline-none"
               />
             </div>
