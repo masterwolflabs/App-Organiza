@@ -328,6 +328,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState('');
   const [recOpen, setRecOpen] = useState(false);
+  const [liveText, setLiveText] = useState('');
+  const liveRef = useRef<HTMLParagraphElement>(null);
   const [micSupported, setMicSupported] = useState(false);
   const [voiceUrls, setVoiceUrls] = useState<Record<string, string>>({});
   const [transcribing, setTranscribing] = useState<string[]>([]);
@@ -819,6 +821,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const patchVoice = (id: string, patch: Partial<VoiceAttachment>) =>
     change({ attachments: draftRef.current.attachments.map((a) => (a.id === id ? ({ ...a, ...patch } as NoteAttachment) : a)) }, true);
 
+  useEffect(() => {
+    if (liveText) liveRef.current?.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+  }, [liveText]);
+
   const transcribeVoice = async (att: VoiceAttachment, insert = true) => {
     if (!att.path || transcribing.includes(att.id)) return;
     setTranscribing((t) => [...t, att.id]);
@@ -839,6 +845,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       notify('Sin conexión: el texto se hará cuando vuelva la señal. El audio está guardado.');
     } finally {
       setTranscribing((t) => t.filter((x) => x !== att.id));
+      setLiveText('');
     }
   };
 
@@ -896,10 +903,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       pending: r.sessionId,
       needsText: !r.transcript.trim(),
     };
-    if (r.transcript.trim()) insertTranscript(r.transcript);
+    if (r.transcript.trim()) {
+      insertTranscript(r.transcript);
+      setLiveText('');
+    }
     if (r.cut) notify('Se cortó el micrófono. Guardé todo lo que alcanzaste a grabar.');
     change({ attachments: [...draftRef.current.attachments, att] }, true);
     const path = imageStore.canUpload === false ? null : await uploadVoice(att);
+    if (!path) setLiveText('');
     if (!path) notify(imageStore.canUpload === false ? 'El audio quedó en este dispositivo (necesitas una cuenta para subirlo).' : 'Sin conexión: el audio quedó guardado en este dispositivo y se sube solo cuando vuelva la señal.');
   };
 
@@ -1544,6 +1555,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             }}
           >
             <EditorContent editor={editor} />
+            {/* What's being heard, on the page itself; the final text replaces it. */}
+            {liveText && (
+              <p ref={liveRef} className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-900/50">
+                {liveText}
+              </p>
+            )}
             {draft.images.map((img) => (
               <div key={img.id} data-note-image>
                 <NoteImageItem
@@ -1667,6 +1684,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               onClose={() => setRecOpen(false)}
               exclude={draft.attachments.map((a) => (a as VoiceAttachment).pending).filter((x): x is string => Boolean(x))}
               transcribeLive={imageStore.canUpload === false ? undefined : transcribeLive}
+              onLiveText={setLiveText}
             />
           </div>
         </BodyPortal>

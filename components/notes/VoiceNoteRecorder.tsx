@@ -7,7 +7,8 @@
  * - Live transcription at the same time (browser SpeechRecognition, Chrome / Edge). If it gives nothing in
  *   5 s (it can fail silently), short pieces go to the AI instead (Emanuel, 2026-11-02). That text is only
  *   a preview: the note's text is made from the whole audio afterwards.
- * - Floats over everything and moves by dragging it.
+ * - Floats over everything, moves by dragging it and resizes from its corner. The live text goes on the
+ *   note's page, so the recorder stays small.
  * - Every second goes to IndexedDB (utils/voiceVault.ts), so nothing is lost: a closed tab or a crash
  *   leaves a recording you can recover the next time you open the recorder.
  * - If the microphone is lost (unplugged, permission revoked) it stops AT ONCE and keeps what you had.
@@ -48,11 +49,14 @@ export function VoiceNoteRecorder({
   onClose,
   exclude = [],
   transcribeLive,
+  onLiveText,
 }: {
   onFinish: (r: FinishedRecording) => Promise<void> | void;
   onClose: () => void;
   /** One short standalone audio → its text. Without it, the live text depends only on the browser. */
   transcribeLive?: (blob: Blob, mime: string) => Promise<string>;
+  /** What's been heard so far: the note shows it on its page. */
+  onLiveText?: (text: string) => void;
   /** Sessions this note already holds (waiting to upload) — not offered as "recuperar". */
   exclude?: string[];
 }) {
@@ -66,6 +70,8 @@ export function VoiceNoteRecorder({
   const [orphans, setOrphans] = useState<VoiceSession[]>([]);
   const [aiLive, setAiLive] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [width, setWidth] = useState(340);
+  const [asking, setAsking] = useState<string | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -410,6 +416,8 @@ export function VoiceNoteRecorder({
 
   useEffect(() => {
     textRef.current?.scrollTo({ top: textRef.current.scrollHeight });
+    onLiveText?.([finalText, interim].filter(Boolean).join(' '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalText, interim]);
 
   const pause = () => {
@@ -433,7 +441,7 @@ export function VoiceNoteRecorder({
     startSegment();
   };
   const discard = async () => {
-    if (elapsed.current > 3 && !window.confirm('¿Descartar esta grabación? Se borra el audio.')) return;
+    if (elapsed.current > 3 && asking !== 'discard') return setAsking('discard');
     done.current = true;
     stopSR();
     segOn.current = false;
@@ -454,7 +462,7 @@ export function VoiceNoteRecorder({
     await cbs.current.onFinish({ sessionId: s.id, blob, mime: s.mime || blob.type, seconds: s.seconds, transcript: s.transcript });
   };
   const forget = async (s: VoiceSession) => {
-    if (!window.confirm('¿Borrar esa grabación guardada en este dispositivo?')) return;
+    setAsking(null);
     await voiceVault.remove(s.id);
     setOrphans((o) => o.filter((x) => x.id !== s.id));
   };
@@ -481,6 +489,32 @@ export function VoiceNoteRecorder({
     window.addEventListener('pointerup', up);
   };
 
+  /** The corner changes its width; it grows from the center, like it sits. */
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const from = e.clientX;
+    const base = width;
+    const move = (ev: PointerEvent) => setWidth(Math.min(Math.min(620, window.innerWidth - 24), Math.max(260, base + (ev.clientX - from) * 2)));
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const askBar = (text: string, yes: string, onYes: () => void) => (
+    <div className="flex items-center gap-2 border-b border-white/10 bg-rose-500/15 px-4 py-2 text-xs">
+      <span className="min-w-0 flex-1 text-rose-100">{text}</span>
+      <button onClick={onYes} className="rounded-md bg-rose-500 px-2 py-0.5 font-semibold text-white hover:bg-rose-400">
+        {yes}
+      </button>
+      <button onClick={() => setAsking(null)} className="rounded-md px-2 py-0.5 font-semibold text-zinc-300 hover:bg-white/10">
+        Cancelar
+      </button>
+    </div>
+  );
+
   const others = orphans.filter((s) => s.id !== session.current.id && !exclude.includes(s.id));
   const statusLine =
     phase === 'paused'
@@ -497,14 +531,18 @@ export function VoiceNoteRecorder({
     <div
       ref={rootRef}
       onPointerDown={startDrag}
-      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-      data-help="Arrástrala para moverla"
-      className="theme-fixed pointer-events-auto w-full max-w-xl cursor-grab touch-none overflow-hidden rounded-2xl bg-[#111214]/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/10 backdrop-blur-xl active:cursor-grabbing"
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)`, width }}
+      className="theme-fixed pointer-events-auto relative max-w-full cursor-grab touch-none overflow-hidden rounded-2xl bg-[#111214]/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/10 backdrop-blur-xl active:cursor-grabbing"
     >
+      {asking === 'discard' && askBar('¿Descartar esta grabación? Se borra el audio.', 'Sí, descartar', discard)}
       {others.length > 0 && (
         <div className="space-y-1.5 border-b border-white/10 bg-amber-400/10 px-4 py-2.5 text-xs">
           {others.slice(0, 3).map((s) => (
-            <div key={s.id} className="flex items-center gap-2">
+            <div key={s.id}>
+            {asking === s.id ? (
+              askBar('¿Borrar esa grabación de este dispositivo?', 'Sí, borrar', () => forget(s))
+            ) : (
+            <div className="flex items-center gap-2">
               <Undo2 className="h-3.5 w-3.5 shrink-0 text-amber-300" />
               <span className="min-w-0 flex-1 truncate text-amber-100">
                 Grabación guardada en este dispositivo · {clock(s.seconds)} ·{' '}
@@ -513,9 +551,11 @@ export function VoiceNoteRecorder({
               <button onClick={() => recover(s)} className="rounded-md bg-amber-300 px-2 py-0.5 font-semibold text-black hover:bg-amber-200">
                 Recuperar
               </button>
-              <button onClick={() => forget(s)} title="Borrar del dispositivo" className="rounded-md p-1 text-amber-200/70 hover:bg-white/10 hover:text-white">
+              <button onClick={() => setAsking(s.id)} title="Borrar del dispositivo" className="rounded-md p-1 text-amber-200/70 hover:bg-white/10 hover:text-white">
                 <X className="h-3.5 w-3.5" />
               </button>
+            </div>
+            )}
             </div>
           ))}
         </div>
@@ -533,22 +573,24 @@ export function VoiceNoteRecorder({
         <>
           <div className="flex items-center gap-3 px-4 pt-3">
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${phase === 'recording' ? 'animate-pulse bg-[#ff453a]' : 'bg-zinc-500'}`} />
-            <span className="font-mono text-2xl font-light tabular-nums tracking-tight">{clock(seconds)}</span>
+            <span className="font-mono text-xl font-light tabular-nums tracking-tight">{clock(seconds)}</span>
             <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">
               {textState === 'offline' && <WifiOff className="mr-1 inline h-3 w-3 text-amber-300" />}
               {statusLine}
             </span>
           </div>
-          <canvas ref={canvasRef} className="mt-1 h-16 w-full" />
-          <div ref={textRef} data-no-drag="" className="max-h-28 min-h-[2.5rem] cursor-text touch-auto overflow-y-auto px-4 text-sm leading-relaxed text-zinc-100">
-            {finalText || interim ? (
-              <>
-                {finalText} <span className="text-zinc-500">{interim}</span>
-              </>
-            ) : (
-              <span className="text-zinc-500">{textState === 'live' || aiLive ? 'Habla, aquí aparece lo que dices…' : 'Tu audio queda guardado igual.'}</span>
-            )}
-          </div>
+          <canvas ref={canvasRef} className="mt-1 h-12 w-full" />
+          {!onLiveText && (
+            <div ref={textRef} data-no-drag="" className="max-h-28 min-h-[2.5rem] cursor-text touch-auto overflow-y-auto px-4 text-sm leading-relaxed text-zinc-100">
+              {finalText || interim ? (
+                <>
+                  {finalText} <span className="text-zinc-500">{interim}</span>
+                </>
+              ) : (
+                <span className="text-zinc-500">{textState === 'live' || aiLive ? 'Habla, aquí aparece lo que dices…' : 'Tu audio queda guardado igual.'}</span>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-2">
             <button onClick={discard} disabled={phase === 'saving'} title="Descartar" className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-rose-300 disabled:opacity-40">
               <Trash2 className="h-4 w-4" />
@@ -557,7 +599,7 @@ export function VoiceNoteRecorder({
               onClick={() => finish(false)}
               disabled={phase === 'starting' || phase === 'saving'}
               title="Terminar y guardar"
-              className="flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-white/80 disabled:opacity-50"
+              className="flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white/80 disabled:opacity-50"
             >
               {phase === 'saving' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Square className="h-5 w-5 rounded-[3px] fill-[#ff453a] text-[#ff453a]" />}
             </button>
@@ -572,6 +614,7 @@ export function VoiceNoteRecorder({
           </div>
         </>
       )}
+      <span onPointerDown={startResize} title="Arrastra para achicarla o agrandarla" className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize touch-none after:absolute after:bottom-1.5 after:right-1.5 after:h-2 after:w-2 after:rounded-br-sm after:border-b-2 after:border-r-2 after:border-white/40" />
     </div>
   );
 }
