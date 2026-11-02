@@ -32,6 +32,7 @@ Notion por áreas de vida, y agendar por voz.
 - **Datos**: `components/organiza/db.tsx` (`useDb`) para probar en memoria; lógica en `model.ts` y `useHorario.ts`. El récord se sigue por nombre de actividad (`refOf`).
 - **Daily** vive aquí (`components/daily/`): la cuenta Labs lee `table_views.daily`, la misma de `daily.sh`; las demás, `organiza-daily-<space>`.
 - **Tarea = su nota**: un solo nombre (el link guarda el último nombre común; el lado que cambió arrastra al otro, en `Board`). Al abrirla: título, propiedades (`TaskProperties`, vía `bridge.linkPanel`) y debajo la nota. `linkedNote`, `renameLinked` y `linkPanel` viven solo en el `NotesSystem` de Organiza: si `update:template` lo pisa, hay que reponerlos.
+- **Importar horario** (`components/organiza/ImportHorario.tsx`, `utils/importFile.ts`): Excel y el ZIP de Notion se abren en el navegador; foto, PDF y texto van a `/api/organiza/import-schedule` de la nube, que devuelve actividades y hasta 3 preguntas. Nada se crea sin la vista previa, y nace en borrador.
 - **Cómo trabajamos** (`components/daily/DailyManual.tsx`): debajo de la Daily, igual a su Notion "Paso a Paso Claude"; estilos en `components/daily/how.css`.
 - **Conexiones y teléfono**: `docs/CONEXIONES.md`. Llaves en Vercel; `lib/server/` es solo servidor.
 - **Tour**: `utils/tourScript.ts` debe ser igual a `src/utils/organizaTour.ts` de la nube, que genera la voz.

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Bell, BellRing, Check as CheckIcon, ChevronDown, Focus, ImagePlus, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { Bell, BellRing, Check as CheckIcon, ChevronDown, FileUp, Focus, ImagePlus, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
+import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { byTime, coverCss, LABEL_COLORS, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
@@ -43,6 +44,7 @@ export const HorarioView: React.FC = () => {
   };
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | 'portada' | null>(null);
 
   const rank = rankOf(xpOf(c.checks, c.days));
@@ -52,7 +54,13 @@ export const HorarioView: React.FC = () => {
   const dirty = s?.status === 'publicado' && !!s.published_at && new Date(s.updated_at).getTime() > new Date(s.published_at).getTime() + 2000;
 
   if (!h.ready) return <p className="text-sm text-zinc-500">Leyendo tu horario…</p>;
-  if (!s) return <Start onPick={h.createFrom} />;
+  if (!s)
+    return (
+      <>
+        <Start onPick={h.createFrom} onImport={() => setImporting(true)} />
+        {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
+      </>
+    );
 
   const add = async (weekday: number) => {
     const made = await h.addItem(s.id, weekday);
@@ -87,6 +95,9 @@ export const HorarioView: React.FC = () => {
         </div>
         <button type="button" onClick={() => setPanel('nuevo')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
           <Plus className="h-4 w-4" /> Nuevo horario
+        </button>
+        <button type="button" onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
+          <FileUp className="h-4 w-4" /> Importar
         </button>
         <button type="button" data-tour="publicar" onClick={() => setPanel('publicar')} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">
           <Send className="h-4 w-4" /> {s.status === 'publicado' ? 'Publicar cambios' : 'Publicar horario'}
@@ -132,6 +143,7 @@ export const HorarioView: React.FC = () => {
 
       {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} />}
       {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a) => h.publish(s.id, a)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
+      {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
       {panel === 'nuevo' && <Dialog title="Nuevo horario" onClose={() => setPanel(null)}><TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} /></Dialog>}
       {panel === 'etiquetas' && <LabelsDialog h={h} onClose={() => setPanel(null)} />}
       {panel === 'portada' && <Dialog title="Portada del horario" onClose={() => setPanel(null)}><CoverPicker value={s.cover_url} rank={rank} onPick={(cover) => { h.patchSchedule(s.id, { cover_url: cover }); setPanel(null); }} /></Dialog>}
@@ -141,11 +153,14 @@ export const HorarioView: React.FC = () => {
 
 /* ── Primer uso ─────────────────────────────────────────────────────── */
 
-const Start: React.FC<{ onPick: (id: string) => Promise<unknown> }> = ({ onPick }) => (
+const Start: React.FC<{ onPick: (id: string) => Promise<unknown>; onImport: () => void }> = ({ onPick, onImport }) => (
   <div className="mx-auto max-w-2xl py-10 text-center" data-tour="horario">
     <h1 className="font-display text-4xl font-semibold text-white">Arma tu horario</h1>
     <p className="mt-2 text-zinc-400">Parte desde una plantilla. Queda en vista previa hasta que lo publiques.</p>
     <div className="mt-8 text-left"><TemplateGrid onPick={onPick} /></div>
+    <button type="button" onClick={onImport} className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3.5 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
+      <FileUp className="h-4 w-4" /> Ya tengo un horario: importarlo
+    </button>
   </div>
 );
 

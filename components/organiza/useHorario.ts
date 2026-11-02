@@ -129,6 +129,16 @@ export function useHorario() {
     return sch;
   }, [choose, db, labels, load, space]);
 
+  /** Un horario importado nace en borrador, como todos. */
+  const createImported = useCallback(async (name: string, list: Pick<Item, 'weekday' | 'time' | 'minutes' | 'title' | 'icon' | 'description'>[]) => {
+    const [sch] = await db.insert<Schedule>('organiza_schedules', { space, name, cover_url: null, status: 'borrador', alarms: 'elegidas', updated_at: new Date().toISOString() });
+    if (!sch) return null;
+    if (list.length) await db.insert('organiza_items', list.map((it, sort) => ({ ...it, sort, schedule_id: sch.id, label_id: null, cover_url: null, stage: 'sin_empezar', progress: 0, alarm: 'notificacion', alarm_before: 0, focus: false, modules: modulesFor(it.title) })));
+    await load();
+    choose(sch.id);
+    return sch;
+  }, [choose, db, load, space]);
+
   /**
    * Publicar: este horario pasa a ser el de la semana y sus tareas se vuelven
    * eventos semanales. Solo un horario publicado por base.
@@ -178,7 +188,7 @@ export function useHorario() {
   const published = schedules.find((s) => s.status === 'publicado') ?? null;
   const publishedItems = useMemo(() => items.filter((i) => i.schedule_id === published?.id), [items, published?.id]);
 
-  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, publish, unpublish, removeSchedule, reload: load };
+  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, publish, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */
