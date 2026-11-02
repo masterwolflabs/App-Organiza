@@ -14,6 +14,8 @@ const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-disp
 export const metadata: Metadata = {
   title: APP.name,
   description: APP.description,
+  appleWebApp: { capable: true, title: APP.name, statusBarStyle: 'black-translucent' },
+  icons: { apple: '/apple-touch-icon.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,7 @@
+{
+  "appId": "com.masterwolflabs.organiza",
+  "appName": "Organiza",
+  "webDir": "www",
+  "server": { "url": "https://app-organiza-six.vercel.app", "cleartext": false },
+  "ios": { "contentInset": "always" }
+}

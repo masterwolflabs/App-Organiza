@@ -26,6 +26,8 @@ agenda.
 | 3. Semana tipo, horas libres, cruces, cambiar un solo día | Lista |
 | 4. Agendar por voz con tarjeta de confirmación | Pendiente |
 | 5. Revisión final en computador y celular | Pendiente |
+| 6. Persona/Empresa, Daily, horario publicable, mundo por tarea, checklist, Ruta, tour | Lista |
+| 7. Google, Apple, Notion, avisos e iPhone | Código listo, faltan llaves: `docs/CONEXIONES.md` |
 
 Pendientes concretos:
 

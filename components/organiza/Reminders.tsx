@@ -3,8 +3,33 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BellRing, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
-import { toMinutes, weekdayOf, type Item } from '@/components/organiza/model';
+import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
+
+type NativeNotifications = {
+  requestPermissions: () => Promise<{ display: string }>;
+  getPending: () => Promise<{ notifications: { id: number }[] }>;
+  cancel: (o: { notifications: { id: number }[] }) => Promise<void>;
+  schedule: (o: { notifications: unknown[] }) => Promise<void>;
+};
+
+/** En la app del iPhone los avisos quedan programados en el teléfono: suenan sin internet y con la app cerrada. iOS guarda hasta 64. */
+async function scheduleNative(items: Item[], alarms: Schedule['alarms']) {
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; Plugins?: { LocalNotifications?: NativeNotifications } } }).Capacitor;
+  const ln = cap?.Plugins?.LocalNotifications;
+  if (!cap?.isNativePlatform?.() || !ln) return;
+  if ((await ln.requestPermissions()).display !== 'granted') return;
+  const pending = await ln.getPending();
+  if (pending.notifications.length) await ln.cancel({ notifications: pending.notifications });
+  const list = items.filter((i) => alarms === 'todas' || (alarms === 'elegidas' && i.alarm !== 'no')).slice(0, 64);
+  await ln.schedule({
+    notifications: list.map((i, n) => {
+      const at = (toMinutes(i.time) - i.alarm_before + 1440) % 1440;
+      const dayShift = toMinutes(i.time) - i.alarm_before < 0 ? 6 : 0;
+      return { id: n + 1, title: `${i.icon} ${i.title}`.trim(), body: i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`, schedule: { on: { weekday: ((i.weekday + dayShift + 1) % 7) + 1, hour: Math.floor(at / 60), minute: at % 60 } }, sound: 'default' };
+    }),
+  });
+}
 
 const beep = (times: number) => {
   try {
@@ -28,6 +53,10 @@ export const Reminders: React.FC = () => {
   const { published, publishedItems } = useHorario();
   const [ringing, setRinging] = useState<Item | null>(null);
   const seen = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (published) scheduleNative(publishedItems, published.alarms).catch(() => {});
+  }, [published, publishedItems]);
 
   useEffect(() => {
     if (!published || published.alarms === 'ninguna') return;

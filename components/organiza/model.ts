@@ -72,7 +72,7 @@ export const STAGES = [
   { id: 'listo', label: 'Listo', color: '#34d399' },
 ];
 export const stageOf = (id: string) => STAGES.find((s) => s.id === id) ?? STAGES[0];
-export const LABEL_COLORS = ['#38bdf8', '#2563eb', '#a78bfa', '#f472b6', '#f87171', '#fb923c', '#fbbf24', '#34d399', '#94a3b8'];
+export const LABEL_COLORS = ['#38bdf8', '#60a5fa', '#a78bfa', '#f472b6', '#f87171', '#fb923c', '#fbbf24', '#34d399', '#94a3b8'];
 
 /** Una actividad se sigue por su nombre: "Levantarse" del lunes y del martes es el mismo récord. */
 export const refOf = (title: string) =>
@@ -139,9 +139,9 @@ export function modulesFor(title: string): Module[] {
 
 type Seed = { d: number; t: string; title: string; icon: string; label: string; min?: number };
 export const EMANUEL_LABELS: { name: string; color: string; icon: string }[] = [
-  { name: 'Zúbale AM', color: '#2563eb', icon: '🅉' },
-  { name: 'Zúbale PM', color: '#2563eb', icon: '🅉' },
-  { name: 'Zúbale XL+', color: '#1d4ed8', icon: '🅉' },
+  { name: 'Zúbale AM', color: '#60a5fa', icon: '🅉' },
+  { name: 'Zúbale PM', color: '#60a5fa', icon: '🅉' },
+  { name: 'Zúbale XL+', color: '#818cf8', icon: '🅉' },
   { name: 'Free', color: '#fbbf24', icon: '😌' },
 ];
 const am = (d: number, label: string, salir: string, alistar = '6:30'): Seed[] => [

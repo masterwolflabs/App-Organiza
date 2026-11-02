@@ -174,3 +174,7 @@ update public.hub_apps set ai = coalesce(ai, '{}'::jsonb) || jsonb_build_object(
 -- Las áreas pueden repetir nombre entre Persona y Empresa.
 alter table public.organiza_areas drop constraint if exists organiza_areas_owner_id_name_key;
 create unique index if not exists organiza_areas_owner_space_name on public.organiza_areas (owner_id, space, name);
+
+-- Reconocer una fila que vino de Notion al volver a traerla.
+alter table public.organiza_items add column if not exists notion_id text;
+create index if not exists organiza_items_notion_idx on public.organiza_items (notion_id);

@@ -74,7 +74,7 @@ export const HorarioView: React.FC = () => {
           defaultValue={s.name}
           aria-label="Nombre del horario"
           onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && h.patchSchedule(s.id, { name: e.target.value.trim() })}
-          className="min-w-0 max-w-full flex-1 basis-56 rounded-lg bg-transparent font-display text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
+          className="w-full min-w-0 rounded-lg bg-transparent font-display sm:w-auto sm:flex-1 text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
         />
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}>
           {s.status === 'publicado' ? (dirty ? 'Publicado · con cambios' : 'Publicado') : 'Vista previa'}

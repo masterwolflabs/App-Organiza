@@ -5,6 +5,7 @@ import { FileText, Flame, Plus, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
+import { FocusTimer } from '@/components/organiza/FocusTimer';
 import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { coverCss, iso, MODULE_CHOICES, rankOf, refOf, STAGES, streakOf, WEEK, weekdayOf, xpOf, type AlarmKind, type Item, type Module } from '@/components/organiza/model';
@@ -22,6 +23,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const confirm = useConfirm();
   const [cover, setCover] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [focusing, setFocusing] = useState(false);
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -89,6 +91,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Marca esta tarea como tiempo sin interrupciones</span></span>
               <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
             </label>
+            {item.focus && <button type="button" onClick={() => setFocusing(true)} className="w-full rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Empezar {item.minutes} minutos de focus</button>}
 
             <Field label="Descripción"><textarea key={`d${item.id}`} defaultValue={item.description} rows={3} onBlur={(e) => e.target.value !== item.description && set({ description: e.target.value })} className={field} /></Field>
             {note && <button type="button" onClick={note.open} className="inline-flex items-center gap-2 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]"><FileText className="h-4 w-4" /> {note.exists ? 'Abrir su nota' : 'Crear su nota'}</button>}
@@ -118,6 +121,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
           </div>
         </aside>
       </div>
+      {focusing && <FocusTimer item={item} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
     </BodyPortal>
   );
 };

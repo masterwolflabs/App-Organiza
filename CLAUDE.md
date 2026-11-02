@@ -27,6 +27,12 @@ Notion por áreas de vida, y agendar por voz.
   Mover ahí siempre mueve la serie, porque es la semana tipo.
 - Plan: 1 base ✅, 2 áreas y fijo/variable ✅, 3 horario y excepciones ✅, 4 voz con tarjeta de confirmación (toca el repo de la nube), 5
   revisión.
+- **Persona / Empresa** (Emanuel, 2026-11-02): `components/organiza/space.tsx`; todo dato lleva `space` y las pantallas son las mismas.
+- **Horario** ya no es `CalendarView`: `organiza_schedules` + `organiza_items` (SQL 27). Nace en vista previa; publicar lo vuelve eventos semanales `source='horario'`, y solo hay uno publicado por base.
+- **Datos**: `components/organiza/db.tsx` (`useDb`) para probar en memoria; lógica en `model.ts` y `useHorario.ts`. El récord se sigue por nombre de actividad (`refOf`).
+- **Daily** vive aquí (`components/daily/`): la cuenta Labs lee `table_views.daily`, la misma de `daily.sh`; las demás, `organiza-daily-<space>`.
+- **Conexiones y teléfono**: `docs/CONEXIONES.md`. Llaves en Vercel; `lib/server/` es solo servidor.
+- **Tour**: `utils/tourScript.ts` debe ser igual a `src/utils/organizaTour.ts` de la nube, que genera la voz.
 - Guía para quien sigue el proyecto: `docs/TRASPASO.md`. SQL 24 y 25: `docs/sql/`.
 - Modo claro: `bg-white` significa oscuro (la plantilla invierte `--color-white`);
   para blanco real usar `bg-[#fff]`.
