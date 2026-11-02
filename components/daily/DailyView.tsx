@@ -497,7 +497,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
     />
   );
-  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle={!compact} onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
 
   return (
     <div>

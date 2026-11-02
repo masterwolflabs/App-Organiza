@@ -40,11 +40,10 @@ export const DayPanel: React.FC = () => {
   };
 
   if (!h.ready) return null;
-  if (!h.schedules.length) return null;
+  if (!h.schedules.length) return <p className="text-sm text-zinc-400">Todavía no tienes un horario. <a href="#horario" className="font-semibold text-sky-300">Ir a Horario</a></p>;
   return (
-    <section data-tour="mi-dia" className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5" style={schedule?.color ? { boxShadow: `inset 3px 0 0 ${schedule.color}` } : undefined}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-lg font-semibold text-white">Mi día</h2>
+    <div data-tour="mi-dia" className="rounded-xl pl-3" style={schedule?.color ? { boxShadow: `inset 3px 0 0 ${schedule.color}` } : undefined}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <select aria-label="Horario de hoy" value={schedule?.id ?? ''} onChange={(e) => h.setPlan(day, { schedule_id: e.target.value || null })} className="max-w-[60vw] truncate rounded-lg bg-white/[0.05] px-2 py-1.5 text-sm text-zinc-200 outline-none ring-1 ring-white/10">
           <option value="" className="bg-zinc-900">Sin horario hoy</option>
           {h.schedules.map((s) => <option key={s.id} value={s.id} className="bg-zinc-900">{s.mode || 'Base'} · {scheduleLabel(s)}</option>)}
@@ -86,7 +85,7 @@ export const DayPanel: React.FC = () => {
         for (const m of p.moved) await c.mark(m.item.title, day, false, { state: 'reprogramada' });
         setFixing(false);
       }} />}
-    </section>
+    </div>
   );
 };
 

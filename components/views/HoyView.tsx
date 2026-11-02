@@ -8,6 +8,7 @@ import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfDay, star
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { DailyView } from '@/components/daily/DailyView';
 import { DayPanel } from '@/components/organiza/DayPanel';
+import { Section, SectionOrder } from '@/components/tables/section';
 import { Checklist } from '@/components/views/ChecklistView';
 
 /** La cinta muestra el día despierto; lo que cae fuera se ve igual en la lista. */
@@ -61,11 +62,10 @@ export const HoyView: React.FC = () => {
         </button>
       </header>
 
-      <div className="mt-8"><DayPanel /></div>
-
-      <section className="mt-8" data-tour="daily">
-        <DailyView compact />
-      </section>
+      {/* Mi día y Pendientes se mueven y se configuran como cualquier sección. */}
+      <div className="mt-8 space-y-6" data-tour="daily">
+        <SectionOrder storageKey="organiza-hoy-orden" ids={['hoy-dia', 'daily-hoy']} blocks={{ 'hoy-dia': <Section n={1} id="hoy-dia" title="Mi día"><DayPanel /></Section>, 'daily-hoy': <DailyView compact /> }} />
+      </div>
 
       {status === 'error' ? (
         <p className="mt-8 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No se pudo leer el calendario. Revisa tu conexión y recarga la página.</p>
