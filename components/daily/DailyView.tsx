@@ -6,6 +6,7 @@ import { dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type ViewDef } from '@/components/tables/table';
 import { Editable } from '@/components/tables/editable';
+import { Section } from '@/components/tables/section';
 import { useConfirm } from '@/components/ui/confirm';
 import { McAvatar } from '@/components/calendar/McAvatar';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
@@ -358,6 +359,8 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     },
   ];
 
+  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -374,7 +377,8 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           <Plus className="h-4 w-4" /> Nueva tarea
         </button>
       </div>
-      <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />
+      {/* In a Section, like every Empresa table: its Configuración gets Tamaño, Mover and Apariencia. Hoy has its own fixed height. */}
+      {compact ? table : <Section n={1} id="daily-tabla" title="Daily - Pendientes">{table}</Section>}
       {!showArchived && !compact && labs && (
         <DailyBoard
           tasks={rows}
