@@ -6,6 +6,7 @@ import "./appearance.css";
 import { APP } from "@/app.config";
 import { THEME_BOOT_SCRIPT } from "@/utils/theme";
 import { APPEARANCE_BOOT_SCRIPT } from "@/utils/appearance";
+import { GlobalFileDrop } from "@/components/ui/GlobalFileDrop";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 // Títulos grandes y expresivos (igual que Finance).
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning className="bg-[#09090b] text-zinc-100 antialiased h-full">
         {children}
+        <GlobalFileDrop />
       </body>
     </html>
   );

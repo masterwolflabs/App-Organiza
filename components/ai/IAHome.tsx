@@ -1,5 +1,6 @@
 'use client';
 
+import { FILE_DROP, hasDroppedFile } from '@/utils/fileDrop';
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight, History, MessageSquare } from 'lucide-react';
 import { AIChatView } from '@/components/ai/AIChatView';
@@ -34,6 +35,13 @@ export const IAHome: React.FC<{
     onChatOpenChange?.(chatOpen);
   }, [chatOpen, onChatOpenChange]);
   useEffect(() => () => onChatOpenChange?.(false), [onChatOpenChange]);
+  // A file dropped anywhere goes straight to the chat.
+  useEffect(() => {
+    const open = () => setChatOpen(true);
+    if (hasDroppedFile()) open();
+    window.addEventListener(FILE_DROP, open);
+    return () => window.removeEventListener(FILE_DROP, open);
+  }, []);
 
   // Picked on mount (client only) so each visit gets a new phrase.
   useEffect(() => {

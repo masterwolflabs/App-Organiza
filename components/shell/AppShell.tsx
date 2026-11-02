@@ -1,5 +1,6 @@
 'use client';
 
+import { FILE_DROP } from '@/utils/fileDrop';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { APP } from '@/app.config';
@@ -52,6 +53,11 @@ export function AppShell({ session }: { session: Session }) {
   // IA: la conversación abierta sobrevive al navegar; con el chat abierto, ocupa toda la pantalla.
   const [iaConversationId, setIaConversationId] = useState<string | null>(null);
   const [iaChatOpen, setIaChatOpen] = useState(false);
+  useEffect(() => {
+    const toIA = () => navigate('ia');
+    window.addEventListener(FILE_DROP, toIA);
+    return () => window.removeEventListener(FILE_DROP, toIA);
+  }, []);
   const calculatorRef = useRef<CalculatorWidgetHandle>(null);
   const openCalculator = useCallback(() => calculatorRef.current?.open(), []);
   const [profileName, setProfileName] = useState<string | null>(null);

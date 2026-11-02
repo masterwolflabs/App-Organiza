@@ -8,6 +8,7 @@
  *  - Si la nube aún no tiene llaves de IA, lo avisa.
  */
 
+import { FILE_DROP, takeDroppedFile } from '@/utils/fileDrop';
 import { SupportErrorAction } from '@/components/support/SupportErrorAction';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { VoiceRecorder } from '@/components/community/VoiceRecorder';
@@ -341,6 +342,29 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
       setUploading(false);
     }
   };
+
+  // A file dropped anywhere in the app lands here: the assistant asks what it's for.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const take = async () => {
+      const file = takeDroppedFile();
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) return setError('El archivo es muy pesado (máximo 10 MB).');
+      setUploading(true);
+      try {
+        const att = await uploadAIFile(file, file.name, 'files');
+        await sendRef.current('Te acabo de subir este archivo. Pregúntame para qué es y dime qué puedes hacer con él.', [att]);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo subir el archivo.');
+      } finally {
+        setUploading(false);
+      }
+    };
+    take();
+    window.addEventListener(FILE_DROP, take);
+    return () => window.removeEventListener(FILE_DROP, take);
+  }, []);
 
   // Voice: record → upload original → transcribe → send the transcript as the message.
   const sendVoice = async (blob: Blob, seconds: number) => {

@@ -465,7 +465,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   // --- Picture upload (also used by paste) ---
-  const insertImageFile = async (file: File) => {
+  const insertImageFile = async (file: File, at?: number) => {
     if (!requireUpload()) return;
     if (!file.type.startsWith('image/')) {
       notify('Ese archivo no es una imagen.');
@@ -490,7 +490,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         id: crypto.randomUUID(),
         path,
         x: (1 - w) / 2,
-        y: (scrollRef.current?.scrollTop ?? 0) + 80,
+        y: at ?? (scrollRef.current?.scrollTop ?? 0) + 80,
         w,
         ratio: height / width,
       };
@@ -535,6 +535,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     } finally {
       setUploading(false);
     }
+  };
+
+  // Dragged onto the note, wherever it lands: pictures stay where they were dropped, the rest as attachments.
+  const dropFiles = (e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+    e.preventDefault();
+    if (readOnly) return;
+    const top = canvasRef.current?.getBoundingClientRect().top ?? 0;
+    Array.from(e.dataTransfer.files).forEach((f, i) => (f.type.startsWith('image/') ? insertImageFile(f, Math.max(0, e.clientY - top) + i * 24) : attachFile(f)));
   };
 
   const removeAttachment = (id: string) => {
@@ -1150,7 +1159,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const participants = meta?.participants ?? [];
 
   return (
-    <div ref={rootRef} className={`theme-fixed relative flex h-full w-full flex-col text-zinc-900 ${darkPage ? 'note-dark bg-[#16171b]' : colors.bg}`}>
+    <div ref={rootRef} onDragOver={(e) => e.preventDefault()} onDropCapture={dropFiles} className={`theme-fixed relative flex h-full w-full flex-col text-zinc-900 ${darkPage ? 'note-dark bg-[#16171b]' : colors.bg}`}>
       {/* Header */}
       <div
         onPointerDown={(e) => {
