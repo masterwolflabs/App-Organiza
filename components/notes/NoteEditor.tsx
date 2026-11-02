@@ -17,6 +17,7 @@ import { formatCLP } from '@/utils/formatters';
 import { formatMathValue, trailingExpression } from '@/utils/mathText';
 import { VoiceNoteRecorder, type FinishedRecording } from '@/components/notes/VoiceNoteRecorder';
 import { BodyPortal } from '@/components/ui/BodyPortal';
+import { NoteImageWrap, applyImageWrap } from '@/components/notes/noteImageWrap';
 import { clock, extOfMime, voiceVault } from '@/utils/voiceVault';
 import { IMPROVE_LABEL, MAX_IMPROVE_CHARS, protectEmbeds, restoreEmbeds, type ImproveMode } from '@/utils/noteImprove';
 import {
@@ -604,6 +605,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       TaskItem.configure({ nested: true }),
       // Notion-style database inside the note (components/databases/DatabaseEmbed.tsx).
       DatabaseEmbedExtension,
+      NoteImageWrap,
       Placeholder.configure({ placeholder: readOnly ? '' : 'Escribe aquí… detalles, pendientes, contexto del movimiento.' }),
     ],
     content: initial.bodyHtml,
@@ -1161,6 +1163,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // A Daily task's page follows the app's theme (Emanuel, 2026-10-27: dark app → dark page, light → light).
   const taskPage = (draft.links ?? []).some((l) => l.type === 'task');
   const darkPage = movementNote || (taskPage && !(typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light'));
+  // Text flows around the pictures, and follows them while they move.
+  useEffect(() => {
+    if (!editor || canvasW <= 0) return;
+    const boxes = draft.images.map((i) => ({ id: i.id, left: i.x * canvasW, top: i.y, width: i.w * canvasW, height: i.w * canvasW * i.ratio }));
+    let raf = requestAnimationFrame(() => {
+      applyImageWrap(editor.view, boxes, canvasW);
+      raf = requestAnimationFrame(() => applyImageWrap(editor.view, boxes, canvasW));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [editor, draft.images, draft.bodyHtml, canvasW]);
+
   const canvasMinHeight = draft.images.reduce((max, i) => Math.max(max, i.y + i.w * canvasW * i.ratio + 80), 0);
   const iconBtn =
     'flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900/70 transition-colors hover:bg-black/10 hover:text-zinc-900';
