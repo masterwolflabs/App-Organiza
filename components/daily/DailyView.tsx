@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, ArchiveRestore, ArrowUpRight, PanelLeft, Plus, Trash2 } from 'lucide-react';
+import { AlignLeft, Archive, ArchiveRestore, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
 import { dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type ViewDef } from '@/components/tables/table';
@@ -109,6 +109,61 @@ export const PeopleCell: React.FC<{ value: string[]; entities: Entity[]; photoOf
         />
       )}
     </>
+  );
+};
+
+/** What a task's page needs to show its properties. It lives apart: the note's window isn't under the Daily. */
+type PageData = {
+  tasks: DailyTask[];
+  now: number;
+  patch: (id: string, p: Partial<DailyTask>) => void;
+  entities: Entity[];
+  photoOf: (name: string) => string | null;
+  createPerson: (name: string) => Promise<string | null>;
+  statusOptions: { value: string; label: string }[];
+  tagOptions: { value: string; label: string }[];
+  appOptions: { value: string; label: string }[];
+  appLabel: string;
+};
+const pageData = { data: null as PageData | null, subs: new Set<() => void>() };
+const publishPage = (data: PageData | null) => {
+  pageData.data = data;
+  pageData.subs.forEach((f) => f());
+};
+const subscribePage = (f: () => void) => {
+  pageData.subs.add(f);
+  return () => {
+    pageData.subs.delete(f);
+  };
+};
+const PRIORITY_TONE = { ok: 'text-emerald-700', soon: 'text-amber-700', late: 'text-rose-700', done: 'text-zinc-900/50', none: 'text-zinc-900/40' };
+
+/** Under the title of a task's note: its properties, like a Notion page (Emanuel, 2026-11-02). */
+const TaskProperties: React.FC<{ id: string }> = ({ id }) => {
+  const d = React.useSyncExternalStore(subscribePage, () => pageData.data, () => null);
+  const t = d?.tasks.find((x) => `pendiente:${x.id}` === id);
+  if (!d || !t) return null;
+  const p = priorityOf(t, d.now);
+  const empty = <span className="text-zinc-900/40">Vacío</span>;
+  const rows: [string, React.ComponentType<{ className?: string }>, React.ReactNode][] = [
+    ['Ejecutor', User, <PeopleCell key="e" value={t.executors} entities={d.entities} photoOf={d.photoOf} onChange={(v) => d.patch(t.id, { executors: v })} onCreate={d.createPerson} />],
+    ['Empieza', CalendarDays, <Editable key="s" label="Empieza" value={t.start} kind="date" noConfirm onSave={async (v) => d.patch(t.id, { start: (v as string) || null })}>{showDate(t.start) || empty}</Editable>],
+    ['Entrega', CalendarDays, <Editable key="d" label="Entrega" value={t.due} kind="date" noConfirm onSave={async (v) => d.patch(t.id, { due: (v as string) || null })}>{showDate(t.due) || empty}</Editable>],
+    ['Estado', Loader, <Editable key="st" label="Estado" value={t.status} kind="select" required options={d.statusOptions} noConfirm onSave={async (v) => d.patch(t.id, { status: (v as DailyStatus) || t.status })}><Pill cls={STATUS_INFO[t.status].cls}>{STATUS_INFO[t.status].label}</Pill></Editable>],
+    ['Prioridad', Sigma, <div key="p" className={`font-semibold ${PRIORITY_TONE[p.tone]}`}>{p.text}</div>],
+    ['Etiqueta', CircleDot, <Editable key="t" label="Etiqueta" value={t.tag} kind="select" required options={d.tagOptions} noConfirm onSave={async (v) => d.patch(t.id, { tag: (v as DailyTag) || t.tag })}><Pill cls={TAG_INFO[t.tag].cls}>{TAG_INFO[t.tag].label}</Pill></Editable>],
+    [d.appLabel, LayoutGrid, <Editable key="a" label={d.appLabel} value={t.app} kind="select" required options={d.appOptions} noConfirm onSave={async (v) => d.patch(t.id, { app: String(v || t.app) })}>{t.app || empty}</Editable>],
+    ['Descripción', AlignLeft, <Editable key="n" label="Descripción" value={t.description} noConfirm onSave={async (v) => d.patch(t.id, { description: String(v ?? '') })}>{t.description || empty}</Editable>],
+  ];
+  return (
+    <div className="mt-4 space-y-1 border-b border-black/10 pb-4 text-sm text-zinc-900">
+      {rows.map(([label, Icon, value]) => (
+        <div key={label} className="grid grid-cols-[150px_1fr] items-start gap-3 rounded-md px-1 py-1 hover:bg-black/[0.04]">
+          <span className="flex items-center gap-2 text-zinc-900/55"><Icon className="h-4 w-4 shrink-0" /> {label}</span>
+          <div className="min-w-0 [&_b]:text-zinc-900 [&_span]:text-inherit">{value}</div>
+        </div>
+      ))}
+    </div>
   );
 };
 
@@ -252,6 +307,26 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   };
   const photoOf = (name: string) =>
     nameKey(name) === 'claude' ? '/people/claude.svg' : (staff.find((x) => nameKey(x.name) === nameKey(name))?.avatar_url ?? photos[nameKey(name)] ?? null);
+  // One name: whichever side changed since the last match (what the link remembers) brings the other along.
+  const bridge = useNotesBridge();
+  const allNotes = bridge?.pickableNotes;
+  useEffect(() => {
+    if (!bridge?.renameLinked || !store?.ready) return;
+    for (const t of doc.tasks) {
+      const linkId = `pendiente:${t.id}`;
+      const note = bridge.linkedNote?.('task', linkId);
+      const link = note?.links?.find((l) => l.id === linkId);
+      if (!note || !link) continue;
+      const title = note.title.trim();
+      if (title && title !== link.label) {
+        if (title !== t.title) patch(t.id, { title });
+        bridge.renameLinked(note.id, note.title, linkId);
+      } else if (t.title !== link.label) bridge.renameLinked(note.id, t.title, linkId);
+    }
+  }, [allNotes, doc.tasks, store?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linkPanel = bridge?.linkPanel;
+  useEffect(() => linkPanel?.('task', TaskProperties), [!!linkPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const actions: TaskActions = { onArchive: (t) => patch(t.id, { archived: !fresh().tasks.find((x) => x.id === t.id)?.archived }), onDelete: remove };
 
   // Urgente e importante first, then what's due sooner; finished at the end.
@@ -270,6 +345,11 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
 
   const opt = <K extends string>(info: Record<K, { label: string }>) => (Object.keys(info) as K[]).map((k) => ({ value: k, label: info[k].label }));
   const statusOptions = opt(STATUS_INFO).filter((o) => labs || (o.value !== 'aprobada_claude' && o.value !== 'esperando'));
+  useEffect(() => {
+    publishPage({ tasks: doc.tasks, now, patch, entities, photoOf, createPerson, statusOptions, tagOptions: opt(TAG_INFO), appOptions: apps.map((a) => ({ value: a, label: a })), appLabel: labs ? 'Aplicación' : 'Área' });
+  });
+  useEffect(() => () => publishPage(null), []);
+
   const columns: Col<DailyTask>[] = [
     {
       key: 'nombre',

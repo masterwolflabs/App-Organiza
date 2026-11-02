@@ -281,6 +281,10 @@ interface NoteEditorProps {
   topSlot?: React.ReactNode;
   /** Extra actions at the very bottom of the page (e.g. a Daily task's Archivar / Borrar). */
   footer?: React.ReactNode;
+  /** Right under the title, before the text (a Daily task's properties, like a Notion page). */
+  titleSlot?: React.ReactNode;
+  /** The title as saved elsewhere (a task renamed from its table): the open note follows it. */
+  liveTitle?: string;
 }
 
 export const NoteEditor: React.FC<NoteEditorProps> = ({
@@ -306,6 +310,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   topSlot,
   loadLatest,
   footer,
+  titleSlot,
+  liveTitle,
 }) => {
   const readOnly = role === 'viewer';
   const [draft, setDraft] = useState(initial);
@@ -371,6 +377,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     },
     [presenceName]
   );
+
+  useEffect(() => {
+    const d = draftRef.current;
+    if (liveTitle === undefined || liveTitle === d.title || timer.current || document.activeElement === titleRef.current) return;
+    const next = { ...d, title: liveTitle };
+    draftRef.current = next;
+    savedSig.current = signature(next);
+    setDraft(next);
+  }, [liveTitle]);
 
   // Saves run strictly one after another, always reading the latest draft, so a
   // slow "create" can never race a follow-up edit into inserting a duplicate row.
@@ -1431,6 +1446,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             placeholder="Título"
             className="w-full bg-transparent text-3xl font-extrabold tracking-tight text-zinc-900 placeholder:text-zinc-900/35 focus:outline-none"
           />
+          {titleSlot}
 
           {/* Category + meta */}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-zinc-900/55">

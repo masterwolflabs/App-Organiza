@@ -28,6 +28,10 @@ export interface NotesBridgeValue {
   linkedNote?: (type: NoteLinkType, id: string) => Note | null;
   /** Opens it, or starts it linked to the record in the given category. */
   openLinkedNote?: (type: NoteLinkType, id: string, label: string, category: string, text?: string, backLabel?: string, start?: { html?: string; color?: string }) => void;
+  /** The record's name and its note's are one: saves the title and the name the link remembers. */
+  renameLinked?: (noteId: string, title: string, linkId: string) => void;
+  /** What shows under the title of the notes linked to this type (a Daily task's properties). */
+  linkPanel?: (type: NoteLinkType, panel: React.ComponentType<{ id: string }>) => void;
 }
 
 const NotesBridgeContext = createContext<NotesBridgeValue | null>(null);

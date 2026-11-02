@@ -45,6 +45,7 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [incomingShare, setIncomingShare] = useState<{ token: string; note: SharedLinkNote } | null>(null);
   const [toast, showToast] = useState<string | null>(null);
+  const [panels, setPanels] = useState<Partial<Record<string, React.ComponentType<{ id: string }>>>>({});
 
   useEffect(() => {
     try {
@@ -152,6 +153,11 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
       if (found) return openNoteObj(found, backLabel);
       setOpenNote({ key: ++noteKey.current, id: null, draft: emptyDraft({ title: label, category, body: text ?? '', bodyHtml: start?.html ?? '', ...(start?.color ? { color: start.color } : {}), links: [{ type, id, label }] } as Partial<Draft>), role: 'owner', backLabel });
     },
+    renameLinked: (noteId, title, linkId) => {
+      const note = notesSys.findNote(noteId);
+      if (note) notesSys.update(noteId, { title, links: (note.links ?? []).map((l) => (l.id === linkId ? { ...l, label: title } : l)) });
+    },
+    linkPanel: (type, panel) => setPanels((p) => (p[type] === panel ? p : { ...p, [type]: panel })),
   };
 
   // Arriving from a share link (/?share=<token>, after login if needed) or a
@@ -181,6 +187,8 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
       {openNote &&
         (() => {
           const live = openNote.id ? notesSys.findNote(openNote.id) : null;
+          const panelLink = ((live ?? openNote.draft).links ?? []).find((l) => panels[l.type]);
+          const Panel = panelLink ? panels[panelLink.type] : undefined;
           return (
             <NoteWindow
               key={openNote.key}
@@ -207,6 +215,8 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
                 archived: Boolean(live?.archivedAt),
               }}
               presenceName={session.displayName || session.email}
+              titleSlot={Panel && panelLink ? <Panel id={panelLink.id} /> : undefined}
+              liveTitle={live?.title}
             />
           );
         })()}
