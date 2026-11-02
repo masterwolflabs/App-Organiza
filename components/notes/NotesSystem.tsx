@@ -16,6 +16,7 @@
  * Va DENTRO de ChatProvider (usa sus cuentas y sus mensajes directos) y de
  * DatabaseStoreProvider (bases de datos dentro de una nota), si existen.
  */
+import { useNoteUrl } from '@/utils/noteUrl';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveSession } from '@/types/auth';
 import type { Note, NoteRole, NoteShareRole, ViewMode } from '@/types/notes';
@@ -89,6 +90,8 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
     const role: NoteRole = notesSys.roleOf(noteId) ?? 'viewer';
     setOpenNote({ key: ++noteKey.current, id: note.id, draft: noteToDraft(note), role });
   };
+
+  useNoteUrl(openNote?.id ?? null, (openNote?.id ? notesSys.findNote(openNote.id)?.title : null) ?? openNote?.draft.title ?? '', (id) => openNoteById(id), () => setOpenNote(null));
 
   const handleDuplicateNote = async (note: Note, forMe?: boolean) => {
     const id = await notesSys.duplicate(note, { forMe });
@@ -168,7 +171,6 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
     const noteParam = params.get('note');
     if (!token && !noteParam) return;
     params.delete('share');
-    params.delete('note');
     const rest = params.toString();
     window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
     if (token) {
