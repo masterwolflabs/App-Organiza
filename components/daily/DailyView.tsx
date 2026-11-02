@@ -6,7 +6,7 @@ import { dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type ViewDef } from '@/components/tables/table';
 import { Editable } from '@/components/tables/editable';
-import { Section } from '@/components/tables/section';
+import { NameMenu, Section } from '@/components/tables/section';
 import { useConfirm } from '@/components/ui/confirm';
 import { McAvatar } from '@/components/calendar/McAvatar';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
@@ -124,6 +124,7 @@ type PageData = {
   tagOptions: { value: string; label: string }[];
   appOptions: { value: string; label: string }[];
   appLabel: string;
+  actions: TaskActions;
 };
 const pageData = { data: null as PageData | null, subs: new Set<() => void>() };
 const publishPage = (data: PageData | null) => {
@@ -167,6 +168,24 @@ const TaskProperties: React.FC<{ id: string }> = ({ id }) => {
   );
 };
 
+/** Last thing on a task's page: Archivar and Borrar live here (and on right click), not in the row. */
+const TaskFooter: React.FC<{ id: string; onClose: () => void }> = ({ id, onClose }) => {
+  const d = React.useSyncExternalStore(subscribePage, () => pageData.data, () => null);
+  const t = d?.tasks.find((x) => `pendiente:${x.id}` === id);
+  if (!d || !t) return null;
+  const btn = 'inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-xs font-semibold text-zinc-900/70 hover:bg-black/10';
+  return (
+    <div className="flex gap-2">
+      <button type="button" className={btn} onClick={() => { d.actions.onArchive(t); onClose(); }}>
+        {t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />} {t.archived ? 'Desarchivar' : 'Archivar'}
+      </button>
+      <button type="button" className={`${btn} hover:text-rose-700`} onClick={async () => { if (await d.actions.onDelete(t)) onClose(); }}>
+        <Trash2 className="h-3.5 w-3.5" /> Borrar
+      </button>
+    </div>
+  );
+};
+
 /** A task's page = its own gray note (Sistema de Notas), started from the explanation in utils/dailyPages. */
 type TaskActions = { onArchive: (t: DailyTask) => void; onDelete: (t: DailyTask) => Promise<boolean> };
 type DailyMode = { docKey: string; labs: boolean; compact?: boolean };
@@ -192,7 +211,7 @@ const OpenButton: React.FC<{ t: DailyTask }> = ({ t }) => {
       type="button"
       onClick={page.open}
       data-help="Abre la página de la tarea: qué hay que hacer, paso a paso, y espacio para tus notas y archivos."
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-[#1c1f26] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-200 opacity-0 shadow transition hover:bg-[#262a33] group-hover/row:opacity-100"
+      className="absolute right-0 top-0 hidden items-center gap-1.5 rounded-lg border border-white/15 bg-[#1c1f26] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-200 shadow hover:bg-[#262a33] focus:inline-flex group-hover/row:inline-flex"
     >
       <PanelLeft className="h-3.5 w-3.5" /> Abrir
     </button>
@@ -260,6 +279,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   // What's just been created goes above everything, even the urgent ones, until it's named and the page reloads.
   const [newIds, setNewIds] = useState<string[]>([]);
   const [writing, setWriting] = useState<string | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
   const isNew = React.useCallback((t: DailyTask) => newIds.includes(t.id) || t.title === 'Nueva tarea', [newIds]);
   const add = (p: Partial<DailyTask> = {}) => {
     const id = newId();
@@ -325,7 +345,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     }
   }, [allNotes, doc.tasks, store?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkPanel = bridge?.linkPanel;
-  useEffect(() => linkPanel?.('task', TaskProperties), [!!linkPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => linkPanel?.('task', TaskProperties, TaskFooter), [!!linkPanel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const actions: TaskActions = { onArchive: (t) => patch(t.id, { archived: !fresh().tasks.find((x) => x.id === t.id)?.archived }), onDelete: remove };
 
@@ -346,7 +366,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const opt = <K extends string>(info: Record<K, { label: string }>) => (Object.keys(info) as K[]).map((k) => ({ value: k, label: info[k].label }));
   const statusOptions = opt(STATUS_INFO).filter((o) => labs || (o.value !== 'aprobada_claude' && o.value !== 'esperando'));
   useEffect(() => {
-    publishPage({ tasks: doc.tasks, now, patch, entities, photoOf, createPerson, statusOptions, tagOptions: opt(TAG_INFO), appOptions: apps.map((a) => ({ value: a, label: a })), appLabel: labs ? 'Aplicación' : 'Área' });
+    publishPage({ tasks: doc.tasks, now, patch, entities, photoOf, createPerson, statusOptions, tagOptions: opt(TAG_INFO), appOptions: apps.map((a) => ({ value: a, label: a })), appLabel: labs ? 'Aplicación' : 'Área', actions });
   });
   useEffect(() => () => publishPage(null), []);
 
@@ -356,7 +376,14 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       label: 'Nombre',
       noClamp: true,
       cell: (t) => (
-        <span className="group/row flex items-start gap-1">
+        <span
+          className="group/row relative flex items-start gap-1"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setRowMenu({ x: e.clientX, y: e.clientY, t });
+          }}
+        >
           <Editable label="Nombre" value={t.title} noConfirm required autoEdit={writing === t.id} placeholder="Nueva tarea" onEditEnd={() => setWriting(null)} onSave={async (v) => patch(t.id, { title: String(v ?? '').trim() || t.title })}>
             <b className={`line-clamp-2 font-semibold text-white ${t.status === 'listo' ? 'line-through opacity-60' : ''}`}>{t.title}</b>
           </Editable>
@@ -365,14 +392,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
               🤖
             </span>
           )}
-          <span className="ml-auto" />
           <OpenButton t={t} />
-          <button type="button" onClick={() => actions.onArchive(t)} data-help={t.archived ? 'Desarchivar' : 'Archivar'} aria-label={t.archived ? 'Desarchivar tarea' : 'Archivar tarea'} className="shrink-0 rounded p-1 text-zinc-500 opacity-0 transition hover:text-white focus:opacity-100 group-hover/row:opacity-100">
-            {t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-          </button>
-          <button type="button" onClick={() => actions.onDelete(t)} data-help="Borrar" aria-label="Borrar tarea" className="shrink-0 rounded p-1 text-zinc-500 opacity-0 transition hover:text-rose-300 focus:opacity-100 group-hover/row:opacity-100">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
         </span>
       ),
     },
@@ -468,6 +488,17 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       </div>
       {/* In a Section, like every Empresa table: its Configuración gets Tamaño, Mover and Apariencia. Hoy has its own fixed height. */}
       {compact ? table : <Section n={1} id="daily-tabla" title="Daily - Pendientes">{table}</Section>}
+      {rowMenu && (
+        <NameMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          onClose={() => setRowMenu(null)}
+          items={[
+            { label: rowMenu.t.archived ? 'Desarchivar' : 'Archivar', icon: rowMenu.t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />, onClick: () => actions.onArchive(rowMenu.t) },
+            { label: 'Borrar', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => actions.onDelete(rowMenu.t) },
+          ]}
+        />
+      )}
       {!showArchived && !compact && labs && (
         <DailyBoard
           tasks={rows}
