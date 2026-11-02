@@ -36,7 +36,10 @@ export type Schedule = {
   color: string | null;
   /** Días que usa (0 = lunes). Dos horarios publicados nunca comparten un día. */
   days: number[];
+  sleep?: Sleep | null;
 };
+export type Sleep = { bed: string; wake: string; goal: number };
+export type Flex = 'obligatorio' | 'flexible' | 'secundario';
 export type Item = {
   id: string;
   schedule_id: string;
@@ -55,8 +58,12 @@ export type Item = {
   focus: boolean;
   modules: Module[];
   sort: number;
+  flex: Flex;
+  category: string;
+  priority: number;
+  block: string;
 };
-export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; bed?: string; wake?: string } };
+export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
 
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -73,6 +80,22 @@ export const toMinutes = (t: string) => {
 };
 export const byTime = (a: Item, b: Item) => toMinutes(a.time) - toMinutes(b.time) || a.sort - b.sort;
 
+export const FLEX: { id: Flex; label: string; hint: string }[] = [
+  { id: 'obligatorio', label: 'Obligatorio', hint: 'Se protege: nunca se mueve solo' },
+  { id: 'flexible', label: 'Flexible', hint: 'Puede moverse si hace falta' },
+  { id: 'secundario', label: 'Secundario', hint: 'Se puede aplazar ese día' },
+];
+export const CATEGORIES = [
+  { id: 'remunerado', label: 'Trabajo remunerado' },
+  { id: 'administrativo', label: 'Trabajo administrativo' },
+  { id: 'proyectos', label: 'Desarrollo de proyectos' },
+  { id: 'personal', label: 'Organización personal' },
+];
+export const PRIORITIES = [
+  { id: 1, label: 'Alta' },
+  { id: 2, label: 'Media' },
+  { id: 3, label: 'Baja' },
+];
 export const STAGES = [
   { id: 'sin_empezar', label: 'Sin empezar', color: '#a1a1aa' },
   { id: 'apuntes', label: 'Apuntes', color: '#fbbf24' },
@@ -97,6 +120,7 @@ export function streakOf(ref: string, weekdays: number[], checks: Check[], today
     seen++;
     const c = byDay.get(iso(d));
     if (!c && i === 0) continue; // hoy todavía se puede marcar
+    if (c?.value?.state) continue; // reprogramar o cancelar no corta la racha
     if (!c?.done) break;
     streak++;
   }
@@ -181,7 +205,7 @@ export const TEMPLATES = [
 
 /* ── Ruta de XP ─────────────────────────────────────────────────────── */
 
-export const XP = { check: 10, close: 25, perfect: 25 };
+export const XP = { check: 10, close: 25, perfect: 25, adapted: 5 };
 export const RANKS = [
   { name: 'Cachorro', min: 0, reward: 'Tus primeras 4 portadas' },
   { name: 'Explorador', min: 150, reward: 'Portadas Arena y Rosa' },
@@ -193,8 +217,10 @@ export const RANKS = [
 ];
 export function xpOf(checks: Check[], days: DayClose[]) {
   const done = checks.filter((c) => c.done).length;
+  // Haberlo movido y cumplirlo igual vale un poco más: premia la constancia, no el horario perfecto.
+  const adapted = checks.filter((c) => c.done && c.value?.state === 'reprogramada').length;
   const perfect = days.filter((d) => d.total > 0 && d.done === d.total).length;
-  return done * XP.check + days.length * XP.close + perfect * XP.perfect;
+  return done * XP.check + adapted * XP.adapted + days.length * XP.close + perfect * XP.perfect;
 }
 export const rankOf = (xp: number) => {
   let i = 0;

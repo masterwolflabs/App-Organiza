@@ -1,19 +1,21 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Bell, BellRing, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { Bell, BellRing, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
-import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule } from '@/components/organiza/model';
+import { freeGaps, toTime } from '@/components/organiza/dayPlan';
+import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
-type ViewId = 'tablero' | 'semana' | 'galeria' | 'lista';
+type ViewId = 'tablero' | 'semana' | 'mi-semana' | 'galeria' | 'lista';
 const VIEWS: { id: ViewId; label: string; icon: typeof Rows3 }[] = [
   { id: 'tablero', label: 'Tablero', icon: Rows3 },
   { id: 'semana', label: 'Semana', icon: LayoutGrid },
+  { id: 'mi-semana', label: 'Mi semana', icon: CalendarDays },
   { id: 'galeria', label: 'Galería', icon: ImagePlus },
   { id: 'lista', label: 'Lista', icon: List },
 ];
@@ -50,7 +52,7 @@ export const HorarioView: React.FC = () => {
   const rank = rankOf(xpOf(c.checks, c.days));
   const s = h.active;
   const shown = useMemo(() => h.activeItems.filter((i) => !filter || i.label_id === filter).sort(byTime), [h.activeItems, filter]);
-  const open = h.activeItems.find((i) => i.id === openId) ?? null;
+  const open = h.activeItems.find((i) => i.id === openId) ?? h.publishedItems.find((i) => i.id === openId) ?? null;
   const dirty = s?.status === 'publicado' && !!s.published_at && new Date(s.updated_at).getTime() > new Date(s.published_at).getTime() + 2000;
 
   if (!h.ready) return <p className="text-sm text-zinc-500">Leyendo tu horario…</p>;
@@ -134,7 +136,8 @@ export const HorarioView: React.FC = () => {
 
       <div className="mt-5">
         {view === 'tablero' && <Board items={shown} labels={h.labels} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
-        {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} />}
+        {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
+        {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
         {view === 'lista' && <ListView items={shown} labels={h.labels} onOpen={setOpenId} />}
       </div>
@@ -169,6 +172,7 @@ const ModeBar: React.FC<{ s: Schedule; h: HorarioApi; modes: string[] }> = ({ s,
   const phases = h.schedules.filter((x) => (x.mode || 'Base') === mode);
   const field = 'rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-zinc-200 outline-none ring-1 ring-white/10 focus:ring-sky-500/60';
   const live = phases.find((x) => x.status === 'publicado' && x.id !== s.id);
+  const [sleeping, setSleeping] = useState(false);
   return (
     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-400">
       <label className="flex items-center gap-2">
@@ -186,9 +190,31 @@ const ModeBar: React.FC<{ s: Schedule; h: HorarioApi; modes: string[] }> = ({ s,
       {live && <button type="button" onClick={() => h.switchPhase(live.id, s.id)} className="rounded-full bg-sky-600 px-2.5 py-1 font-semibold text-[#fff] hover:bg-sky-500">Usar esta fase</button>}
       <button type="button" onClick={() => h.duplicate(s.id, { name: s.name, phase: `Fase ${phases.length + 1}` })} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Plus className="mr-1 inline h-3 w-3" />Nueva fase</button>
       <button type="button" onClick={() => h.duplicate(s.id)} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Copy className="mr-1 inline h-3 w-3" />Duplicar</button>
+      <button type="button" onClick={() => setSleeping(true)} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Moon className="mr-1 inline h-3 w-3" />Sueño</button>
+      {sleeping && <Dialog title="Tu sueño" onClose={() => setSleeping(false)}><SleepForm s={s} onSave={async (v) => { await h.setSleep(s.id, v); setSleeping(false); }} /></Dialog>}
       <div className="flex items-center gap-1" role="group" aria-label="Color del horario">
         {LABEL_COLORS.map((c) => <button key={c} type="button" aria-label={`Color ${c}`} aria-pressed={s.color === c} onClick={() => h.patchSchedule(s.id, { color: c })} className={`h-4 w-4 rounded-full ${s.color === c ? 'ring-2 ring-white ring-offset-1 ring-offset-[#14161b]' : ''}`} style={{ background: c }} />)}
       </div>
+    </div>
+  );
+};
+
+/** El bloque de sueño sigue a esto en todos los días del horario. */
+const SleepForm: React.FC<{ s: Schedule; onSave: (v: Sleep) => Promise<void> }> = ({ s, onSave }) => {
+  const [bed, setBed] = useState(s.sleep?.bed ?? '23:00');
+  const [wake, setWake] = useState(s.sleep?.wake ?? '07:00');
+  const [goal, setGoal] = useState(s.sleep?.goal ?? 8);
+  const hours = (((toMinutes(wake) - toMinutes(bed) + 1440) % 1440) || 1440) / 60;
+  const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10';
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-3 text-xs text-zinc-400">
+        <label>Acostarse<input type="time" value={bed} onChange={(e) => e.target.value && setBed(e.target.value)} className={`${field} mt-1`} /></label>
+        <label>Levantarse<input type="time" value={wake} onChange={(e) => e.target.value && setWake(e.target.value)} className={`${field} mt-1`} /></label>
+        <label>Horas objetivo<input type="number" min={1} max={14} step={0.5} value={goal} onChange={(e) => setGoal(Number(e.target.value) || goal)} className={`${field} mt-1`} /></label>
+      </div>
+      <p className={`mt-3 text-sm ${hours < goal ? 'text-amber-300' : 'text-zinc-400'}`}>Son {hours} horas{hours < goal ? `: te faltan ${goal - hours} para tu objetivo` : ''}.</p>
+      <button type="button" onClick={() => onSave({ bed, wake, goal })} className="mt-4 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Guardar</button>
     </div>
   );
 };
@@ -324,7 +350,15 @@ const Board: React.FC<ViewProps & { onAdd: (d: number) => void; onMove: (id: str
         >
           <h2 className="px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${d === today ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}</span></h2>
           <div className="mt-1 space-y-2">
-            {items.filter((i) => i.weekday === d).map((i) => <Card key={i.id} item={i} labels={labels} onOpen={onOpen} draggable />)}
+            {items.filter((i) => i.weekday === d).map((i, n, day) => {
+              const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
+              return (
+                <React.Fragment key={i.id}>
+                  {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
+                  <Card item={i} labels={labels} onOpen={onOpen} draggable />
+                </React.Fragment>
+              );
+            })}
             <button type="button" onClick={() => onAdd(d)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>
@@ -336,7 +370,34 @@ const Board: React.FC<ViewProps & { onAdd: (d: number) => void; onMove: (id: str
 };
 
 const HOUR = 44;
-const WeekGrid: React.FC<ViewProps> = ({ items, labels, onOpen }) => {
+const SNAP = 15;
+/** Arrastrar un bloque hacia arriba o abajo cambia su hora. Sin moverlo, lo abre. */
+const useTimeDrag = (onMove: (id: string, time: string) => void, onOpen: (id: string) => void) => {
+  const [drag, setDrag] = useState<{ id: string; dy: number } | null>(null);
+  const start = (e: React.PointerEvent, i: Item) => {
+    const from = e.clientY;
+    let dy = 0;
+    const box = e.currentTarget as HTMLElement;
+    box.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      dy = Math.round(((ev.clientY - from) / HOUR) * (60 / SNAP)) * (SNAP / 60) * HOUR;
+      setDrag({ id: i.id, dy });
+    };
+    const up = () => {
+      box.removeEventListener('pointermove', move);
+      box.removeEventListener('pointerup', up);
+      setDrag(null);
+      if (!dy) return onOpen(i.id);
+      onMove(i.id, toTime(Math.max(0, Math.min(1425, toMinutes(i.time) + Math.round((dy / HOUR) * 60)))));
+    };
+    box.addEventListener('pointermove', move);
+    box.addEventListener('pointerup', up);
+  };
+  return { drag, start };
+};
+
+const WeekGrid: React.FC<ViewProps & { onMove: (id: string, time: string) => void; schedules?: Schedule[] }> = ({ items, labels, onOpen, onMove, schedules }) => {
+  const { drag, start } = useTimeDrag(onMove, onOpen);
   const mins = items.map((i) => toMinutes(i.time));
   const from = Math.max(0, Math.floor((mins.length ? Math.min(...mins) : 360) / 60));
   const to = Math.min(24, Math.ceil(Math.max(mins.length ? Math.max(...items.map((i) => toMinutes(i.time) + i.minutes)) : 1320, from * 60 + 240) / 60));
@@ -345,16 +406,24 @@ const WeekGrid: React.FC<ViewProps> = ({ items, labels, onOpen }) => {
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <div className="grid min-w-[880px] grid-cols-[3rem_repeat(7,1fr)] gap-x-1.5">
         <span />
-        {WEEK.map((n) => <p key={n} className="pb-2 text-center text-sm font-semibold text-zinc-300">{n}</p>)}
+        {WEEK.map((n, d) => {
+          const s = schedules?.find((x) => x.status === 'publicado' && daysOf(x).includes(d));
+          return (
+            <div key={n} className="pb-2 text-center">
+              <p className="text-sm font-semibold text-zinc-300">{n}</p>
+              {schedules && <p className="truncate text-[11px] font-semibold" style={{ color: s?.color ?? '#a1a1aa' }}>{s ? scheduleLabel(s) : 'Libre'}</p>}
+            </div>
+          );
+        })}
         <div className="relative" style={{ height: (to - from) * HOUR }}>
           {Array.from({ length: to - from }, (_, i) => <span key={i} className="absolute right-1 text-[11px] tabular-nums text-zinc-500" style={{ top: i * HOUR }}>{from + i}:00</span>)}
         </div>
         {WEEK.map((n, d) => (
           <div key={n} className="relative rounded-lg bg-white/[0.025]" style={{ height: (to - from) * HOUR }}>
             {items.filter((i) => i.weekday === d).map((i) => {
-              const color = labelOf(labels, i.label_id)?.color ?? '#94a3b8';
+              const color = schedules?.find((x) => x.id === i.schedule_id)?.color ?? labelOf(labels, i.label_id)?.color ?? '#94a3b8';
               return (
-                <button key={i.id} type="button" onClick={() => onOpen(i.id)} className="absolute inset-x-0.5 overflow-hidden rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white" style={{ top: y(toMinutes(i.time)), height: Math.max(20, (i.minutes / 60) * HOUR - 2), background: `${color}40`, borderLeft: `3px solid ${color}` }}>
+                <button key={i.id} type="button" aria-label={`${i.title}, ${i.time}`} onPointerDown={(e) => start(e, i)} className="absolute inset-x-0.5 cursor-grab touch-none overflow-hidden rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white active:cursor-grabbing" style={{ top: y(toMinutes(i.time)) + (drag?.id === i.id ? drag.dy : 0), height: Math.max(20, (i.minutes / 60) * HOUR - 2), background: `${color}40`, borderLeft: `3px solid ${color}` }}>
                   <span className="block truncate">{i.icon} {i.title}</span>
                 </button>
               );

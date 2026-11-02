@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDb } from '@/components/organiza/db';
 import { useSpace } from '@/components/organiza/space';
-import { ALL_DAYS, daysOf, BYDAY_OF, EMANUEL_LABELS, iso, modulesFor, refOf, TEMPLATES, weekdayOf, type Check, type DayClose, type Item, type Label, type Schedule } from '@/components/organiza/model';
+import { dayItems, scheduleFor, type DayPlan } from '@/components/organiza/dayPlan';
+import { ALL_DAYS, daysOf, toMinutes, type Sleep, BYDAY_OF, EMANUEL_LABELS, iso, modulesFor, refOf, TEMPLATES, weekdayOf, type Check, type DayClose, type Item, type Label, type Schedule } from '@/components/organiza/model';
 
 const ACTIVE = 'organiza-schedule';
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
@@ -17,17 +18,22 @@ export function nextOccurrence(weekday: number, time: string, from = new Date())
 }
 
 /** Todos los horarios de la base activa, el elegido y sus tareas. */
+/** La alarma que vale: la que eligió el horario al publicarse. */
+const withAlarm = (s: Schedule, i: Item): Item => ({ ...i, alarm: s.alarms === 'ninguna' ? 'no' : s.alarms === 'todas' && i.alarm === 'no' ? 'notificacion' : i.alarm });
+
 export function useHorario() {
   const db = useDb();
   const { space, userId } = useSpace();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
+  const [plans, setPlans] = useState<DayPlan[]>([]);
   const [activeId, setActive] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   const load = useCallback(async () => {
-    const [s, l] = await Promise.all([db.select<Schedule>('organiza_schedules', { space }), db.select<Label>('organiza_labels', { space })]);
+    const [s, l, p] = await Promise.all([db.select<Schedule>('organiza_schedules', { space }), db.select<Label>('organiza_labels', { space }), db.select<DayPlan>('organiza_day_plans', { space })]);
+    setPlans(p);
     const ids = s.map((x) => x.id);
     const it = (await db.select<Item>('organiza_items')).filter((i) => ids.includes(i.schedule_id));
     setSchedules(s.sort((a, b) => (a.status === b.status ? 0 : a.status === 'publicado' ? -1 : 1)));
@@ -77,7 +83,7 @@ export function useHorario() {
   const addItem = useCallback(async (scheduleId: string, weekday: number, p: Partial<Item> = {}) => {
     const sort = items.filter((i) => i.schedule_id === scheduleId && i.weekday === weekday).length;
     const title = p.title ?? 'Nueva tarea';
-    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time: '09:00', minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], ...p });
+    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time: '09:00', minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p });
     if (made) setItems((l) => [...l, made]);
     touch(scheduleId);
     return made ?? null;
@@ -133,11 +139,48 @@ export function useHorario() {
   const createImported = useCallback(async (name: string, list: Pick<Item, 'weekday' | 'time' | 'minutes' | 'title' | 'icon' | 'description'>[]) => {
     const [sch] = await db.insert<Schedule>('organiza_schedules', { space, name, cover_url: null, status: 'borrador', alarms: 'elegidas', updated_at: new Date().toISOString() });
     if (!sch) return null;
-    if (list.length) await db.insert('organiza_items', list.map((it, sort) => ({ ...it, sort, schedule_id: sch.id, label_id: null, cover_url: null, stage: 'sin_empezar', progress: 0, alarm: 'notificacion', alarm_before: 0, focus: false, modules: modulesFor(it.title) })));
+    if (list.length) await db.insert('organiza_items', list.map((it, sort) => ({ ...it, sort, schedule_id: sch.id, label_id: null, cover_url: null, stage: 'sin_empezar', progress: 0, alarm: 'notificacion', alarm_before: 0, focus: false, modules: modulesFor(it.title), flex: 'flexible', category: '', priority: 2, block: '' })));
     await load();
     choose(sch.id);
     return sch;
   }, [choose, db, load, space]);
+
+  /** Repite una actividad en otro día de este horario, o la quita de él. */
+  const repeatOn = useCallback(async (item: Item, weekday: number, on: boolean) => {
+    const same = items.filter((i) => i.schedule_id === item.schedule_id && refOf(i.title) === refOf(item.title));
+    const there = same.find((i) => i.weekday === weekday);
+    if (on && !there) {
+      const { id: _id, ...copy } = item;
+      await addItem(item.schedule_id, weekday, { ...copy, weekday });
+    } else if (!on && there && same.length > 1) await removeItem(there.id);
+  }, [addItem, items, removeItem]);
+
+  /** El sueño es un bloque por día que sigue a su configuración. */
+  const setSleep = useCallback(async (id: string, sleep: Sleep) => {
+    await patchSchedule(id, { sleep });
+    const start = toMinutes(sleep.bed);
+    const minutes = ((toMinutes(sleep.wake) - start + 1440) % 1440) || 480;
+    const have = items.filter((i) => i.schedule_id === id && i.block === 'sueno');
+    for (const d of ALL_DAYS) {
+      const it = have.find((i) => i.weekday === d);
+      if (it) await db.update('organiza_items', { id: it.id }, { time: sleep.bed, minutes });
+      else await db.insert('organiza_items', { schedule_id: id, weekday: d, sort: 0, time: sleep.bed, minutes, title: 'Dormir', icon: '😴', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'obligatorio', category: 'personal', priority: 1, block: 'sueno' });
+    }
+    await load();
+  }, [db, items, load, patchSchedule]);
+
+  /** Cambia solo ese día: la plantilla queda igual. */
+  const setPlan = useCallback(async (day: string, p: Partial<DayPlan>) => {
+    const base = plans.find((x) => x.day === day) ?? { day, schedule_id: null, moves: {}, extras: [] };
+    const next = { ...base, ...p };
+    setPlans((l) => [...l.filter((x) => x.day !== day), next]);
+    await db.upsert('organiza_day_plans', { day: next.day, schedule_id: next.schedule_id, moves: next.moves, extras: next.extras, space, updated_at: new Date().toISOString() }, 'owner_id,space,day');
+  }, [db, plans, space]);
+  const planOf = useCallback((date: Date) => plans.find((x) => x.day === iso(date)) ?? null, [plans]);
+  const itemsOn = useCallback((date: Date) => {
+    const s = scheduleFor(date, schedules, planOf(date));
+    return dayItems(date, schedules, items, planOf(date)).map((i) => (s ? withAlarm(s, i) : i));
+  }, [items, planOf, schedules]);
 
   /** Copia un horario con sus tareas. La copia nace en borrador. */
   const duplicate = useCallback(async (id: string, p: Partial<Schedule> = {}) => {
@@ -234,12 +277,12 @@ export function useHorario() {
         .flatMap((s) =>
           items
             .filter((i) => i.schedule_id === s.id && daysOf(s).includes(i.weekday))
-            .map((i) => ({ ...i, alarm: s.alarms === 'ninguna' ? ('no' as const) : s.alarms === 'todas' && i.alarm === 'no' ? ('notificacion' as const) : i.alarm }))
+            .map((i) => withAlarm(s, i))
         ),
     [items, schedules]
   );
 
-  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, duplicate, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
+  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */

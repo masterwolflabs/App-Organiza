@@ -8,7 +8,8 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { FocusTimer } from '@/components/organiza/FocusTimer';
 import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
-import { coverCss, iso, MODULE_CHOICES, rankOf, refOf, STAGES, streakOf, WEEK, weekdayOf, xpOf, type AlarmKind, type Item, type Module } from '@/components/organiza/model';
+import { toTime } from '@/components/organiza/dayPlan';
+import { CATEGORIES, coverCss, FLEX, iso, MODULE_CHOICES, PRIORITIES, rankOf, refOf, STAGES, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50';
@@ -81,12 +82,24 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               <Field label="Día"><select value={item.weekday} onChange={(e) => set({ weekday: Number(e.target.value) })} className={field}>{WEEK.map((w, i) => <option key={w} value={i} className="bg-zinc-900">{w}</option>)}</select></Field>
               <Field label="Hora"><input type="time" value={item.time} onChange={(e) => e.target.value && set({ time: e.target.value })} className={field} /></Field>
               <Field label="Duración (min)"><input type="number" min={5} step={5} value={item.minutes} onChange={(e) => Number(e.target.value) > 0 && set({ minutes: Number(e.target.value) })} className={field} /></Field>
+              <Field label="Termina"><input type="time" value={toTime(toMinutes(item.time) + item.minutes)} onChange={(e) => e.target.value && set({ minutes: ((toMinutes(e.target.value) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} className={field} /></Field>
+              <Field label="Tipo de bloque"><select value={item.flex} onChange={(e) => set({ flex: e.target.value as Flex })} className={field}>{FLEX.map((f) => <option key={f.id} value={f.id} className="bg-zinc-900">{f.label}</option>)}</select></Field>
+              <Field label="Categoría"><select value={item.category} onChange={(e) => set({ category: e.target.value })} className={field}><option value="" className="bg-zinc-900">Sin categoría</option>{CATEGORIES.map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{x.label}</option>)}</select></Field>
+              <Field label="Prioridad"><select value={item.priority} onChange={(e) => set({ priority: Number(e.target.value) })} className={field}>{PRIORITIES.map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{x.label}</option>)}</select></Field>
               <Field label="Etapa"><select value={item.stage} onChange={(e) => set({ stage: e.target.value })} className={field}>{STAGES.map((s) => <option key={s.id} value={s.id} className="bg-zinc-900">{s.label}</option>)}</select></Field>
               <Field label="Etiqueta"><select value={item.label_id ?? ''} onChange={(e) => set({ label_id: e.target.value || null })} className={field}><option value="" className="bg-zinc-900">Sin etiqueta</option>{h.labels.map((l) => <option key={l.id} value={l.id} className="bg-zinc-900">{l.name}</option>)}</select></Field>
               <Field label={`Avance ${item.progress}%`}><input type="range" min={0} max={100} step={5} value={item.progress} onChange={(e) => set({ progress: Number(e.target.value) })} className="w-full accent-sky-500" /></Field>
               <Field label="Aviso"><select value={item.alarm} onChange={(e) => set({ alarm: e.target.value as AlarmKind })} className={field}>{ALARMS.map((a) => <option key={a.id} value={a.id} className="bg-zinc-900">{a.label}</option>)}</select></Field>
               <Field label="Minutos antes"><input type="number" min={0} step={5} disabled={item.alarm === 'no'} value={item.alarm_before} onChange={(e) => set({ alarm_before: Math.max(0, Number(e.target.value)) })} className={`${field} disabled:opacity-40`} /></Field>
             </section>
+            <div>
+              <span className="mb-1 block text-xs font-medium text-zinc-400">Se repite</span>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEK.map((w, d) => (
+                  <button key={w} type="button" aria-pressed={weekdays.includes(d)} disabled={weekdays.length === 1 && weekdays[0] === d} onClick={() => h.repeatOn(item, d, !weekdays.includes(d))} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${weekdays.includes(d) ? 'bg-sky-600 text-[#fff] ring-sky-500' : 'text-zinc-400 ring-white/15 hover:bg-white/[0.06]'}`}>{w.slice(0, 3)}</button>
+                ))}
+              </div>
+            </div>
             <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
               <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Marca esta tarea como tiempo sin interrupciones</span></span>
               <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />

@@ -3,7 +3,8 @@
 import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { Flame, Lock, Moon, Target } from 'lucide-react';
-import { iso, RANKS, rankOf, refOf, streakOf, weekdayOf, XP, xpOf } from '@/components/organiza/model';
+import { dayStats } from '@/components/organiza/dayPlan';
+import { iso, RANKS, rankOf, refOf, streakOf, XP, xpOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 /** La Ruta: cumplir lo que uno mismo se propuso sube el rango y gana beneficios. */
@@ -21,10 +22,12 @@ export const RutaView: React.FC = () => {
     const streaks = titles.map((t) => ({ title: t, n: streakOf(refOf(t), [...new Set(h.publishedItems.filter((i) => i.title === t).map((i) => i.weekday))], c.checks) })).sort((a, b) => b.n - a.n);
     const now = new Date();
     const week = Array.from({ length: 7 }, (_, i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
-    const due = week.reduce((s, d) => s + h.publishedItems.filter((i) => i.weekday === weekdayOf(d)).length, 0);
-    const done = c.checks.filter((k) => k.done && week.some((d) => iso(d) === k.day)).length;
-    return { best: streaks[0], week: due ? Math.min(100, Math.round((done / due) * 100)) : 0, closed: c.days.length };
-  }, [c.checks, c.days, h.publishedItems]);
+    const statsOf = (d: Date) => dayStats(h.itemsOn(d), (i) => c.checks.find((k) => k.ref === refOf(i.title) && k.day === iso(d)));
+    const days = week.map(statsOf);
+    const due = days.reduce((s, x) => s + x.total, 0);
+    const done = days.reduce((s, x) => s + x.done, 0);
+    return { best: streaks[0], week: due ? Math.round((done / due) * 100) : 0, weekDone: done, weekDue: due, today: days[0], closed: c.days.length };
+  }, [c.checks, c.days, h]);
 
   return (
     <div className="mx-auto max-w-4xl" data-tour="ruta">
@@ -41,9 +44,10 @@ export const RutaView: React.FC = () => {
         </div>
       </section>
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-3">
+      <section className="mt-4 grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Stat icon={<Flame className="h-4 w-4 text-amber-300" />} value={stats.best?.n ?? 0} label={stats.best?.n ? `Mejor racha: ${stats.best.title}` : 'Tu mejor racha'} />
-        <Stat icon={<Target className="h-4 w-4 text-sky-300" />} value={`${stats.week}%`} label="Cumplido estos 7 días" />
+        <Stat icon={<Target className="h-4 w-4 text-emerald-300" />} value={`${stats.today.pct}%`} label={`Hoy: ${stats.today.done} de ${stats.today.total}`} />
+        <Stat icon={<Target className="h-4 w-4 text-sky-300" />} value={`${stats.week}%`} label={`Estos 7 días: ${stats.weekDone} de ${stats.weekDue}`} />
         <Stat icon={<Moon className="h-4 w-4 text-violet-300" />} value={stats.closed} label="Días cerrados" />
       </section>
 
@@ -51,6 +55,7 @@ export const RutaView: React.FC = () => {
         <h2 className="text-lg font-semibold text-white">Cómo se gana XP</h2>
         <ul className="mt-2 divide-y divide-white/5 text-sm text-zinc-300">
           <li className="flex justify-between py-2"><span>Cumplir una tarea</span><b className="text-white">+{XP.check}</b></li>
+          <li className="flex justify-between py-2"><span>Moverla y cumplirla igual</span><b className="text-white">+{XP.check + XP.adapted}</b></li>
           <li className="flex justify-between py-2"><span>Cerrar el día con el checklist</span><b className="text-white">+{XP.close}</b></li>
           <li className="flex justify-between py-2"><span>Día perfecto, todo cumplido</span><b className="text-white">+{XP.perfect}</b></li>
         </ul>

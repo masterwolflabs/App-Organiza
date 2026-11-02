@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Check, Moon, X } from 'lucide-react';
-import { byTime, iso, refOf, RANKS, rankOf, weekdayOf, XP, xpOf, type Item } from '@/components/organiza/model';
+import { iso, refOf, RANKS, rankOf, XP, xpOf, type Item } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 const longDay = (d: Date) => d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -18,8 +18,10 @@ export const Checklist: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
     return new Date(n.getFullYear(), n.getMonth(), n.getDate() - back);
   }, [back]);
   const day = iso(date);
-  const list = h.publishedItems.filter((i) => i.weekday === weekdayOf(date)).sort(byTime);
-  const stateOf = (i: Item) => c.checks.find((x) => x.ref === refOf(i.title) && x.day === day)?.done;
+  const checkOf = (i: Item) => c.checks.find((x) => x.ref === refOf(i.title) && x.day === day);
+  // Lo cancelado o reprogramado sin hacer no se cobra como incumplido.
+  const list = h.itemsOn(date).filter((i) => checkOf(i)?.value?.state !== 'cancelada');
+  const stateOf = (i: Item) => (checkOf(i)?.value?.state === 'reprogramada' && !checkOf(i)?.done ? undefined : checkOf(i)?.done);
   const answered = list.filter((i) => stateOf(i) !== undefined).length;
   const done = list.filter((i) => stateOf(i) === true).length;
   const closed = c.days.find((d) => d.day === day);

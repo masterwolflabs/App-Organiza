@@ -27,13 +27,22 @@ export async function POST(request: Request) {
   const { data: items } = await db.from('organiza_items').select('*').in('schedule_id', schedules.map((s) => s.id));
   const { data: events } = await db.from('calendar_events').select('source_ref, time_zone').eq('source', 'horario').in('source_ref', (items ?? []).map((i) => i.id));
   const zoneOf = new Map((events ?? []).map((e) => [e.source_ref as string, e.time_zone as string]));
+  // Lo que cambió solo ese día manda: otro horario, una hora movida o una actividad quitada.
+  const { data: plans } = await db.from('organiza_day_plans').select('owner_id, day, schedule_id, moves').gte('day', new Date(Date.now() - 864e5).toISOString().slice(0, 10));
+  const planOf = (owner: string, zone: string) => {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+    return (plans ?? []).find((p) => p.owner_id === owner && p.day === day);
+  };
   let sent = 0;
   for (const s of schedules) {
     for (const i of (items ?? []).filter((x) => x.schedule_id === s.id && (s.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(x.weekday))) {
       const kind = s.alarms === 'todas' && i.alarm === 'no' ? 'notificacion' : i.alarm;
       if (kind === 'no') continue;
-      const now = localNow(zoneOf.get(i.id) || 'America/Santiago', i.alarm_before);
-      if (now.weekday !== i.weekday || now.time !== i.time) continue;
+      const zone = zoneOf.get(i.id) || 'America/Santiago';
+      const now = localNow(zone, i.alarm_before);
+      const plan = planOf(s.owner_id, zone);
+      const move = plan?.moves?.[i.id] as { time?: string; off?: boolean } | undefined;
+      if (now.weekday !== i.weekday || now.time !== (move?.time ?? i.time) || move?.off || (plan?.schedule_id && plan.schedule_id !== s.id)) continue;
       const at = new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
       const { error: repeated } = await db.from('organiza_push_sent').insert({ owner_id: s.owner_id, ref: i.id, at });
       if (repeated) continue;

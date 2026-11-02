@@ -7,6 +7,7 @@ import { goalDone, goalFrequency, useOrganiza } from '@/components/calendar/orga
 import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { DailyView } from '@/components/daily/DailyView';
+import { DayPanel } from '@/components/organiza/DayPanel';
 import { Checklist } from '@/components/views/ChecklistView';
 
 /** La cinta muestra el día despierto; lo que cae fuera se ve igual en la lista. */
@@ -59,6 +60,8 @@ export const HoyView: React.FC = () => {
           <CalendarPlus className="h-4 w-4" /> Agendar
         </button>
       </header>
+
+      <div className="mt-8"><DayPanel /></div>
 
       <section className="mt-8" data-tour="daily">
         <h2 className="mb-3 text-lg font-semibold text-white">Pendientes</h2>

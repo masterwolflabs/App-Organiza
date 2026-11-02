@@ -50,7 +50,7 @@ const beep = (times: number) => {
 
 /** Con la app abierta, avisa a la hora: solo tareas del horario publicado. El resto lo cubre el aviso al teléfono. */
 export const Reminders: React.FC = () => {
-  const { published, publishedItems } = useHorario();
+  const { published, publishedItems, itemsOn } = useHorario();
   const [ringing, setRinging] = useState<Item | null>(null);
   const seen = useRef(new Set<string>());
 
@@ -63,7 +63,8 @@ export const Reminders: React.FC = () => {
     const tick = () => {
       const now = new Date();
       const min = now.getHours() * 60 + now.getMinutes();
-      for (const i of publishedItems) {
+      // Hoy manda el plan del día: lo movido suena a su nueva hora y lo cancelado no suena.
+      for (const i of itemsOn(now)) {
         const kind = i.alarm;
         if (kind === 'no' || i.weekday !== weekdayOf(now) || toMinutes(i.time) - i.alarm_before !== min) continue;
         const key = `${i.id}:${now.toDateString()}:${min}`;
@@ -78,7 +79,7 @@ export const Reminders: React.FC = () => {
     tick();
     const t = setInterval(tick, 20_000);
     return () => clearInterval(t);
-  }, [published, publishedItems]);
+  }, [published, publishedItems, itemsOn]);
 
   if (!ringing) return null;
   return (

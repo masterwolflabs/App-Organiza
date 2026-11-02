@@ -1,0 +1,84 @@
+import { byTime, daysOf, toMinutes, weekdayOf, type Check, type Item, type Schedule } from '@/components/organiza/model';
+
+/**
+ * El plan de un día: qué horario usa y qué cambió solo ese día. La plantilla nunca se toca:
+ * lo que se mueve o se cancela queda en `organiza_day_plans` (docs/sql/29).
+ */
+export type Extra = { id: string; title: string; time: string; minutes: number };
+export type DayPlan = { day: string; schedule_id: string | null; moves: Record<string, { time?: string; off?: boolean }>; extras: Extra[] };
+export type Gap = { from: string; to: string; minutes: number };
+export type Proposal = { moved: { item: Item; to: string }[]; off: Item[]; blocked: Item[] };
+
+const pad = (n: number) => String(n).padStart(2, '0');
+export const toTime = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+const endOf = (i: Pick<Item, 'time' | 'minutes'>) => toMinutes(i.time) + i.minutes;
+const MIN_GAP = 15;
+const DAY_FROM = 6 * 60;
+const DAY_TO = 24 * 60;
+
+/** El horario de ese día: el elegido solo para hoy, o el que la semana le asigna. */
+export const scheduleFor = (date: Date, schedules: Schedule[], plan?: DayPlan | null) =>
+  schedules.find((s) => s.id === plan?.schedule_id) ?? schedules.find((s) => s.status === 'publicado' && daysOf(s).includes(weekdayOf(date))) ?? null;
+
+export function dayItems(date: Date, schedules: Schedule[], items: Item[], plan?: DayPlan | null): Item[] {
+  const s = scheduleFor(date, schedules, plan);
+  const d = weekdayOf(date);
+  const own = !s ? [] : items.filter((i) => i.schedule_id === s.id && i.weekday === d && !plan?.moves?.[i.id]?.off).map((i) => ({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }));
+  const extras = (plan?.extras ?? []).map((x, sort): Item => ({ id: x.id, schedule_id: s?.id ?? '', weekday: d, time: x.time, minutes: x.minutes, title: x.title, icon: '⚡', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], sort, flex: 'obligatorio', category: '', priority: 1, block: '' }));
+  return [...own, ...extras].sort(byTime);
+}
+
+/** Los espacios entre actividades. Son tiempo libre: no son tareas ni se llenan solos. */
+export function freeGaps(list: Pick<Item, 'time' | 'minutes'>[]): Gap[] {
+  const sorted = [...list].sort((a, b) => toMinutes(a.time) - toMinutes(b.time));
+  const gaps: Gap[] = [];
+  let end = sorted.length ? endOf(sorted[0]) : 0;
+  for (const i of sorted.slice(1)) {
+    const start = toMinutes(i.time);
+    if (start - end >= MIN_GAP) gaps.push({ from: toTime(end), to: toTime(start), minutes: start - end });
+    end = Math.max(end, endOf(i));
+  }
+  return gaps;
+}
+
+/**
+ * «Reorganizar mi día» con reglas fijas: lo obligatorio no se mueve, lo flexible busca el primer
+ * espacio donde cabe y lo secundario se aplaza si no hay. Primero lo más prioritario.
+ */
+export function reorganize(list: Item[], extra: Pick<Item, 'time' | 'minutes'>, nowMin = 0): Proposal {
+  const start = toMinutes(extra.time);
+  const end = start + extra.minutes;
+  const hit = list.filter((i) => toMinutes(i.time) < end && endOf(i) > start);
+  const busy: [number, number][] = [...list.filter((i) => !hit.includes(i)).map((i): [number, number] => [toMinutes(i.time), endOf(i)]), [start, end]];
+  const out: Proposal = { moved: [], off: [], blocked: hit.filter((i) => i.flex === 'obligatorio') };
+  const rank = (i: Item) => i.priority * 10 + (i.flex === 'secundario' ? 1 : 0);
+  const fit = (minutes: number, from: number) => {
+    for (let t = Math.ceil(Math.max(from, DAY_FROM) / 5) * 5; t + minutes <= DAY_TO; t += 5) if (!busy.some(([a, b]) => t < b && t + minutes > a)) return t;
+    return null;
+  };
+  for (const i of hit.filter((x) => x.flex !== 'obligatorio').sort((a, b) => rank(a) - rank(b))) {
+    const t = fit(i.minutes, Math.max(nowMin, end));
+    if (t === null) out.off.push(i);
+    else {
+      busy.push([t, t + i.minutes]);
+      out.moved.push({ item: i, to: toTime(t) });
+    }
+  }
+  return out;
+}
+
+export type ActivityState = 'pendiente' | 'completada' | 'reprogramada' | 'cancelada';
+export const STATES: { id: ActivityState; label: string }[] = [
+  { id: 'pendiente', label: 'Pendiente' },
+  { id: 'completada', label: 'Completada' },
+  { id: 'reprogramada', label: 'Reprogramada' },
+  { id: 'cancelada', label: 'Cancelada' },
+];
+export const stateOf = (c?: Check): ActivityState => (c?.done ? 'completada' : c?.value?.state ?? 'pendiente');
+
+/** Lo cancelado no cuenta: 8 de 10 son 80%. Reprogramar no es fallar. */
+export function dayStats(list: Item[], checkOf: (i: Item) => Check | undefined) {
+  const live = list.filter((i) => stateOf(checkOf(i)) !== 'cancelada');
+  const done = live.filter((i) => stateOf(checkOf(i)) === 'completada').length;
+  return { done, total: live.length, pct: live.length ? Math.round((done / live.length) * 100) : 0 };
+}
