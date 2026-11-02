@@ -22,14 +22,14 @@ export async function POST(request: Request) {
   webpush.setVapidDetails('mailto:masterwolf.labs@gmail.com', pub, priv);
 
   const db = admin();
-  const { data: schedules } = await db.from('organiza_schedules').select('id, owner_id, alarms').eq('status', 'publicado').neq('alarms', 'ninguna');
+  const { data: schedules } = await db.from('organiza_schedules').select('id, owner_id, alarms, days').eq('status', 'publicado').neq('alarms', 'ninguna');
   if (!schedules?.length) return Response.json({ sent: 0 });
   const { data: items } = await db.from('organiza_items').select('*').in('schedule_id', schedules.map((s) => s.id));
   const { data: events } = await db.from('calendar_events').select('source_ref, time_zone').eq('source', 'horario').in('source_ref', (items ?? []).map((i) => i.id));
   const zoneOf = new Map((events ?? []).map((e) => [e.source_ref as string, e.time_zone as string]));
   let sent = 0;
   for (const s of schedules) {
-    for (const i of (items ?? []).filter((x) => x.schedule_id === s.id)) {
+    for (const i of (items ?? []).filter((x) => x.schedule_id === s.id && (s.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(x.weekday))) {
       const kind = s.alarms === 'todas' && i.alarm === 'no' ? 'notificacion' : i.alarm;
       if (kind === 'no') continue;
       const now = localNow(zoneOf.get(i.id) || 'America/Santiago', i.alarm_before);

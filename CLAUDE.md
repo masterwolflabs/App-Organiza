@@ -29,6 +29,7 @@ Notion por áreas de vida, y agendar por voz.
   revisión.
 - **Persona / Empresa** (Emanuel, 2026-11-02): `components/organiza/space.tsx`; todo dato lleva `space` y las pantallas son las mismas.
 - **Horario** ya no es `CalendarView`: `organiza_schedules` + `organiza_items` (SQL 27). Nace en vista previa; publicar lo vuelve eventos semanales `source='horario'`, y solo hay uno publicado por base.
+- **Modalidades** (SQL 28): cada horario tiene `mode`, `phase`, `color` y `days`. Varios pueden estar publicados, nunca en el mismo día; `applyWeek` en `useHorario.ts` guarda eso y rehace los eventos. Avisos: `publishedItems` y `api/push/tick` respetan `days`.
 - **Datos**: `components/organiza/db.tsx` (`useDb`) para probar en memoria; lógica en `model.ts` y `useHorario.ts`. El récord se sigue por nombre de actividad (`refOf`).
 - **Daily** vive aquí (`components/daily/`): la cuenta Labs lee `table_views.daily`, la misma de `daily.sh`; las demás, `organiza-daily-<space>`.
 - **Tarea = su nota**: un solo nombre (el link guarda el último nombre común; el lado que cambió arrastra al otro, en `Board`). Al abrirla: título, propiedades (`TaskProperties`, vía `bridge.linkPanel`) y debajo la nota. `linkedNote`, `renameLinked` y `linkPanel` viven solo en el `NotesSystem` de Organiza: si `update:template` lo pisa, hay que reponerlos.

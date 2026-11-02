@@ -55,16 +55,16 @@ export const Reminders: React.FC = () => {
   const seen = useRef(new Set<string>());
 
   useEffect(() => {
-    if (published) scheduleNative(publishedItems, published.alarms).catch(() => {});
+    if (published) scheduleNative(publishedItems, 'elegidas').catch(() => {});
   }, [published, publishedItems]);
 
   useEffect(() => {
-    if (!published || published.alarms === 'ninguna') return;
+    if (!published) return;
     const tick = () => {
       const now = new Date();
       const min = now.getHours() * 60 + now.getMinutes();
       for (const i of publishedItems) {
-        const kind = published.alarms === 'todas' && i.alarm === 'no' ? 'notificacion' : i.alarm;
+        const kind = i.alarm;
         if (kind === 'no' || i.weekday !== weekdayOf(now) || toMinutes(i.time) - i.alarm_before !== min) continue;
         const key = `${i.id}:${now.toDateString()}:${min}`;
         if (seen.current.has(key)) continue;

@@ -30,6 +30,12 @@ export type Schedule = {
   alarms: 'todas' | 'elegidas' | 'ninguna';
   published_at: string | null;
   updated_at: string;
+  /** Modalidad (Base, Subele…) y fase dentro de ella. */
+  mode: string;
+  phase: string;
+  color: string | null;
+  /** Días que usa (0 = lunes). Dos horarios publicados nunca comparten un día. */
+  days: number[];
 };
 export type Item = {
   id: string;
@@ -53,6 +59,9 @@ export type Item = {
 export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; bed?: string; wake?: string } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
 
+export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+export const daysOf = (s: Pick<Schedule, 'days'>) => s.days ?? ALL_DAYS;
+export const scheduleLabel = (s: Pick<Schedule, 'name' | 'phase'>) => (s.phase ? `${s.name} · ${s.phase}` : s.name);
 export const WEEK = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const BYDAY_OF = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 export const weekdayOf = (d: Date) => (d.getDay() + 6) % 7;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDb } from '@/components/organiza/db';
 import { useSpace } from '@/components/organiza/space';
-import { BYDAY_OF, EMANUEL_LABELS, iso, modulesFor, refOf, TEMPLATES, weekdayOf, type Check, type DayClose, type Item, type Label, type Schedule } from '@/components/organiza/model';
+import { ALL_DAYS, daysOf, BYDAY_OF, EMANUEL_LABELS, iso, modulesFor, refOf, TEMPLATES, weekdayOf, type Check, type DayClose, type Item, type Label, type Schedule } from '@/components/organiza/model';
 
 const ACTIVE = 'organiza-schedule';
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
@@ -139,17 +139,24 @@ export function useHorario() {
     return sch;
   }, [choose, db, load, space]);
 
-  /**
-   * Publicar: este horario pasa a ser el de la semana y sus tareas se vuelven
-   * eventos semanales. Solo un horario publicado por base.
-   */
-  const publish = useCallback(async (id: string, alarms: Schedule['alarms']) => {
-    if (!userId) return false;
+  /** Copia un horario con sus tareas. La copia nace en borrador. */
+  const duplicate = useCallback(async (id: string, p: Partial<Schedule> = {}) => {
+    const from = schedules.find((s) => s.id === id);
+    if (!from) return null;
+    const [sch] = await db.insert<Schedule>('organiza_schedules', { space, name: `${from.name} (copia)`, cover_url: from.cover_url, status: 'borrador', alarms: from.alarms, mode: from.mode, phase: from.phase, color: from.color, days: daysOf(from), updated_at: new Date().toISOString(), ...p });
+    if (!sch) return null;
     const list = items.filter((i) => i.schedule_id === id);
-    for (const s of schedules.filter((x) => x.status === 'publicado')) {
-      await db.update('organiza_schedules', { id: s.id }, { status: 'borrador' });
-    }
+    if (list.length) await db.insert('organiza_items', list.map(({ id: _id, ...i }) => ({ ...i, schedule_id: sch.id })));
+    await load();
+    choose(sch.id);
+    return sch;
+  }, [choose, db, items, load, schedules, space]);
+
+  /** Los eventos semanales salen de lo publicado, cada horario solo en sus días. */
+  const syncEvents = useCallback(async (next: Schedule[]) => {
+    if (!userId) return false;
     await db.remove('calendar_events', { source: 'horario', space, owner_id: userId });
+    const list = next.filter((s) => s.status === 'publicado').flatMap((s) => items.filter((i) => i.schedule_id === s.id && daysOf(s).includes(i.weekday)));
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (list.length) {
       const ok = await db.insert('calendar_events', list.map((i) => {
@@ -162,18 +169,51 @@ export function useHorario() {
       }));
       if (!ok.length) return false;
     }
-    const at = new Date().toISOString();
-    await db.update('organiza_schedules', { id }, { status: 'publicado', alarms, published_at: at, updated_at: at });
-    await load();
     return true;
-  }, [db, items, labels, load, schedules, space, userId]);
+  }, [db, items, labels, space, userId]);
+
+  /** Guarda quién usa cada día y deja el calendario igual a eso. Un horario sin días vuelve a borrador. */
+  const applyWeek = useCallback(async (next: Schedule[]) => {
+    const at = new Date().toISOString();
+    const settled = next.map((s) => (s.status === 'publicado' && !daysOf(s).length ? { ...s, status: 'borrador' as const } : s));
+    for (const s of settled) {
+      const old = schedules.find((x) => x.id === s.id);
+      if (old && (old.status !== s.status || old.alarms !== s.alarms || daysOf(old).join() !== daysOf(s).join())) await db.update('organiza_schedules', { id: s.id }, { status: s.status, alarms: s.alarms, days: daysOf(s), published_at: s.status === 'publicado' ? (old.status === 'publicado' && s.published_at === old.published_at ? s.published_at : at) : s.published_at, updated_at: at });
+    }
+    const ok = await syncEvents(settled);
+    await load();
+    return ok;
+  }, [db, load, schedules, syncEvents]);
+
+  /**
+   * Publicar: este horario toma sus días y sus tareas se vuelven eventos semanales.
+   * Los demás horarios publicados siguen en los días que le quedan libres.
+   */
+  const publish = useCallback((id: string, alarms: Schedule['alarms'], days?: number[]) => {
+    const target = schedules.find((s) => s.id === id);
+    const taken = days ?? (target ? daysOf(target) : ALL_DAYS);
+    const at = new Date().toISOString();
+    return applyWeek(schedules.map((s) => (s.id === id ? { ...s, status: 'publicado' as const, alarms, days: taken, published_at: at } : s.status === 'publicado' ? { ...s, days: daysOf(s).filter((d) => !taken.includes(d)) } : s)));
+  }, [applyWeek, schedules]);
+
+  /** Cambia solo ese día de la semana. `null` lo deja libre. */
+  const assignDay = useCallback((weekday: number, id: string | null) =>
+    applyWeek(schedules.map((s) => {
+      const days = daysOf(s).filter((d) => d !== weekday);
+      if (s.id !== id) return s.status === 'publicado' ? { ...s, days } : s;
+      return { ...s, status: 'publicado' as const, days: s.status === 'publicado' ? [...days, weekday].sort() : [weekday] };
+    })), [applyWeek, schedules]);
+
+  /** Pasa de una fase a otra: la nueva toma los días de la actual. */
+  const switchPhase = useCallback((fromId: string, toId: string) => {
+    const from = schedules.find((s) => s.id === fromId);
+    if (!from) return Promise.resolve(false);
+    return applyWeek(schedules.map((s) => (s.id === fromId ? { ...s, status: 'borrador' as const } : s.id === toId ? { ...s, status: 'publicado' as const, alarms: from.alarms, days: daysOf(from) } : s)));
+  }, [applyWeek, schedules]);
 
   const unpublish = useCallback(async (id: string) => {
-    if (!userId) return;
-    await db.remove('calendar_events', { source: 'horario', space, owner_id: userId });
-    await db.update('organiza_schedules', { id }, { status: 'borrador' });
-    await load();
-  }, [db, load, space, userId]);
+    await applyWeek(schedules.map((s) => (s.id === id ? { ...s, status: 'borrador' as const } : s)));
+  }, [applyWeek, schedules]);
 
   const removeSchedule = useCallback(async (id: string) => {
     const s = schedules.find((x) => x.id === id);
@@ -186,9 +226,20 @@ export function useHorario() {
   const active = schedules.find((s) => s.id === activeId) ?? null;
   const activeItems = useMemo(() => items.filter((i) => i.schedule_id === activeId), [items, activeId]);
   const published = schedules.find((s) => s.status === 'publicado') ?? null;
-  const publishedItems = useMemo(() => items.filter((i) => i.schedule_id === published?.id), [items, published?.id]);
+  // Lo que rige la semana: cada horario publicado en sus días, con la alarma que eligió al publicarse.
+  const publishedItems = useMemo(
+    () =>
+      schedules
+        .filter((s) => s.status === 'publicado')
+        .flatMap((s) =>
+          items
+            .filter((i) => i.schedule_id === s.id && daysOf(s).includes(i.weekday))
+            .map((i) => ({ ...i, alarm: s.alarms === 'ninguna' ? ('no' as const) : s.alarms === 'todas' && i.alarm === 'no' ? ('notificacion' as const) : i.alarm }))
+        ),
+    [items, schedules]
+  );
 
-  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, publish, unpublish, removeSchedule, reload: load };
+  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, duplicate, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */
