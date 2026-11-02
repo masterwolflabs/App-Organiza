@@ -223,6 +223,8 @@ function toUnits(rows: RowEl[]): Unit[] {
 }
 
 // ── Table ──────────────────────────────────────────────────────────────────
+/** A cell's way to open its row as a page (only inside the table, not in that page). Takes the row's unit key. */
+export const OpenRowCtx = createContext<((key: string) => void) | null>(null);
 const MIN_W = 64;
 const iconBtn = 'relative rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-white/[0.08] hover:text-white';
 const selCls = 'rounded-lg border border-white/10 bg-zinc-900 px-2 py-1 text-xs text-white focus:border-sky-500 focus:outline-none';
@@ -246,7 +248,12 @@ export const Table: React.FC<{
   peekHide?: string[];
   /** "¿Para qué es?" per column key: shown after resting the cursor 2 s on it, and in the right-click menu. */
   help?: Record<string, string>;
-}> = ({ id, head: baseHead, colKeys, children, minWidth = 900, empty, isEmpty, title, defaultViews, peekExtra, peekHide, help }) => {
+  /** The user's Bases de datos keep their columns in the database itself: "+" and "···" hand over to it. */
+  onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void;
+  onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void;
+  /** The title already shows above (its Section or database): it's kept for full screen and relations only. */
+  noTitle?: boolean;
+}> = ({ id, head: baseHead, colKeys, children, minWidth = 900, empty, isEmpty, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle }) => {
   const section = useContext(SectionCtx);
   const baseKeys = useMemo(() => colKeys ?? baseHead.map((_, i) => String(i)), [colKeys, baseHead]);
   // Columns the user added with "+" (texto, número, selección, fórmula…).
@@ -262,8 +269,8 @@ export const Table: React.FC<{
   // Relaciones entre tablas (components/company/relations.tsx).
   const [addRel, setAddRel] = useState<HTMLElement | null>(null);
   const [addRollup, setAddRollup] = useState<HTMLElement | null>(null);
-  const canAdd = cf.enabled && !cf.locked;
-  const hasExtraCol = cf.enabled; // the "+" (or 🔒) column
+  const canAdd = (cf.enabled || !!onAddField) && !cf.locked;
+  const hasExtraCol = cf.enabled || !!onAddField; // the "+" (or 🔒) column
   // Views live in `doc`; `prefs` is the active view's settings.
   const store = useTableViewsStore();
   const reg = useRegistry(store?.scope);
@@ -733,7 +740,7 @@ export const Table: React.FC<{
           className="mb-2 w-full max-w-md rounded-lg border border-sky-500 bg-zinc-900 px-2 py-1 text-lg font-bold text-white focus:outline-none"
         />
       ) : (
-        dbTitle && (
+        dbTitle && !noTitle && (
           <h3
             onDoubleClick={() => setTitleEditing(true)}
             onContextMenu={(e) => {
@@ -1090,6 +1097,10 @@ export const Table: React.FC<{
                     key={t}
                     type="button"
                     onClick={() => {
+                      if (onAddField) {
+                        onAddField(t);
+                        return setAddAnchor(null);
+                      }
                       const f = newProperty(t);
                       cf.addField(f);
                       const anchor = addAnchor;
@@ -1209,6 +1220,18 @@ export const Table: React.FC<{
                             <MoreHorizontal className="h-3 w-3" />
                           </button>
                         )}
+                        {onColumnMenu && !fieldOf(k) && !cf.locked && (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => onColumnMenu(k, e.currentTarget, (dir) => persist({ ...prefs, sort: { col: k, dir } }))}
+                            title="Opciones de la columna"
+                            aria-label={`Opciones de ${labelText(k)}`}
+                            className="rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-white"
+                          >
+                            <MoreHorizontal className="h-3 w-3" />
+                          </button>
+                        )}
                         {sort?.col === k && (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-300" /> : <ArrowDown className="h-3 w-3 text-sky-300" />)}
                       </span>
                       {id && (
@@ -1242,10 +1265,12 @@ export const Table: React.FC<{
                 </tr>
               </thead>
               <tbody>
+                <OpenRowCtx.Provider value={setPeekKey}>
                 {ordered.flatMap((u) => {
                   const show = shows(u);
                   return u.rows.map((r, i) => renderRow(r, u, u.kind === 'row' && i === 0, show));
                 })}
+                </OpenRowCtx.Provider>
                 {(isEmpty || (active && totalRows > 0 && shownCount === 0)) && (
                   <tr className="mf-detail">
                     <td colSpan={visible.length + (hasExtraCol ? 1 : 0)} className="px-3 py-8 text-center text-sm text-zinc-500">
@@ -1571,9 +1596,9 @@ export interface Col<T> {
   className?: string;
 }
 
-export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, title, defaultViews, peekExtra, peekHide, help }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string> }) {
+export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string>; onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void; onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void; noTitle?: boolean }) {
   return (
-    <Table id={id} title={title} defaultViews={defaultViews} peekExtra={peekExtra} peekHide={peekHide} help={help} head={columns.map((c) => c.label)} colKeys={columns.map((c) => c.key)} minWidth={minWidth} empty={empty} isEmpty={!rows.length}>
+    <Table id={id} title={title} defaultViews={defaultViews} peekExtra={peekExtra} peekHide={peekHide} help={help} onAddField={onAddField} onColumnMenu={onColumnMenu} noTitle={noTitle} head={columns.map((c) => c.label)} colKeys={columns.map((c) => c.key)} minWidth={minWidth} empty={empty} isEmpty={!rows.length}>
       {rows.map((r) => (
         <tr key={rowKey(r)} className={rowClassName ?? 'border-b border-white/[0.05] hover:bg-white/[0.02]'}>
           {columns.map((c) => (

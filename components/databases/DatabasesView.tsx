@@ -69,9 +69,7 @@ export const DatabasesView: React.FC<{ openId: string | null; onOpenChange: (id:
         <button type="button" onClick={() => onOpenChange(null)} className="inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-zinc-400 hover:bg-white/5 hover:text-white">
           <ArrowLeft className="h-4 w-4" /> Bases de datos
         </button>
-        <SectionShell variant="glass">
-          <DatabaseTable databaseId={openId} />
-        </SectionShell>
+        <DatabaseTable databaseId={openId} />
       </div>
     );
   }

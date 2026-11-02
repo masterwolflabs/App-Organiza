@@ -38,7 +38,6 @@ const AUTO = {
   'components/company/window.tsx': 'components/tables/window.tsx',
   'components/company/confirm.tsx': 'components/ui/confirm.tsx',
   'components/databases/DatabaseTable.tsx': 'components/databases/DatabaseTable.tsx',
-  'components/databases/dbViews.tsx': 'components/databases/dbViews.tsx',
   'components/databases/DatabasesView.tsx': 'components/databases/DatabasesView.tsx',
   'components/databases/FormulaEditor.tsx': 'components/databases/FormulaEditor.tsx',
   'components/dashboard/ExpandPair.tsx': 'components/dashboard/ExpandPair.tsx',

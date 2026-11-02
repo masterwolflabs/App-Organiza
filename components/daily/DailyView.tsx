@@ -359,7 +359,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     },
   ];
 
-  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle={!compact} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
 
   return (
     <div>

@@ -570,7 +570,7 @@ export const SectionSettings: React.FC<{ api: SectionApi; only?: ('move' | 'fold
   );
 };
 
-export const Section: React.FC<{ n: number; title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; id?: string; solid?: boolean }> = ({ n, title: baseTitle, description, actions, children, id, solid }) => {
+export const Section: React.FC<{ n: number; title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; id?: string; solid?: boolean; /** Replaces the number and the title (a database shows its icon and editable name). */ head?: React.ReactNode }> = ({ n, title: baseTitle, description, actions, children, id, solid, head }) => {
   const canEdit = useContext(CanEditCtx); // team members whose role can't change this section: no action buttons
   const order = useContext(OrderCtx);
   const [prefs, save] = useSectionPrefs(id);
@@ -622,6 +622,7 @@ export const Section: React.FC<{ n: number; title: string; description?: string;
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-white sm:text-2xl">
+            {head ? head : <>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-black text-sky-300">{num}</span>
             {naming ? (
               <NameInput
@@ -646,6 +647,7 @@ export const Section: React.FC<{ n: number; title: string; description?: string;
                 {title}
               </span>
             )}
+            </>}
           </h2>
           {prefs.fold !== 'title' && description && <p className="mt-1 text-sm text-zinc-400">{description}</p>}
         </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import { DbViewBody, DbViewsBar, useDbViews } from '@/components/databases/dbViews';
-import type { Item } from '@/components/tables/tableViews';
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { DataTable, OpenRowCtx, type Col } from '@/components/tables/table';
+import { Section } from '@/components/tables/section';
+import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FormulaEditor } from '@/components/databases/FormulaEditor';
 import {
@@ -18,7 +18,6 @@ import {
   Loader2,
   Maximize2,
   Plus,
-  Search,
   Sigma,
   Tag,
   Trash2,
@@ -36,7 +35,6 @@ import {
   PropType,
   SelectOption,
   TYPE_LABEL,
-  compareRows,
   displayText,
   evaluateFormula,
   formulaDisplay,
@@ -45,7 +43,7 @@ import {
   newOption,
   newProperty,
 } from '@/utils/databases';
-import { useDatabaseDoc, useDatabaseStore } from '@/utils/useDatabases';
+import { useDatabaseDoc } from '@/utils/useDatabases';
 
 /**
  * A Notion-style database (Emanuel, 2026-10-15): typed columns, inline
@@ -392,8 +390,27 @@ export const PropertyMenu: React.FC<{
 };
 
 // ── The table ──────────────────────────────────────────────────────────────
+/** Notion's "Abrir" next to the name: the row as a window (lateral, flotante, completa). */
+const OpenRow: React.FC<{ rowId: string }> = ({ rowId }) => {
+  const open = useContext(OpenRowCtx);
+  if (!open) return null;
+  return (
+    <button type="button" onClick={() => open(`.$${rowId}`)} data-help="Abre la fila en una ventana: lateral, flotante o completa." className="shrink-0 rounded-md border border-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 opacity-0 transition hover:bg-white/10 focus:opacity-100 group-hover/row:opacity-100">
+      Abrir
+    </button>
+  );
+};
+
 const ICONS = ['📄', '💰', '🛒', '🎯', '📊', '🏦', '📈', '🧾', '🗂️', '✅', '📅', '💡', '🐺', '🏠', '🚗', '✈️'];
 
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+/** "2026-10-06" → "6 oct 2026": the shape the table reads as a date (filters, Calendario, Cronograma). */
+const dateText = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return y && m && d ? `${d} ${MONTHS[m - 1]} ${y}` : '';
+};
+
+/** Every database is an Empresa table (Emanuel, 2026-11-02: "que queden todas iguales"): same Table, with the columns kept in the database. */
 export const DatabaseTable: React.FC<{
   databaseId: string;
   /** Inside a note: smaller, no outer card, "Abrir completa" link. */
@@ -401,28 +418,13 @@ export const DatabaseTable: React.FC<{
   onOpenFull?: (id: string) => void;
 }> = ({ databaseId, embedded, onOpenFull }) => {
   const { db, rows, status, saveError, patchDb, setCell, addRow, deleteRow } = useDatabaseDoc(databaseId);
-  const dbStore = useDatabaseStore();
-  const views = useDbViews(databaseId, dbStore?.scope);
-  const [menu, setMenu] = useState<{ prop: DbProperty; anchor: HTMLElement } | null>(null);
+  const [menu, setMenu] = useState<{ prop: DbProperty; anchor: HTMLElement; sort: (dir: 'asc' | 'desc') => void } | null>(null);
   const [formulaEdit, setFormulaEdit] = useState<string | null>(null);
-  const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
   const [iconAnchor, setIconAnchor] = useState<HTMLElement | null>(null);
-  const [sort, setSort] = useState<{ propId: string; dir: 'asc' | 'desc' } | null>(null);
-  const [q, setQ] = useState('');
   const [title, setTitle] = useState('');
   useEffect(() => setTitle(db?.title ?? ''), [db?.title]);
 
   const props = useMemo(() => db?.properties ?? [], [db?.properties]);
-  const shown = useMemo(() => {
-    let list = rows;
-    const needle = q.trim().toLowerCase();
-    if (needle) list = list.filter((r) => props.some((p) => displayText(p, r.values[p.id] ?? null).toLowerCase().includes(needle)));
-    if (sort) {
-      const p = props.find((x) => x.id === sort.propId);
-      if (p) list = [...list].sort((a, b) => compareRows(p, props, a, b) * (sort.dir === 'asc' ? 1 : -1));
-    }
-    return list;
-  }, [rows, props, q, sort]);
 
   if (status === 'loading') return <div className="flex items-center gap-2 px-4 py-6 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando base de datos…</div>;
   if (status !== 'ready' || !db)
@@ -498,120 +500,115 @@ export const DatabaseTable: React.FC<{
     }
   };
 
-  // Galería · Calendario · Cronograma · Panel de control · Feed: each row as properties (same cells, so they stay editable).
-  const textOf = (p: DbProperty, r: DbRow) => (p.type === 'formula' ? formulaDisplay(evaluateFormula(p.formula ?? '', props, r), p.numberFormat) : p.type === 'number' && typeof r.values[p.id] === 'number' ? formatNumber(r.values[p.id] as number, p.numberFormat) : displayText(p, r.values[p.id] ?? null));
-  const ordered = [...props.filter((p) => p.type === 'title'), ...props.filter((p) => p.type !== 'title')];
-  const items: Item[] =
-    views.active.type === 'table'
-      ? []
-      : shown.map((r) => {
-          const all = ordered.map((p) => ({ key: p.id, label: p.name, node: cell(p, r), text: textOf(p, r) }));
-          return { key: r.id, props: all, all };
-        });
-
+  // The table filters, sorts and detects dates by each cell's text, and an <input> has none.
+  const hiddenText = (p: DbProperty, r: DbRow) => {
+    const v = r.values[p.id] ?? null;
+    if (p.type === 'select' || p.type === 'multi_select' || p.type === 'formula') return null;
+    const text = p.type === 'date' && typeof v === 'string' ? dateText(v) : p.type === 'number' && typeof v === 'number' ? formatNumber(v, p.numberFormat) : displayText(p, v);
+    return <span className="sr-only">{text}</span>;
+  };
   const width = (p: DbProperty) => p.width ?? (p.type === 'title' ? 220 : p.type === 'checkbox' ? 90 : p.type === 'multi_select' ? 200 : 160);
+  const columns: Col<DbRow>[] = props.map((p) => ({
+    key: p.id,
+    label: p.name,
+    noClamp: true,
+    className: '!p-0',
+    cell: (r) =>
+      p.type === 'title' ? (
+        <div className="flex items-center">
+          {hiddenText(p, r)}
+          <div className="min-w-0 flex-1">{cell(p, r)}</div>
+          <OpenRow rowId={r.id} />
+          <button type="button" onClick={() => deleteRow(r.id)} className="mr-1 shrink-0 rounded p-1.5 text-zinc-600 opacity-0 transition-opacity hover:text-rose-300 focus:opacity-100 group-hover/row:opacity-100" aria-label="Eliminar fila">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div>
+          {hiddenText(p, r)}
+          {cell(p, r)}
+        </div>
+      ),
+  }));
+
+  const table = (
+    <>
+      <DataTable
+        id={`dbt-${databaseId}`}
+        title={db.title}
+        noTitle
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        minWidth={props.reduce((s, p) => s + width(p), 44)}
+        empty="Sin filas todavía."
+        rowClassName="group/row border-b border-white/[0.05] hover:bg-white/[0.02]"
+        onAddField={(t) => patchDb({ properties: [...props, newProperty(t)] })}
+        onColumnMenu={(key, anchor, sort) => {
+          const prop = props.find((x) => x.id === key);
+          if (prop) setMenu({ prop, anchor, sort });
+        }}
+      />
+      <button type="button" onClick={() => addRow()} className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200">
+        <Plus className="h-4 w-4" /> Nueva fila
+      </button>
+    </>
+  );
+  const head = (
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <button type="button" onClick={(e) => setIconAnchor(e.currentTarget)} className={`${embedded ? 'text-xl' : 'text-3xl'} rounded-lg px-1 hover:bg-white/[0.06]`} aria-label="Cambiar ícono">
+        {db.icon || '📄'}
+      </button>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={() => title.trim() !== db.title && patchDb({ title: title.trim() || 'Sin título' })}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        className={`min-w-0 flex-1 bg-transparent font-bold tracking-tight text-white focus:outline-none ${embedded ? 'text-lg' : 'text-2xl sm:text-3xl'}`}
+        aria-label="Título de la base de datos"
+      />
+    </span>
+  );
+  const counter = (
+    <>
+      <span className="text-xs text-zinc-500">{rows.length} {rows.length === 1 ? 'fila' : 'filas'}</span>
+      {saveError && <span className="text-xs text-rose-300">No se pudo guardar el último cambio.</span>}
+    </>
+  );
 
   return (
-    <div className={embedded ? '' : ''}>
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={(e) => setIconAnchor(e.currentTarget)} className={`${embedded ? 'text-xl' : 'text-3xl'} rounded-lg px-1 hover:bg-white/[0.06]`} aria-label="Cambiar ícono">
-          {db.icon || '📄'}
-        </button>
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title.trim() !== db.title && patchDb({ title: title.trim() || 'Sin título' })}
-          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-          className={`min-w-0 flex-1 bg-transparent font-bold tracking-tight text-white focus:outline-none ${embedded ? 'text-lg' : 'text-2xl sm:text-3xl'}`}
-          aria-label="Título de la base de datos"
-        />
-        {embedded && onOpenFull && (
-          <button type="button" onClick={() => onOpenFull(db.id)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-400 hover:bg-white/[0.06] hover:text-white">
-            <Maximize2 className="h-3.5 w-3.5" /> Abrir completa
-          </button>
-        )}
-      </div>
-
-      {/* Toolbar */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="flex min-w-[180px] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 sm:max-w-xs">
-          <Search className="h-3.5 w-3.5 text-zinc-500" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en la tabla…" className="w-full bg-transparent text-sm text-white placeholder:text-zinc-600 focus:outline-none" />
-        </label>
-        {sort && (
-          <button type="button" onClick={() => setSort(null)} className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-200">
-            {sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-            {props.find((p) => p.id === sort.propId)?.name} <X className="h-3 w-3" />
-          </button>
-        )}
-        <span className="text-xs text-zinc-500">{rows.length} {rows.length === 1 ? 'fila' : 'filas'}</span>
-        {saveError && <span className="text-xs text-rose-300">No se pudo guardar el último cambio.</span>}
-        <button type="button" onClick={() => addRow()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
-          <Plus className="h-3.5 w-3.5" /> Nueva fila
-        </button>
-      </div>
-
-      <DbViewsBar api={views} />
-      {views.active.type !== 'table' && <DbViewBody api={views} props={props} items={items} empty={q ? 'Nada coincide con la búsqueda.' : 'Sin filas todavía.'} />}
-
-      {/* Table */}
-      <div className={views.active.type === 'table' ? 'mt-3 overflow-x-auto rounded-xl border border-white/[0.08]' : 'hidden'}>
-        <table className="w-full border-collapse text-left" style={{ minWidth: props.reduce((s, p) => s + width(p), 80) }}>
-          <thead>
-            <tr className="border-b border-white/[0.08] bg-white/[0.03]">
-              {props.map((p) => {
-                const Icon = TYPE_ICON[p.type];
-                return (
-                  <th key={p.id} style={{ width: width(p) }} className="border-r border-white/[0.06] p-0 font-normal">
-                    <button type="button" onClick={(e) => setMenu({ prop: p, anchor: e.currentTarget })} className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-xs font-semibold text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200">
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{p.name}</span>
-                      {sort?.propId === p.id && (sort.dir === 'asc' ? <ArrowUp className="ml-auto h-3 w-3" /> : <ArrowDown className="ml-auto h-3 w-3" />)}
-                    </button>
-                  </th>
-                );
-              })}
-              <th className="w-[80px] p-0">
-                <button type="button" onClick={(e) => setAddAnchor(e.currentTarget)} className="flex w-full items-center justify-center gap-1 px-2 py-2 text-xs text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200" aria-label="Agregar columna">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.id} className="group/row border-b border-white/[0.05] hover:bg-white/[0.02]">
-                {props.map((p) => (
-                  <td key={p.id} className="border-r border-white/[0.05] p-0 align-middle">
-                    {cell(p, r)}
-                  </td>
-                ))}
-                <td className="p-0 text-center">
-                  <button
-                    type="button"
-                    onClick={() => deleteRow(r.id)}
-                    className="rounded p-1.5 text-zinc-600 opacity-0 transition-opacity hover:text-rose-300 focus:opacity-100 group-hover/row:opacity-100"
-                    aria-label="Eliminar fila"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {shown.length === 0 && (
-              <tr>
-                <td colSpan={props.length + 1} className="px-3 py-6 text-center text-sm text-zinc-500">
-                  {q ? 'Nada coincide con la búsqueda.' : 'Sin filas todavía.'}
-                </td>
-              </tr>
+    <div>
+      {embedded ? (
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {head}
+            {counter}
+            {onOpenFull && (
+              <button type="button" onClick={() => onOpenFull(db.id)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-400 hover:bg-white/[0.06] hover:text-white">
+                <Maximize2 className="h-3.5 w-3.5" /> Abrir completa
+              </button>
             )}
-          </tbody>
-        </table>
-        <button type="button" onClick={() => addRow()} className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200">
-          <Plus className="h-4 w-4" /> Nueva fila
-        </button>
-      </div>
+          </div>
+          {table}
+        </>
+      ) : (
+        <Section
+          n={1}
+          id={`db-${databaseId}`}
+          title={db.title}
+          head={head}
+          actions={
+            <>
+              {counter}
+              <button type="button" onClick={() => addRow()} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
+                <Plus className="h-3.5 w-3.5" /> Nueva fila
+              </button>
+            </>
+          }
+        >
+          {table}
+        </Section>
+      )}
 
       {formulaEdit && props.find((x) => x.id === formulaEdit) && (() => {
         const fp = props.find((x) => x.id === formulaEdit)!;
@@ -644,36 +641,13 @@ export const DatabaseTable: React.FC<{
           onDelete={() => {
             if (!window.confirm(`¿Eliminar la columna “${menu.prop.name}” y sus datos?`)) return;
             patchDb({ properties: props.filter((x) => x.id !== menu.prop.id) });
-            if (sort?.propId === menu.prop.id) setSort(null);
             setMenu(null);
           }}
           onSort={(dir) => {
-            setSort({ propId: menu.prop.id, dir });
+            menu.sort(dir);
             setMenu(null);
           }}
         />
-      )}
-      {addAnchor && (
-        <Popover anchor={addAnchor} onClose={() => setAddAnchor(null)} width={220}>
-          <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Nueva columna</p>
-          {ADDABLE_TYPES.map((t) => {
-            const Icon = TYPE_ICON[t];
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  const p = newProperty(t);
-                  patchDb({ properties: [...props, p] });
-                  setAddAnchor(null);
-                }}
-                className={menuItem}
-              >
-                <Icon className="h-4 w-4 text-zinc-400" /> {TYPE_LABEL[t]}
-              </button>
-            );
-          })}
-        </Popover>
       )}
       {iconAnchor && (
         <Popover anchor={iconAnchor} onClose={() => setIconAnchor(null)} width={232}>
