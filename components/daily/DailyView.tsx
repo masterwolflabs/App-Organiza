@@ -349,6 +349,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   // One name: whichever side changed since the last match (what the link remembers) brings the other along.
   const bridge = useNotesBridge();
   const allNotes = bridge?.pickableNotes;
+  const synced = React.useRef(new Map<string, string>());
   useEffect(() => {
     if (!bridge?.renameLinked || !store?.ready) return;
     for (const t of doc.tasks) {
@@ -356,11 +357,15 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       const note = bridge.linkedNote?.('task', linkId);
       const link = note?.links?.find((l) => l.id === linkId);
       if (!note || !link) continue;
+      // Sin espacios de más, y cada cambio una sola vez: si no, una nota con un espacio al inicio se guarda sin parar.
       const title = note.title.trim();
-      if (title && title !== link.label) {
-        if (title !== t.title) patch(t.id, { title });
-        bridge.renameLinked(note.id, note.title, linkId);
-      } else if (t.title !== link.label) bridge.renameLinked(note.id, t.title, linkId);
+      const label = (link.label ?? '').trim();
+      const name = t.title.trim();
+      const pick = title && title !== label ? title : name !== label ? name : null;
+      if (!pick || synced.current.get(linkId) === pick) continue;
+      synced.current.set(linkId, pick);
+      if (pick !== name) patch(t.id, { title: pick });
+      bridge.renameLinked(note.id, pick, linkId);
     }
   }, [allNotes, doc.tasks, store?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkPanel = bridge?.linkPanel;
