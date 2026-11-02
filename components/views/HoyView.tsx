@@ -6,6 +6,8 @@ import { APP } from '@/app.config';
 import { goalDone, goalFrequency, useOrganiza } from '@/components/calendar/organiza';
 import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
 import { useCalendar } from '@/components/calendar/useCalendar';
+import { DailyView } from '@/components/daily/DailyView';
+import { Checklist } from '@/components/views/ChecklistView';
 
 /** La cinta muestra el día despierto; lo que cae fuera se ve igual en la lista. */
 const BAND_FROM = 6 * 60;
@@ -45,7 +47,7 @@ export const HoyView: React.FC = () => {
   const coming = Array.from({ length: 7 }, (_, i) => addDays(today, i + 1)).map((d) => ({ day: d, items: occ.filter((o) => sameDay(o.start, d)) }));
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-6xl">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="font-display text-4xl font-semibold first-letter:uppercase text-white sm:text-5xl">{longDay(now)}</h1>
@@ -57,6 +59,13 @@ export const HoyView: React.FC = () => {
           <CalendarPlus className="h-4 w-4" /> Agendar
         </button>
       </header>
+
+      <section className="mt-8" data-tour="daily">
+        <h2 className="mb-3 text-lg font-semibold text-white">Pendientes</h2>
+        <div className="max-h-[440px] overflow-auto rounded-2xl">
+          <DailyView compact />
+        </div>
+      </section>
 
       {status === 'error' ? (
         <p className="mt-8 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No se pudo leer el calendario. Revisa tu conexión y recarga la página.</p>
@@ -112,6 +121,8 @@ export const HoyView: React.FC = () => {
               )}
             </section>
           </div>
+
+          <div className="mt-12"><Checklist embedded /></div>
         </>
       )}
     </div>

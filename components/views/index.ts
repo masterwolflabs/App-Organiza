@@ -9,6 +9,10 @@ import { CalendarioView } from '@/components/views/CalendarioView';
 import { HorarioView } from '@/components/views/HorarioView';
 import { AcomodarView } from '@/components/views/AcomodarView';
 import { BasesView } from '@/components/views/BasesView';
+import { DailyPage } from '@/components/views/DailyPage';
+import { ChecklistView } from '@/components/views/ChecklistView';
+import { RutaView } from '@/components/views/RutaView';
+import { ConexionesView } from '@/components/views/ConexionesView';
 
 export type ViewProps = { onOpenSettings: () => void; onOpenCloud: () => void };
 
@@ -18,4 +22,8 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   horario: HorarioView,
   acomodar: AcomodarView,
   bases: BasesView,
+  daily: DailyPage,
+  checklist: ChecklistView,
+  ruta: RutaView,
+  conexiones: ConexionesView,
 };

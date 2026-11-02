@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useSpace } from '@/components/organiza/space';
 import { addDays, AREA_INFO, minutesOf, MONTHS, sameDay, startOfDay, startOfWeek, type Occurrence } from './model';
 
 /**
@@ -32,6 +33,14 @@ const DEFAULT_AREAS = [
   { name: 'Yo', emoji: '✨', color: '#fb923c' },
 ];
 
+const EMPRESA_AREAS = [
+  { name: 'Clientes', emoji: '🤝', color: '#38bdf8' },
+  { name: 'Ventas', emoji: '📈', color: '#34d399' },
+  { name: 'Equipo', emoji: '👥', color: '#a78bfa' },
+  { name: 'Operaciones', emoji: '⚙️', color: '#fb923c' },
+  { name: 'Finanzas', emoji: '💸', color: '#fbbf24' },
+];
+
 const publishAreas = (areas: Area[]) => {
   AREA_INFO.clear();
   for (const a of areas) AREA_INFO.set(a.id, { color: a.color, label: `${a.emoji} ${a.name}`.trim() });
@@ -39,6 +48,7 @@ const publishAreas = (areas: Area[]) => {
 
 /** Áreas y metas de la persona. `missing` = aún no se corre el SQL 24 en Supabase. */
 export function useOrganiza() {
+  const { space } = useSpace();
   const [areas, setAreas] = useState<Area[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing'>('loading');
@@ -48,14 +58,14 @@ export function useOrganiza() {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return;
-      let a = await supabase.from('organiza_areas').select('*').order('sort_order');
+      let a = await supabase.from('organiza_areas').select('*').eq('space', space).order('sort_order');
       if (a.error) { if (alive) setStatus('missing'); return; }
       if (!a.data?.length) {
-        const rows = DEFAULT_AREAS.map((x, i) => ({ ...x, sort_order: i, owner_id: auth.user.id }));
-        await supabase.from('organiza_areas').upsert(rows, { onConflict: 'owner_id,name', ignoreDuplicates: true });
-        a = await supabase.from('organiza_areas').select('*').order('sort_order');
+        const rows = (space === 'empresa' ? EMPRESA_AREAS : DEFAULT_AREAS).map((x, i) => ({ ...x, sort_order: i, owner_id: auth.user.id, space }));
+        await supabase.from('organiza_areas').upsert(rows, { onConflict: 'owner_id,space,name', ignoreDuplicates: true });
+        a = await supabase.from('organiza_areas').select('*').eq('space', space).order('sort_order');
       }
-      const g = await supabase.from('organiza_goals').select('*').is('archived_at', null).order('created_at');
+      const g = await supabase.from('organiza_goals').select('*').eq('space', space).is('archived_at', null).order('created_at');
       if (!alive) return;
       const list = (a.data ?? []) as Area[];
       publishAreas(list);
@@ -64,13 +74,13 @@ export function useOrganiza() {
       setStatus('ready');
     })();
     return () => { alive = false; };
-  }, []);
+  }, [space]);
 
   const saveArea = useCallback(async (patch: Partial<Area>): Promise<boolean> => {
     const { id, ...rest } = patch;
     const q = id
       ? supabase.from('organiza_areas').update(rest).eq('id', id).select().single()
-      : supabase.from('organiza_areas').insert(rest).select().single();
+      : supabase.from('organiza_areas').insert({ space, ...rest }).select().single();
     const { data, error } = await q;
     if (error) return false;
     setAreas((list) => {
@@ -79,7 +89,7 @@ export function useOrganiza() {
       return next;
     });
     return true;
-  }, []);
+  }, [space]);
 
   const removeArea = useCallback(async (id: string) => {
     const { error } = await supabase.from('organiza_areas').delete().eq('id', id);
@@ -95,12 +105,12 @@ export function useOrganiza() {
     const { id, ...rest } = patch;
     const q = id
       ? supabase.from('organiza_goals').update(rest).eq('id', id).select().single()
-      : supabase.from('organiza_goals').insert(rest).select().single();
+      : supabase.from('organiza_goals').insert({ space, ...rest }).select().single();
     const { data, error } = await q;
     if (error) return false;
     setGoals((list) => (id ? list.map((g) => (g.id === id ? (data as Goal) : g)) : [...list, data as Goal]));
     return true;
-  }, []);
+  }, [space]);
 
   /** Archiva: los eventos que ya nacieron de la meta se quedan en el calendario. */
   const removeGoal = useCallback(async (id: string) => {

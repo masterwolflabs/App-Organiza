@@ -29,6 +29,7 @@ import { loadThemePref, saveThemePref, ThemePref, applyTheme } from '@/utils/the
 import { AccentId, LightsId, loadAccent, loadLights, saveAppearance } from '@/utils/appearance';
 import { openCloud, touchApp } from '@/utils/cloud';
 import { useMyRole } from '@/utils/mente';
+import { SpaceProvider, SpaceSwitch } from '@/components/organiza/space';
 
 /**
  * Esqueleto de la app (versión plantilla del app/page.tsx de Finance).
@@ -166,6 +167,7 @@ export function AppShell({ session }: { session: Session }) {
 
   return (
     // Chat compartido con la nube, solo con los canales y mensajes de esta app.
+    <SpaceProvider userId={user.id} email={user.email ?? null} name={displayName}>
     <ChatProvider session={chatSession} scope={CHAT_SCOPE} inChat={section === 'chat'} onOpenChat={() => navigate('chat')}>
     {/* Datos estilo Notion de este usuario en esta app (vistas de tablas + bases de datos), también dentro de las notas. */}
     <ConfirmProvider>
@@ -196,6 +198,7 @@ export function AppShell({ session }: { session: Session }) {
             onOpenCalculator={openCalculator}
             displayName={displayName}
             avatarUrl={avatarUrl}
+            extra={<SpaceSwitch />}
             search={<GlobalSearch getItems={getSearchItems} quick={quick} />}
             onOpenSidebar={() => setSidebarOpen(true)}
             onOpenUserCenter={setUserCenter}
@@ -283,6 +286,7 @@ export function AppShell({ session }: { session: Session }) {
     </TableViewsProvider>
     </ConfirmProvider>
     </ChatProvider>
+    </SpaceProvider>
   );
 }
 

@@ -146,6 +146,12 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
     sendNote: (conversationId, noteId, role) => {
       handleSendCommunityNote(conversationId, noteId, role);
     },
+    linkedNote: (type, id) => notes.find((n) => (n.links ?? []).some((l) => l.type === type && l.id === id)) ?? null,
+    openLinkedNote: (type, id, label, category, text, backLabel, start) => {
+      const found = notes.find((n) => (n.links ?? []).some((l) => l.type === type && l.id === id));
+      if (found) return openNoteObj(found, backLabel);
+      setOpenNote({ key: ++noteKey.current, id: null, draft: emptyDraft({ title: label, category, body: text ?? '', bodyHtml: start?.html ?? '', ...(start?.color ? { color: start.color } : {}), links: [{ type, id, label }] } as Partial<Draft>), role: 'owner', backLabel });
+    },
   };
 
   // Arriving from a share link (/?share=<token>, after login if needed) or a

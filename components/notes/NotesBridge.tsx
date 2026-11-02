@@ -27,7 +27,7 @@ export interface NotesBridgeValue {
   /** Any record's own note (a Pendientes task…): the note linked to {type, id}, if any. */
   linkedNote?: (type: NoteLinkType, id: string) => Note | null;
   /** Opens it, or starts it linked to the record in the given category. */
-  openLinkedNote?: (type: NoteLinkType, id: string, label: string, category: string, text?: string, backLabel?: string) => void;
+  openLinkedNote?: (type: NoteLinkType, id: string, label: string, category: string, text?: string, backLabel?: string, start?: { html?: string; color?: string }) => void;
 }
 
 const NotesBridgeContext = createContext<NotesBridgeValue | null>(null);

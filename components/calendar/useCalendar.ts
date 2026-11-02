@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useSpace } from '@/components/organiza/space';
 import { toDateInput, type CalEvent, type Occurrence } from './model';
 
 export type Who = { id: string; name: string; avatar_url: string | null };
@@ -19,6 +20,7 @@ const NUBE: CalApp = { slug: 'nube', name: 'Nube', icon: '☁️' };
  * every 30 s so what another app adds shows up by itself.
  */
 export function useCalendar(from: Date, to: Date, enabled = true) {
+  const { space } = useSpace();
   const [userId, setUserId] = useState<string | null>(null);
   const [isMw, setIsMw] = useState(false);
   const [events, setEvents] = useState<CalEvent[]>([]);
@@ -59,11 +61,12 @@ export function useCalendar(from: Date, to: Date, enabled = true) {
       .from('calendar_events')
       .select('*')
       .or(`rrule.not.is.null,and(ends_at.gte.${f.toISOString()},starts_at.lt.${t.toISOString()})`)
+      .eq('space', space)
       .neq('status', 'cancelado');
     if (error) return setStatus('error');
     setEvents((data ?? []) as CalEvent[]);
     setStatus('ready');
-  }, []);
+  }, [space]);
 
   const fromKey = from.getTime();
   const toKey = to.getTime();
@@ -97,13 +100,13 @@ export function useCalendar(from: Date, to: Date, enabled = true) {
         setEvents((list) => list.map((e) => (e.id === id ? (data as CalEvent) : e)));
         return data as CalEvent;
       }
-      const row = { owner_scope: userId, ...rest };
+      const row = { owner_scope: userId, space, ...rest };
       const { data, error } = await supabase.from('calendar_events').insert(row).select().single();
       if (error) return null;
       setEvents((list) => [...list, data as CalEvent]);
       return data as CalEvent;
     },
-    [userId, load],
+    [userId, load, space],
   );
 
   const remove = useCallback(async (id: string) => {

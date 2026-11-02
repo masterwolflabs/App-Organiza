@@ -9,6 +9,8 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 interface TopbarProps {
   displayName: string;
   avatarUrl: string | null;
+  /** Lo propio de la app junto a la campana (Persona / Empresa en Organiza). */
+  extra?: React.ReactNode;
   /** Buscador global (GlobalSearch). */
   search?: React.ReactNode;
   onOpenSidebar: () => void;
@@ -29,7 +31,7 @@ interface TopbarProps {
  * campana y menú de perfil. El ojo de "ocultar montos" no viene en la
  * plantilla: cada app lo agrega si muestra datos sensibles.
  */
-export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, search, onOpenSidebar, onOpenUserCenter, onOpenCloud, onOpenMente, onLogout, unreadCount = 0, onOpenNotifications, onOpenCalculator }) => {
+export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, extra, search, onOpenSidebar, onOpenUserCenter, onOpenCloud, onOpenMente, onLogout, unreadCount = 0, onOpenNotifications, onOpenCalculator }) => {
   const [open, setOpen] = useState(false);
   const firstName = displayName.split(' ')[0];
   const item = 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-200 hover:bg-zinc-800';
@@ -51,6 +53,7 @@ export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, search, 
       </div>
 
       {search}
+      {extra}
 
       {onOpenCalculator && (
         <button onClick={onOpenCalculator} title="Calculadora" className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-zinc-400 hover:text-white">
