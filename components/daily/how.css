@@ -1,0 +1,43 @@
+/* 📖 Cómo trabajamos: his Notion "Paso a Paso Claude", values measured from the real page
+   (2026-11-02). Own file, not globals.css: the template update overwrites that one. */
+.how { --how-bg: #191919; --how-text: #f0efed; --how-muted: #9b9a97; --how-line: rgba(255, 255, 255, 0.1); --how-hover: rgba(255, 255, 255, 0.06); --how-col: 6%; --how-chip: 45%; --how-chip-text: #fff; --how-card: #252525; --how-ring: 16%; border-radius: 14px; padding: 2.5rem 2rem; background: var(--how-bg); color: var(--how-text); font-family: ui-sans-serif, -apple-system, "system-ui", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif; }
+:root[data-theme='light'] .how { --how-bg: #fff; --how-text: #2c2c2b; --how-muted: #7d7a75; --how-line: rgba(42, 28, 0, 0.09); --how-hover: rgba(42, 28, 0, 0.05); --how-col: 6%; --how-chip: 24%; --how-card: #fff; --how-ring: 12%; }
+:root[data-theme='light'] .how-chip { color: color-mix(in srgb, var(--c) 45%, #2c2c2b); }
+.how [data-col] { font-weight: 600; }
+.how [data-col='muted'] { color: var(--how-muted); font-weight: 400; font-style: italic; }
+.how-rich { min-width: 0; outline: none; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 4px; cursor: text; }
+.how-rich:focus { box-shadow: 0 0 0 2px var(--how-hover); }
+.how-rich:empty::before { content: attr(data-empty); color: var(--how-muted); }
+.how-page { font-size: 2.25rem; font-weight: 700; line-height: 1.2; }
+.how-h1 { font-size: 1.75rem; font-weight: 600; line-height: 1.3; }
+.how-h2 { font-size: 1.4rem; font-weight: 600; line-height: 1.3; }
+.how-callout { margin-top: 1rem; border: 1px solid var(--how-line); border-radius: 10px; padding: 1.25rem; }
+.how-scroll { overflow-x: auto; }
+.how-table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+.how-table th { padding: 0.45rem 0.6rem; color: var(--how-muted); font-size: 14px; font-weight: 400; text-align: left; white-space: nowrap; }
+.how-table th svg { display: inline; height: 15px; width: 15px; margin: -2px 5px 0 0; }
+.how-table th, .how-table td { border-bottom: 1px solid var(--how-line); }
+.how-table th + th, .how-table td + td { border-left: 1px solid var(--how-line); }
+.how-table td { padding: 0.5rem 0.6rem; vertical-align: top; }
+.how-ico { height: 16px; width: 16px; flex: none; color: var(--how-muted); }
+.how-del { flex: none; color: var(--how-muted); opacity: 0; }
+.group:hover > * > * > .how-del, .how-del:focus { opacity: 1; }
+.how-del:hover, .how-tools button:hover { color: #e5484d; }
+.how-add { display: flex; align-items: center; gap: 0.4rem; border-radius: 6px; padding: 0.35rem 0.5rem; color: var(--how-muted); font-size: 14px; }
+.how-add:hover, .how-tab:hover { background: var(--how-hover); }
+.how-tab { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.3rem 0.7rem; color: var(--how-muted); font-size: 14px; }
+.how-tab-on { background: var(--how-hover); color: var(--how-text); font-weight: 600; }
+.how-col { flex: 0 0 260px; border-radius: 10px; padding: 0 8px 8px; background: color-mix(in srgb, var(--c) var(--how-col), transparent); }
+.how-col-over { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent); }
+.how-count { color: var(--c); font-size: 14px; }
+.how-chip { border-radius: 4px; padding: 0 6px; background: color-mix(in srgb, var(--c) var(--how-chip), var(--how-bg)); color: var(--how-chip-text); font-size: 14px; line-height: 1.5; white-space: nowrap; }
+.how-card { position: relative; border-radius: 10px; padding: 0.625rem; background: var(--how-card); box-shadow: 0 4px 12px rgba(25, 25, 25, 0.027), 0 1px 2px rgba(25, 25, 25, 0.02), 0 0 0 1px color-mix(in srgb, var(--c) var(--how-ring), transparent); }
+.how-card-title { font-size: 15px; font-weight: 500; line-height: 1.5; padding-right: 2.5rem; }
+.how-card-body { margin-top: 0.3rem; font-size: 12px; line-height: 1.5; }
+.how-tools { position: absolute; top: 0.5rem; right: 0.5rem; z-index: 1; display: flex; gap: 0.25rem; color: var(--how-muted); opacity: 0; }
+.how-card:hover .how-tools { opacity: 1; }
+
+@media (max-width: 640px) {
+  .how { padding: 1.5rem 1rem; }
+  .how-callout { padding: 0.75rem; }
+}

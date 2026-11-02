@@ -31,6 +31,7 @@ Notion por áreas de vida, y agendar por voz.
 - **Horario** ya no es `CalendarView`: `organiza_schedules` + `organiza_items` (SQL 27). Nace en vista previa; publicar lo vuelve eventos semanales `source='horario'`, y solo hay uno publicado por base.
 - **Datos**: `components/organiza/db.tsx` (`useDb`) para probar en memoria; lógica en `model.ts` y `useHorario.ts`. El récord se sigue por nombre de actividad (`refOf`).
 - **Daily** vive aquí (`components/daily/`): la cuenta Labs lee `table_views.daily`, la misma de `daily.sh`; las demás, `organiza-daily-<space>`.
+- **Cómo trabajamos** (`components/daily/DailyManual.tsx`): debajo de la Daily, igual a su Notion "Paso a Paso Claude"; estilos en `components/daily/how.css`.
 - **Conexiones y teléfono**: `docs/CONEXIONES.md`. Llaves en Vercel; `lib/server/` es solo servidor.
 - **Tour**: `utils/tourScript.ts` debe ser igual a `src/utils/organizaTour.ts` de la nube, que genera la voz.
 - Guía para quien sigue el proyecto: `docs/TRASPASO.md`. SQL 24 y 25: `docs/sql/`.

@@ -9,6 +9,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { PeopleCell } from '@/components/daily/DailyView';
 import { newId } from '@/utils/daily';
 import { HOW_COLORS, HOW_DEFAULT, HOW_KEY, type HowCard, type HowColumn, type HowDoc, type HowRow } from '@/utils/howWeWork';
+import './how.css';
 
 /**
  * 📖 Cómo trabajamos (Emanuel, 2026-10-31): the look of his Notion "Paso a Paso Claude", under the Daily
