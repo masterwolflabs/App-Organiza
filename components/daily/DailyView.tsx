@@ -6,7 +6,7 @@ import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type Filter, type ViewDef } from '@/components/tables/table';
 import { Editable } from '@/components/tables/editable';
-import { NameMenu, Section } from '@/components/tables/section';
+import { NameMenu, Section, SectionOrder } from '@/components/tables/section';
 import { useConfirm } from '@/components/ui/confirm';
 import { McAvatar } from '@/components/calendar/McAvatar';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
@@ -487,6 +487,16 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     },
   ];
 
+  const board = !showArchived && !compact && labs && (
+    <DailyBoard
+      tasks={rows}
+      now={now}
+      photoOf={photoOf}
+      onPatch={patch}
+      onAdd={add}
+      renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
+    />
+  );
   const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle={!compact} onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
 
   return (
@@ -505,8 +515,12 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           <Plus className="h-4 w-4" /> Nueva tarea
         </button>
       </div>
-      {/* In a Section, like every Empresa table: its Configuración gets Tamaño, Mover and Apariencia. Hoy has its own fixed height. */}
-      {compact ? table : <Section n={1} id="daily-tabla" title="Daily - Pendientes">{table}</Section>}
+      {/* In a Section, like every Empresa table: its Configuración gets Tamaño, Mover and Apariencia. */}
+      {compact ? (
+        <Section n={1} id="daily-hoy" title="Pendientes" defaultFold="half">{table}</Section>
+      ) : (
+        <SectionOrder storageKey="organiza-daily-orden" ids={board ? ['daily-tabla', 'daily-tablero'] : ['daily-tabla']} blocks={{ 'daily-tabla': <Section n={1} id="daily-tabla" title="Daily - Pendientes">{table}</Section>, 'daily-tablero': board && <Section n={2} id="daily-tablero" title="Tablero · ¿Quién la hace?">{board}</Section> }} />
+      )}
       {rowMenu && (
         <NameMenu
           x={rowMenu.x}
@@ -516,16 +530,6 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
             { label: rowMenu.t.archived ? 'Desarchivar' : 'Archivar', icon: rowMenu.t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />, onClick: () => actions.onArchive(rowMenu.t) },
             { label: 'Borrar', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => actions.onDelete(rowMenu.t) },
           ]}
-        />
-      )}
-      {!showArchived && !compact && labs && (
-        <DailyBoard
-          tasks={rows}
-          now={now}
-          photoOf={photoOf}
-          onPatch={patch}
-          onAdd={add}
-          renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
         />
       )}
       {!showArchived && !compact && labs && <DailyManual entities={entities} photoOf={photoOf} onCreatePerson={createPerson} />}

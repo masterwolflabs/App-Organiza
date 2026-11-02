@@ -61,10 +61,7 @@ export const HoyView: React.FC = () => {
       </header>
 
       <section className="mt-8" data-tour="daily">
-        <h2 className="mb-3 text-lg font-semibold text-white">Pendientes</h2>
-        <div className="max-h-[440px] overflow-auto rounded-2xl">
-          <DailyView compact />
-        </div>
+        <DailyView compact />
       </section>
 
       {status === 'error' ? (

@@ -37,8 +37,8 @@ const readGlobalLook = (): Look => {
   }
 };
 
-function useSectionPrefs(id?: string) {
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
+function useSectionPrefs(id?: string, startFold: Fold = 'full') {
+  const [prefs, setPrefs] = useState<Prefs>({ ...DEFAULT, fold: startFold });
   const save = useCallback(
     (next: Prefs) => {
       setPrefs(next);
@@ -55,11 +55,11 @@ function useSectionPrefs(id?: string) {
     try {
       const saved = JSON.parse(localStorage.getItem(`mf-sec:${id}`) || 'null');
       const base = readGlobalLook();
-      setPrefs(saved ? { ...DEFAULT, ...saved, look: { ...base, ...(saved.look ?? {}) } } : { ...DEFAULT, look: base });
+      setPrefs(saved ? { ...DEFAULT, ...saved, look: { ...base, ...(saved.look ?? {}) } } : { ...DEFAULT, fold: startFold, look: base });
     } catch {
       /* ignore */
     }
-  }, [id]);
+  }, [id, startFold]);
   // "Aplicar a todas las secciones": every mounted section takes the look (keeps its own fold).
   useEffect(() => {
     if (!id) return;
@@ -570,10 +570,10 @@ export const SectionSettings: React.FC<{ api: SectionApi; only?: ('move' | 'fold
   );
 };
 
-export const Section: React.FC<{ n: number; title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; id?: string; solid?: boolean; /** Replaces the number and the title (a database shows its icon and editable name). */ head?: React.ReactNode }> = ({ n, title: baseTitle, description, actions, children, id, solid, head }) => {
+export const Section: React.FC<{ n: number; title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; id?: string; solid?: boolean; /** Replaces the number and the title (a database shows its icon and editable name). */ head?: React.ReactNode; /** How it starts until the person changes it. */ defaultFold?: Fold }> = ({ n, title: baseTitle, description, actions, children, id, solid, head, defaultFold }) => {
   const canEdit = useContext(CanEditCtx); // team members whose role can't change this section: no action buttons
   const order = useContext(OrderCtx);
-  const [prefs, save] = useSectionPrefs(id);
+  const [prefs, save] = useSectionPrefs(id, defaultFold);
   const [panel, setPanel] = useState<DOMRect | null>(null);
   // Right-click on the title → "Cambiar nombre" (Moisés, 2026-10-18). Saved per browser like the rest of the section.
   const [nameMenu, setNameMenu] = useState<{ x: number; y: number } | null>(null);
