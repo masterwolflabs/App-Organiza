@@ -1,6 +1,6 @@
 'use client';
 
-import { DataTable, OpenRowCtx, type Col } from '@/components/tables/table';
+import { DataTable, OpenRowCtx, type Col, type Filter } from '@/components/tables/table';
 import { Section } from '@/components/tables/section';
 import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -423,6 +423,7 @@ export const DatabaseTable: React.FC<{
   const [iconAnchor, setIconAnchor] = useState<HTMLElement | null>(null);
   const [title, setTitle] = useState('');
   useEffect(() => setTitle(db?.title ?? ''), [db?.title]);
+  const filters = useRef<Filter[]>([]);
 
   const props = useMemo(() => db?.properties ?? [], [db?.properties]);
 
@@ -507,6 +508,20 @@ export const DatabaseTable: React.FC<{
     const text = p.type === 'date' && typeof v === 'string' ? dateText(v) : p.type === 'number' && typeof v === 'number' ? formatNumber(v, p.numberFormat) : displayText(p, v);
     return <span className="sr-only">{text}</span>;
   };
+  /** A new row takes the filters on screen, so it doesn't vanish when created (like Notion). */
+  const newRow = () => {
+    const values: Record<string, CellValue> = {};
+    for (const f of filters.current) {
+      const p = props.find((x) => x.id === f.col);
+      const wanted = (f.op === 'en' ? f.value.split('|')[0] : f.value).trim();
+      if (!p || !wanted || !['es', 'en', 'contiene'].includes(f.op)) continue;
+      const option = p.options?.find((o) => o.name.toLowerCase() === wanted.toLowerCase());
+      if (p.type === 'title' || p.type === 'text') values[p.id] = wanted;
+      else if (p.type === 'select' && option) values[p.id] = option.id;
+      else if (p.type === 'multi_select' && option) values[p.id] = [option.id];
+    }
+    addRow(values);
+  };
   const width = (p: DbProperty) => p.width ?? (p.type === 'title' ? 220 : p.type === 'checkbox' ? 90 : p.type === 'multi_select' ? 200 : 160);
   const columns: Col<DbRow>[] = props.map((p) => ({
     key: p.id,
@@ -537,6 +552,7 @@ export const DatabaseTable: React.FC<{
         id={`dbt-${databaseId}`}
         title={db.title}
         noTitle
+        onFilters={(f) => (filters.current = f)}
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
@@ -549,7 +565,7 @@ export const DatabaseTable: React.FC<{
           if (prop) setMenu({ prop, anchor, sort });
         }}
       />
-      <button type="button" onClick={() => addRow()} className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200">
+      <button type="button" onClick={newRow} className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200">
         <Plus className="h-4 w-4" /> Nueva fila
       </button>
     </>
@@ -600,7 +616,7 @@ export const DatabaseTable: React.FC<{
           actions={
             <>
               {counter}
-              <button type="button" onClick={() => addRow()} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
+              <button type="button" onClick={newRow} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">
                 <Plus className="h-3.5 w-3.5" /> Nueva fila
               </button>
             </>

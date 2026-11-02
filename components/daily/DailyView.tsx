@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlignLeft, Archive, ArchiveRestore, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
 import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
-import { DataTable, type Col, type ViewDef } from '@/components/tables/table';
+import { DataTable, type Col, type Filter, type ViewDef } from '@/components/tables/table';
 import { Editable } from '@/components/tables/editable';
 import { NameMenu, Section } from '@/components/tables/section';
 import { useConfirm } from '@/components/ui/confirm';
@@ -281,10 +281,29 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const [writing, setWriting] = useState<string | null>(null);
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
   const isNew = React.useCallback((t: DailyTask) => newIds.includes(t.id) || t.title === 'Nueva tarea', [newIds]);
+  // A new task takes the filters on screen, so it appears right there (like Notion).
+  const filters = React.useRef<Filter[]>([]);
+  const fromFilters = () => {
+    const out: Partial<DailyTask> = {};
+    const lower = (t: string) => t.trim().toLowerCase();
+    const pick = <K extends string>(info: Record<K, { label: string }>, v: string) => (Object.keys(info) as K[]).find((k) => lower(info[k].label) === v || lower(info[k].label).includes(v));
+    for (const f of filters.current) {
+      const v = lower(f.op === 'en' ? f.value.split('|')[0] : f.value);
+      if (!v || !['es', 'en', 'contiene'].includes(f.op)) continue;
+      if (f.col === 'estado') out.status = pick(STATUS_INFO, v) ?? out.status;
+      if (f.col === 'etiqueta') out.tag = pick(TAG_INFO, v) ?? out.tag;
+      if (f.col === 'app') out.app = apps.find((a) => lower(a) === v || lower(a).includes(v)) ?? out.app;
+      if (f.col === 'ejecutor') {
+        const who = entities.find((e) => lower(e.name).includes(v))?.name;
+        if (who) out.executors = [who];
+      }
+    }
+    return out;
+  };
   const add = (p: Partial<DailyTask> = {}) => {
     const id = newId();
     setNewIds((l) => [...l, id]);
-    save([...fresh().tasks, { id, title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...p }]);
+    save([...fresh().tasks, { id, title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...fromFilters(), ...p }]);
     return id;
   };
   // Two confirmations: deleting is final (archiving is the soft option).
@@ -468,7 +487,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     },
   ];
 
-  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle={!compact} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle={!compact} onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
 
   return (
     <div>

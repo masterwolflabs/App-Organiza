@@ -100,6 +100,13 @@ export const Editable: React.FC<{
     if (!editing) return;
     ref.current?.focus();
     if (kind === 'text' || kind === 'money') ref.current?.select?.();
+    if (kind === 'select') {
+      try {
+        ref.current?.showPicker?.();
+      } catch {
+        /* the browser asks for one more click */
+      }
+    }
   }, [editing, kind]);
 
   const label2 = (v: Value) => {
@@ -180,7 +187,11 @@ export const Editable: React.FC<{
       );
     if (kind === 'select')
       return (
-        <select ref={ref} className={cls} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => commit()} onKeyDown={keys} onClick={(e) => e.stopPropagation()}>
+        <select ref={ref} className={cls} value={text} onChange={(e) => {
+          // A list is decided on picking: nothing else to confirm, so it doesn't wait for a click elsewhere.
+          setText(e.target.value);
+          commit(e.target.value);
+        }} onBlur={() => setEditing(false)} onKeyDown={keys} onClick={(e) => e.stopPropagation()}>
           {!required && <option value="">{noneLabel ?? '—'}</option>}
           {options?.map((o) => (
             <option key={o.value} value={o.value}>

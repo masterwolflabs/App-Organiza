@@ -253,7 +253,9 @@ export const Table: React.FC<{
   onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void;
   /** The title already shows above (its Section or database): it's kept for full screen and relations only. */
   noTitle?: boolean;
-}> = ({ id, head: baseHead, colKeys, children, minWidth = 900, empty, isEmpty, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle }) => {
+  /** The filters on screen: a row created now takes them, so it shows up (like Notion). */
+  onFilters?: (filters: Filter[]) => void;
+}> = ({ id, head: baseHead, colKeys, children, minWidth = 900, empty, isEmpty, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle, onFilters }) => {
   const section = useContext(SectionCtx);
   const baseKeys = useMemo(() => colKeys ?? baseHead.map((_, i) => String(i)), [colKeys, baseHead]);
   // Columns the user added with "+" (texto, número, selección, fórmula…).
@@ -392,6 +394,10 @@ export const Table: React.FC<{
   const widthsSet = id ? visible.every((k) => prefs.widths[k]) : false;
   const custom = hidden.length > 0 || order.join() !== keys.join() || Object.keys(prefs.widths).length > 0;
   const filters = prefs.filters.filter((f) => keys.includes(f.col));
+  const filtersKey = JSON.stringify(filters);
+  useEffect(() => {
+    onFilters?.(JSON.parse(filtersKey));
+  }, [filtersKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const sort = prefs.sort && keys.includes(prefs.sort.col) ? prefs.sort : null;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -1596,9 +1602,9 @@ export interface Col<T> {
   className?: string;
 }
 
-export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string>; onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void; onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void; noTitle?: boolean }) {
+export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle, onFilters }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string>; onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void; onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void; noTitle?: boolean; onFilters?: (filters: Filter[]) => void }) {
   return (
-    <Table id={id} title={title} defaultViews={defaultViews} peekExtra={peekExtra} peekHide={peekHide} help={help} onAddField={onAddField} onColumnMenu={onColumnMenu} noTitle={noTitle} head={columns.map((c) => c.label)} colKeys={columns.map((c) => c.key)} minWidth={minWidth} empty={empty} isEmpty={!rows.length}>
+    <Table id={id} title={title} defaultViews={defaultViews} peekExtra={peekExtra} peekHide={peekHide} help={help} onAddField={onAddField} onColumnMenu={onColumnMenu} noTitle={noTitle} onFilters={onFilters} head={columns.map((c) => c.label)} colKeys={columns.map((c) => c.key)} minWidth={minWidth} empty={empty} isEmpty={!rows.length}>
       {rows.map((r) => (
         <tr key={rowKey(r)} className={rowClassName ?? 'border-b border-white/[0.05] hover:bg-white/[0.02]'}>
           {columns.map((c) => (
