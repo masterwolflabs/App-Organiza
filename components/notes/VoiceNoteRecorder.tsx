@@ -4,8 +4,10 @@
  * Voice note recorder (Emanuel, 2026-10-28), like Apple's Notas de voz:
  * - It RECORDS the audio (MediaRecorder) — the audio is the source of truth; the text is a bonus.
  * - Live waveform that scrolls while you speak, timer, pause / resume.
- * - Live transcription at the same time (browser SpeechRecognition, Chrome / Edge). If it fails or the
- *   connection drops, the audio keeps recording and the text is made from the audio afterwards.
+ * - Live transcription at the same time (browser SpeechRecognition, Chrome / Edge). If it gives nothing in
+ *   5 s (it can fail silently), short pieces go to the AI instead (Emanuel, 2026-11-02). That text is only
+ *   a preview: the note's text is made from the whole audio afterwards.
+ * - Floats over everything and moves by dragging it.
  * - Every second goes to IndexedDB (utils/voiceVault.ts), so nothing is lost: a closed tab or a crash
  *   leaves a recording you can recover the next time you open the recorder.
  * - If the microphone is lost (unplugged, permission revoked) it stops AT ONCE and keeps what you had.
@@ -45,9 +47,12 @@ export function VoiceNoteRecorder({
   onFinish,
   onClose,
   exclude = [],
+  transcribeLive,
 }: {
   onFinish: (r: FinishedRecording) => Promise<void> | void;
   onClose: () => void;
+  /** One short standalone audio → its text. Without it, the live text depends only on the browser. */
+  transcribeLive?: (blob: Blob, mime: string) => Promise<string>;
   /** Sessions this note already holds (waiting to upload) — not offered as "recuperar". */
   exclude?: string[];
 }) {
@@ -59,7 +64,10 @@ export function VoiceNoteRecorder({
   const [textState, setTextState] = useState<'live' | 'offline' | 'none' | 'paused'>('live');
   const [quiet, setQuiet] = useState(false);
   const [orphans, setOrphans] = useState<VoiceSession[]>([]);
+  const [aiLive, setAiLive] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
 
+  const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -78,8 +86,58 @@ export function VoiceNoteRecorder({
   const lastTick = useRef(0);
   const quietSince = useRef(0);
   const done = useRef(false);
-  const cbs = useRef({ onFinish, onClose });
-  cbs.current = { onFinish, onClose };
+  const cbs = useRef({ onFinish, onClose, transcribeLive });
+  cbs.current = { onFinish, onClose, transcribeLive };
+  const heardSR = useRef(false);
+  const liveRef = useRef('');
+  const segOn = useRef(false);
+  const segRec = useRef<MediaRecorder | null>(null);
+  const seg = useRef({ voice: false });
+  const segTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const segQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const showText = useCallback(() => setFinalText([liveRef.current, finalRef.current].filter(Boolean).join(' ')), []);
+
+  // ---- live text from the AI: 5 s standalone pieces, in order (silent ones are skipped) ----
+  const stopSegment = useCallback(() => {
+    clearTimeout(segTimer.current);
+    try {
+      if (segRec.current?.state !== 'inactive') segRec.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    segRec.current = null;
+  }, []);
+  const startSegment = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream || !segOn.current || phaseRef.current !== 'recording') return;
+    const mime = session.current.mime;
+    const mark = { voice: !analyserRef.current };
+    seg.current = mark;
+    const parts: Blob[] = [];
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    rec.ondataavailable = (e) => {
+      if (e.data?.size) parts.push(e.data);
+    };
+    rec.onstop = () => {
+      if (!mark.voice) return;
+      const blob = new Blob(parts, { type: mime });
+      segQueue.current = segQueue.current
+        .then(() => cbs.current.transcribeLive?.(blob, mime))
+        .then((text) => {
+          const t = text?.trim();
+          if (!t) return;
+          liveRef.current = liveRef.current ? `${liveRef.current} ${t}` : t;
+          showText();
+        })
+        .catch(() => {});
+    };
+    rec.start();
+    segRec.current = rec;
+    segTimer.current = setTimeout(() => {
+      stopSegment();
+      startSegment();
+    }, 5000);
+  }, [showText, stopSegment]);
 
   // ---- live transcription (bonus — never required) ----
   const startSR = useCallback(() => {
@@ -100,7 +158,13 @@ export function VoiceNoteRecorder({
             if (t) finalRef.current = finalRef.current ? `${finalRef.current} ${t}` : t.charAt(0).toUpperCase() + t.slice(1);
           } else live += r[0].transcript;
         }
-        setFinalText(finalRef.current);
+        if ((finalRef.current || live.trim()) && !heardSR.current) {
+          heardSR.current = true;
+          segOn.current = false;
+          stopSegment();
+          setAiLive(false);
+        }
+        showText();
         setInterim(live);
         session.current.transcript = finalRef.current;
         setTextState('live');
@@ -125,7 +189,7 @@ export function VoiceNoteRecorder({
     } catch {
       setTextState('none');
     }
-  }, []);
+  }, [showText, stopSegment]);
   const stopSR = useCallback(() => {
     const sr = srRef.current;
     srRef.current = null;
@@ -150,6 +214,8 @@ export function VoiceNoteRecorder({
       done.current = true;
       setPhase('saving');
       stopSR();
+      segOn.current = false;
+      stopSegment();
       const rec = recRef.current;
       if (rec && rec.state !== 'inactive') {
         await new Promise<void>((resolve) => {
@@ -171,15 +237,16 @@ export function VoiceNoteRecorder({
         cbs.current.onClose();
         return;
       }
-      await cbs.current.onFinish({ sessionId: session.current.id, blob, mime, seconds: elapsed.current, transcript: finalRef.current, cut });
+      await cbs.current.onFinish({ sessionId: session.current.id, blob, mime, seconds: elapsed.current, transcript: liveRef.current ? '' : finalRef.current, cut });
       cbs.current.onClose();
     },
-    [releaseMic, stopSR]
+    [releaseMic, stopSR, stopSegment]
   );
 
   // ---- start recording on mount ----
   useEffect(() => {
     let cancelled = false;
+    let fallback: ReturnType<typeof setTimeout> | undefined;
     voiceVault.listSessions().then((list) => !cancelled && setOrphans(list));
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
@@ -229,9 +296,20 @@ export function VoiceNoteRecorder({
       lastTick.current = performance.now();
       setPhase('recording');
       startSR();
+      if (cbs.current.transcribeLive) {
+        fallback = setTimeout(() => {
+          if (heardSR.current || done.current) return;
+          segOn.current = true;
+          setAiLive(true);
+          startSegment();
+        }, 5000);
+      }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(fallback);
+      segOn.current = false;
+      stopSegment();
       // Unmounted without finishing (note closed): stop, the audio stays in the vault to recover.
       if (!done.current) {
         stopSR();
@@ -294,6 +372,7 @@ export function VoiceNoteRecorder({
           else if (now - quietSince.current > 5000) setQuiet(true);
         } else {
           quietSince.current = 0;
+          seg.current.voice = true;
           setQuiet(false);
         }
       }
@@ -338,6 +417,7 @@ export function VoiceNoteRecorder({
     if (!rec || rec.state !== 'recording') return;
     rec.pause();
     stopSR();
+    stopSegment();
     setInterim('');
     setPhase('paused');
     setTextState((s) => (s === 'live' ? 'paused' : s));
@@ -347,13 +427,17 @@ export function VoiceNoteRecorder({
     if (!rec || rec.state !== 'paused') return;
     rec.resume();
     lastTick.current = performance.now();
+    phaseRef.current = 'recording';
     setPhase('recording');
     startSR();
+    startSegment();
   };
   const discard = async () => {
     if (elapsed.current > 3 && !window.confirm('¿Descartar esta grabación? Se borra el audio.')) return;
     done.current = true;
     stopSR();
+    segOn.current = false;
+    stopSegment();
     try {
       if (recRef.current?.state !== 'inactive') recRef.current?.stop();
     } catch {
@@ -375,20 +459,48 @@ export function VoiceNoteRecorder({
     setOrphans((o) => o.filter((x) => x.id !== s.id));
   };
 
+  /** Moves anywhere on the screen, always staying inside it. */
+  const startDrag = (e: React.PointerEvent) => {
+    const box = rootRef.current;
+    if (!box || (e.target as HTMLElement).closest('button, [data-no-drag]')) return;
+    e.preventDefault();
+    const r = box.getBoundingClientRect();
+    const from = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    const left = r.left - pos.x;
+    const top = r.top - pos.y;
+    const move = (ev: PointerEvent) =>
+      setPos({
+        x: Math.min(window.innerWidth - r.width - left, Math.max(-left, ev.clientX - from.x)),
+        y: Math.min(window.innerHeight - r.height - top, Math.max(-top, ev.clientY - from.y)),
+      });
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   const others = orphans.filter((s) => s.id !== session.current.id && !exclude.includes(s.id));
   const statusLine =
     phase === 'paused'
       ? 'En pausa'
-      : textState === 'offline'
+      : textState === 'offline' && !navigator.onLine
         ? 'Sin conexión: el audio se sigue grabando y el texto se hará después'
-        : textState === 'none'
+        : textState === 'none' && !aiLive
           ? 'Grabando el audio · el texto se hará al terminar'
           : quiet
             ? 'No te escucho… ¿está bien el micrófono?'
             : 'Grabando y transcribiendo en vivo';
 
   return (
-    <div className="theme-fixed pointer-events-auto w-full max-w-xl overflow-hidden rounded-2xl bg-[#111214]/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/10 backdrop-blur-xl">
+    <div
+      ref={rootRef}
+      onPointerDown={startDrag}
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+      data-help="Arrástrala para moverla"
+      className="theme-fixed pointer-events-auto w-full max-w-xl cursor-grab touch-none overflow-hidden rounded-2xl bg-[#111214]/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/10 backdrop-blur-xl active:cursor-grabbing"
+    >
       {others.length > 0 && (
         <div className="space-y-1.5 border-b border-white/10 bg-amber-400/10 px-4 py-2.5 text-xs">
           {others.slice(0, 3).map((s) => (
@@ -428,13 +540,13 @@ export function VoiceNoteRecorder({
             </span>
           </div>
           <canvas ref={canvasRef} className="mt-1 h-16 w-full" />
-          <div ref={textRef} className="max-h-28 min-h-[2.5rem] overflow-y-auto px-4 text-sm leading-relaxed text-zinc-100">
+          <div ref={textRef} data-no-drag="" className="max-h-28 min-h-[2.5rem] cursor-text touch-auto overflow-y-auto px-4 text-sm leading-relaxed text-zinc-100">
             {finalText || interim ? (
               <>
                 {finalText} <span className="text-zinc-500">{interim}</span>
               </>
             ) : (
-              <span className="text-zinc-500">{textState === 'live' ? 'Habla, aquí aparece lo que dices…' : 'Tu audio queda guardado igual.'}</span>
+              <span className="text-zinc-500">{textState === 'live' || aiLive ? 'Habla, aquí aparece lo que dices…' : 'Tu audio queda guardado igual.'}</span>
             )}
           </div>
           <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-2">

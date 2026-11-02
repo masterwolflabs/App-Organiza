@@ -16,6 +16,7 @@ import { compressImageForNote } from '@/utils/image';
 import { formatCLP } from '@/utils/formatters';
 import { formatMathValue, trailingExpression } from '@/utils/mathText';
 import { VoiceNoteRecorder, type FinishedRecording } from '@/components/notes/VoiceNoteRecorder';
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { clock, extOfMime, voiceVault } from '@/utils/voiceVault';
 import { IMPROVE_LABEL, MAX_IMPROVE_CHARS, protectEmbeds, restoreEmbeds, type ImproveMode } from '@/utils/noteImprove';
 import {
@@ -832,6 +833,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
+  /** A few seconds of what's being recorded → text, only to show it live: the piece doesn't stay stored. */
+  const transcribeLive = async (blob: Blob, mime: string) => {
+    const store = cbs.current.imageStore;
+    const path = await store.upload(blob, extOfMime(mime));
+    if (!path) return '';
+    try {
+      const res = await authFetch('/api/notes/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+      const data = await res.json().catch(() => ({}));
+      return res.ok ? String(data.text ?? '') : '';
+    } finally {
+      store.remove([path]).catch(() => {});
+    }
+  };
+
   /** Uploads a recording that's waiting on this device. Returns the uploaded path, or null. */
   const uploadingVoice = useRef(new Set<string>());
   const uploadVoice = async (att: VoiceAttachment): Promise<string | null> => {
@@ -1636,13 +1651,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {recOpen && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-3">
-          <VoiceNoteRecorder
-            onFinish={handleRecording}
-            onClose={() => setRecOpen(false)}
-            exclude={draft.attachments.map((a) => (a as VoiceAttachment).pending).filter((x): x is string => Boolean(x))}
-          />
-        </div>
+        <BodyPortal lockScroll={false}>
+          <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[130] flex justify-center px-3">
+            <VoiceNoteRecorder
+              onFinish={handleRecording}
+              onClose={() => setRecOpen(false)}
+              exclude={draft.attachments.map((a) => (a as VoiceAttachment).pending).filter((x): x is string => Boolean(x))}
+              transcribeLive={imageStore.canUpload === false ? undefined : transcribeLive}
+            />
+          </div>
+        </BodyPortal>
       )}
 
       {aiMenu && (
