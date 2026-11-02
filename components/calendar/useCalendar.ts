@@ -64,7 +64,8 @@ export function useCalendar(from: Date, to: Date, enabled = true) {
       .eq('space', space)
       .neq('status', 'cancelado');
     if (error) return setStatus('error');
-    setEvents((data ?? []) as CalEvent[]);
+    const next = (data ?? []) as CalEvent[];
+    setEvents((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next)); // nada cambió: no se repinta
     setStatus('ready');
   }, [space]);
 

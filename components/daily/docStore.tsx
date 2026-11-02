@@ -46,6 +46,7 @@ export const DocStoreProvider: React.FC<{ scope: string; keys: string[]; childre
     if (pending.current.has(key)) return;
     supabase.from('table_views').select('data').eq('owner_scope', scope).eq('table_key', key).maybeSingle().then(({ data }) => {
       if (!data || pending.current.has(key)) return;
+      if (JSON.stringify(data.data) === JSON.stringify(latest.current[key])) return; // nada cambió: no se repinta
       latest.current = { ...latest.current, [key]: data.data };
       setDocs(latest.current);
     });
