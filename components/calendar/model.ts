@@ -39,6 +39,7 @@ export type CalEvent = {
   goal_id?: string | null;
   /** Excepciones (SQL 25): días en que la serie no ocurre, y serie de origen de un evento suelto. */
   exdates?: string[] | null;
+  reminders?: number[];
   series_id?: string | null;
 };
 

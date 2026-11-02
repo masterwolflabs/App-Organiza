@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import { admin, isCron } from '@/lib/server/admin';
+import { expand, type CalEvent } from '@/components/calendar/model';
 
 /**
  * El reloj de los avisos: lo llama un cron cada minuto. Busca tareas de
@@ -13,6 +14,40 @@ function localNow(zone: string, shift: number) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(Date.now() + shift * 60_000));
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   return { weekday: KEYS.indexOf(get('weekday')), time: `${get('hour').replace('24', '00')}:${get('minute')}` };
+}
+
+/** Recordatorios de eventos: crea la notificación una sola vez (`ref` única) y la manda a sus teléfonos. */
+async function eventReminders(db: ReturnType<typeof admin>) {
+  const { data } = await db.from('calendar_events').select('*').neq('reminders', '{}').neq('status', 'cancelado');
+  if (!data?.length) return 0;
+  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+  const events = data as (CalEvent & { reminders: number[] })[];
+  const { data: invites } = await db.from('organiza_invites').select('event_id, user_id').eq('status', 'aceptada').in('event_id', events.map((e) => e.id));
+  const { data: prefs } = await db.from('organiza_prefs').select('owner_id, reminders');
+  const off = new Set((prefs ?? []).filter((p) => !p.reminders).map((p) => p.owner_id as string));
+  let sent = 0;
+  for (const o of expand(events, now, new Date(now.getTime() + 8 * 864e5))) {
+    for (const min of (o.ev as CalEvent & { reminders: number[] }).reminders) {
+      if (o.start.getTime() - min * 60_000 !== now.getTime()) continue;
+      const people = [o.ev.owner_id, ...(invites ?? []).filter((i) => i.event_id === o.ev.id).map((i) => i.user_id as string)].filter((u) => !off.has(u));
+      const body = min >= 1440 ? `En ${Math.round(min / 1440)} días` : min >= 60 ? `En ${Math.round(min / 60)} horas` : `En ${min} minutos`;
+      for (const owner of people) {
+        const { error } = await db.from('organiza_notifications').insert({ owner_id: owner, kind: 'recordatorio', title: o.ev.title, body, link: '#calendario', ref: `recordatorio:${o.key}:${min}` });
+        if (error) continue;
+        const { data: subs } = await db.from('organiza_push').select('*').eq('owner_id', owner);
+        for (const sub of subs ?? []) {
+          try {
+            await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify({ title: o.ev.title, body, alarm: false }), { urgency: 'high' });
+            sent++;
+          } catch (err) {
+            const code = (err as { statusCode?: number }).statusCode;
+            if (code === 404 || code === 410) await db.from('organiza_push').delete().eq('id', sub.id);
+          }
+        }
+      }
+    }
+  }
+  return sent;
 }
 
 export async function POST(request: Request) {
@@ -59,5 +94,6 @@ export async function POST(request: Request) {
       }
     }
   }
+  sent += await eventReminders(db);
   return Response.json({ sent });
 }

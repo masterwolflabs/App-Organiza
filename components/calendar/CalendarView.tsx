@@ -416,7 +416,10 @@ export function CalendarView({ lockApp, source, horario }: { lockApp?: string; /
         {cal.status === 'error' ? (
           <p className="m-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No se pudo leer el calendario. Recarga la página.</p>
         ) : view === 'month' ? (
+          <>
+          <FreeDays month={cursor} occ={occ} />
           <MonthGrid month={cursor} occ={occ} warned={warned} onOpen={open} onCreate={create} onChange={change} canEdit={canEdit} onDay={(d) => { setCursor(d); setView('day'); }} />
+          </>
         ) : view === 'agenda' ? (
           <AgendaList occ={occ} warned={warnings} onOpen={open} from={cursor} apps={lockApp ? undefined : appNames} />
         ) : (
@@ -537,3 +540,12 @@ function MiniMonth({ cursor, onPick, marks }: { cursor: Date; onPick: (d: Date) 
     </div>
   );
 }
+
+/** Planificación mensual: los días que siguen sin nada agendado. */
+const FreeDays: React.FC<{ month: Date; occ: Occurrence[] }> = ({ month, occ }) => {
+  const today = startOfDay(new Date());
+  const days = Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1));
+  const free = days.filter((d) => d >= today && !occ.some((o) => o.start < addDays(d, 1) && o.end > d)).map((d) => d.getDate());
+  if (!free.length) return null;
+  return <p className="px-4 py-2 text-xs text-white/50">Días libres este mes: <b className="font-semibold text-white/80">{free.join(', ')}</b></p>;
+};

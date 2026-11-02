@@ -5,6 +5,7 @@ import { BellRing, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
+import { playSound, useAvisos } from '@/components/organiza/useAvisos';
 
 type NativeNotifications = {
   requestPermissions: () => Promise<{ display: string }>;
@@ -53,6 +54,25 @@ export const Reminders: React.FC = () => {
   const { published, publishedItems, itemsOn } = useHorario();
   const [ringing, setRinging] = useState<Item | null>(null);
   const seen = useRef(new Set<string>());
+  const { notices, prefs, reload } = useAvisos();
+  const heard = useRef<string | null>(null);
+  // Lo nuevo del centro de notificaciones suena y se muestra, según las preferencias.
+  useEffect(() => {
+    const t = setInterval(reload, 60_000);
+    return () => clearInterval(t);
+  }, [reload]);
+  useEffect(() => {
+    const last = notices.find((n) => !n.read_at);
+    if (!last) return;
+    if (heard.current === null) {
+      heard.current = last.id; // lo que ya estaba antes de abrir no suena
+      return;
+    }
+    if (heard.current === last.id) return;
+    heard.current = last.id;
+    if (prefs.sounds) playSound(prefs.sound);
+    if (prefs.notifications && 'Notification' in window && Notification.permission === 'granted') new Notification(last.title, { body: last.body });
+  }, [notices, prefs]);
 
   useEffect(() => {
     if (published) scheduleNative(publishedItems, 'elegidas').catch(() => {});

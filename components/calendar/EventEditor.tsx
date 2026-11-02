@@ -1,5 +1,7 @@
 'use client';
 
+import { supabase } from '@/lib/supabaseClient';
+import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Lock, MapPin, Trash2, Users, Video, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -35,6 +37,13 @@ const field = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 p
 const label = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-white/40';
 
 /** Side panel to create / edit one event (a recurring one edits its whole series). */
+const REMINDERS = [
+  { minutes: 7200, label: '5 días' },
+  { minutes: 4320, label: '3 días' },
+  { minutes: 1440, label: '1 día' },
+];
+const EVENT_PLAN = '<h2>📝 Notas</h2><p></p><h2>✅ Preparación</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul><h2>🔗 Enlaces y archivos</h2><p></p>';
+
 export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, readOnly, around, onSave, onDelete, onClose }: Props) {
   const isNew = !draft.id;
   const [title, setTitle] = useState(draft.title ?? '');
@@ -54,6 +63,9 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
   const [description, setDescription] = useState(draft.description ?? '');
   const [shared, setShared] = useState(draft.owner_scope === 'mw');
   const [color, setColor] = useState<string | null>(draft.color ?? null);
+  const [reminders, setReminders] = useState<number[]>(draft.reminders ?? []);
+  const [customHours, setCustomHours] = useState('');
+  const bridge = useNotesBridge();
   const [tentative, setTentative] = useState(draft.status === 'tentativo');
   const [users, setUsers] = useState<string[]>(draft.attendee_users ?? []);
   const [people, setPeople] = useState<string[]>(draft.attendee_people ?? []);
@@ -119,6 +131,7 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
       owner_scope: shared ? 'mw' : (draft.owner_id ?? userId),
       color,
       status: tentative ? 'tentativo' : 'confirmado',
+      reminders,
       attendee_users: users,
       attendee_people: people,
       attendee_clients: clients,
@@ -309,6 +322,19 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
           </div>
 
           <div>
+            <span className={label}>Recordatorios</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {REMINDERS.map((r) => (
+                <button key={r.minutes} type="button" aria-pressed={reminders.includes(r.minutes)} onClick={() => setReminders((l) => (l.includes(r.minutes) ? l.filter((x) => x !== r.minutes) : [...l, r.minutes]))} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${reminders.includes(r.minutes) ? 'bg-sky-600 text-[#fff]' : 'bg-white/5 text-white/60'}`}>{r.label}</button>
+              ))}
+              {reminders.filter((m) => !REMINDERS.some((r) => r.minutes === m)).map((m) => (
+                <button key={m} type="button" onClick={() => setReminders((l) => l.filter((x) => x !== m))} className="rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-[#fff]">{m / 60} h ×</button>
+              ))}
+              <input value={customHours} onChange={(e) => setCustomHours(e.target.value)} onBlur={() => { const h = Number(customHours.replace(',', '.')); if (h > 0) setReminders((l) => [...new Set([...l, Math.round(h * 60)])]); setCustomHours(''); }} inputMode="decimal" placeholder="Otras horas" aria-label="Horas antes" className="w-24 rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white outline-none" />
+            </div>
+          </div>
+
+          <div>
             <span className={label}>Color</span>
             <div className="flex gap-1.5">
               <button type="button" onClick={() => setColor(null)} className={`h-6 rounded-full px-2 text-[11px] ${color === null ? 'bg-white/15 text-white' : 'bg-white/5 text-white/50'}`}>{areas.length ? 'Según área' : 'Según tipo'}</button>
@@ -324,6 +350,16 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
           </div>
           {error && <p className="text-sm text-rose-300">{error}</p>}
         </fieldset>
+        {!isNew && draft.id && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-4 py-3">
+            {bridge?.openLinkedNote && (
+              <button type="button" onClick={() => bridge.openLinkedNote!('task', `evento:${draft.id}`, draft.title ?? 'Evento', 'Calendario', undefined, 'Calendario', { html: EVENT_PLAN })} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">Planificar: notas, checklist y archivos</button>
+            )}
+            {readOnly && draft.owner_id !== userId && (['aceptada', 'rechazada'] as const).map((s) => (
+              <button key={s} type="button" onClick={async () => { await supabase.from('organiza_invites').update({ status: s, responded_at: new Date().toISOString() }).eq('event_id', draft.id!).eq('user_id', userId ?? ''); onClose(); }} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">{s === 'aceptada' ? 'Aceptar' : 'Rechazar'}</button>
+            ))}
+          </div>
+        )}
 
         {!readOnly && (
           <div className="flex items-center gap-2 border-t border-white/10 px-4 py-3">
