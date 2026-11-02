@@ -11,6 +11,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { DatabaseEmbedExtension, InsertDatabaseButton } from '@/components/databases/DatabaseEmbed';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
+import { lastSaveError } from '@/utils/useSupabaseCollection';
 import { Note, NoteAttachment, NoteImage, NoteLink, NoteRole } from '@/types/notes';
 import { compressImageForNote } from '@/utils/image';
 import { formatCLP } from '@/utils/formatters';
@@ -394,6 +395,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setDraft(next);
   }, [liveTitle]);
 
+  // A failed save tries again by itself with a fresh session, so what's written isn't lost.
+  const [failures, setFailures] = useState(0);
+  const report = useCallback((ok: boolean) => {
+    setSaveError(!ok);
+    setFailures((n) => (ok ? 0 : n + 1));
+  }, []);
+
   // Saves run strictly one after another, always reading the latest draft, so a
   // slow "create" can never race a follow-up edit into inserting a duplicate row.
   const persist = useCallback((): Promise<void> => {
@@ -422,7 +430,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           cbs.current.onIdChange?.(id);
           savedSig.current = sig;
         }
-        setSaveError(!id);
+        report(!!id);
       } else {
         const updatedAt = new Date().toISOString();
         const ok = await cbs.current.onUpdate(idRef.current, {
@@ -440,11 +448,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           savedSig.current = sig;
           broadcast(d, contentChanged ? updatedAt : stampRef.current);
         }
-        setSaveError(!ok);
+        report(ok);
       }
     });
     return chain.current;
-  }, [readOnly, broadcast]);
+  }, [readOnly, broadcast, report]);
+  useEffect(() => {
+    if (!failures || failures > 3) return;
+    const t = setTimeout(async () => {
+      await supabase.auth.refreshSession().catch(() => null);
+      persist();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [failures, persist]);
 
   const change = useCallback(
     (patch: Partial<Draft>, touchesContent: boolean) => {
@@ -1477,7 +1493,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {saveError && (
         <p className="flex items-start gap-2 bg-rose-600/90 px-5 py-2 text-xs font-medium text-white">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          No se pudo guardar esta nota todavía. Si acabas de actualizar la app, falta correr la migración de Notas en Supabase.
+          {failures > 3 ? `No se pudo guardar esta nota. Copia tu texto antes de salir. Detalle: ${lastSaveError.message || 'sin conexión'}` : 'No se pudo guardar todavía. Reintentando…'}
         </p>
       )}
 

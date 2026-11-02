@@ -14,6 +14,9 @@ interface WithId {
  * state. `ownerScope` is either 'mw' (shared Master Wolf data) or a user's
  * uuid (their private data) — switching it re-fetches from scratch.
  */
+/** Why the last save failed, so the editor can say it instead of guessing. */
+export const lastSaveError = { message: '' };
+
 export function useSupabaseCollection<T extends WithId>(table: string, ownerScope: string | null) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +53,10 @@ export function useSupabaseCollection<T extends WithId>(table: string, ownerScop
         .insert({ ...row, owner_scope: ownerScope })
         .select()
         .single();
-      if (error || !data) return null;
+      if (error || !data) {
+        lastSaveError.message = error?.message ?? 'No se creó la fila.';
+        return null;
+      }
       setItems((prev) => [data as T, ...prev]);
       return data as T;
     },
@@ -67,7 +73,10 @@ export function useSupabaseCollection<T extends WithId>(table: string, ownerScop
         .eq('id', id)
         .select()
         .single();
-      if (error || !data) return false;
+      if (error || !data) {
+        lastSaveError.message = error?.message ?? 'No se actualizó ninguna fila.';
+        return false;
+      }
       setItems((prev) => prev.map((it) => (it.id === id ? (data as T) : it)));
       return true;
     },
