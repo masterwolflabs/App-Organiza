@@ -52,9 +52,8 @@ export const DailyBoard: React.FC<{
 
   const open = tasks.filter((t) => !t.archived);
   return (
-    <section className="mt-10">
+    <section>
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-lg font-bold text-white">Tablero · ¿Quién la hace?</h2>
         <p className="text-xs text-zinc-500">Arrastra una tarjeta para cambiar quién la hace · clic para abrir su página.</p>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
