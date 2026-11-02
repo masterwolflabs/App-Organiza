@@ -16,6 +16,7 @@
  * Va DENTRO de ChatProvider (usa sus cuentas y sus mensajes directos) y de
  * DatabaseStoreProvider (bases de datos dentro de una nota), si existen.
  */
+import { supabase } from '@/lib/supabaseClient';
 import { useNoteUrl } from '@/utils/noteUrl';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveSession } from '@/types/auth';
@@ -151,9 +152,13 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
       handleSendCommunityNote(conversationId, noteId, role);
     },
     linkedNote: (type, id) => notes.find((n) => (n.links ?? []).some((l) => l.type === type && l.id === id)) ?? null,
-    openLinkedNote: (type, id, label, category, text, backLabel, start) => {
+    openLinkedNote: async (type, id, label, category, text, backLabel, start) => {
       const found = notes.find((n) => (n.links ?? []).some((l) => l.type === type && l.id === id));
       if (found) return openNoteObj(found, backLabel);
+      // The list can be behind (another tab, a save just finished): a record has one note, so ask the database first.
+      const { data } = await supabase.from('notes').select('*').contains('links', [{ type, id }]).is('deletedAt', null).order('updatedAt', { ascending: false }).limit(1);
+      const saved = (data as Note[] | null)?.[0];
+      if (saved) return setOpenNote({ key: ++noteKey.current, id: saved.id, draft: noteToDraft(saved), role: notesSys.roleOf(saved.id) ?? 'owner', backLabel });
       setOpenNote({ key: ++noteKey.current, id: null, draft: emptyDraft({ title: label, category, body: text ?? '', bodyHtml: start?.html ?? '', ...(start?.color ? { color: start.color } : {}), links: [{ type, id, label }] } as Partial<Draft>), role: 'owner', backLabel });
     },
     renameLinked: (noteId, title, linkId) => {
