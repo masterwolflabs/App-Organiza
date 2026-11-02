@@ -202,8 +202,16 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       window.removeEventListener('focus', pull);
     };
   }, [store, labs, KEY]);
-  const add = (p: Partial<DailyTask> = {}) =>
-    save([...fresh().tasks, { id: newId(), title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...p }]);
+  // What's just been created goes above everything, even the urgent ones, until it's named and the page reloads.
+  const [newIds, setNewIds] = useState<string[]>([]);
+  const [writing, setWriting] = useState<string | null>(null);
+  const isNew = React.useCallback((t: DailyTask) => newIds.includes(t.id) || t.title === 'Nueva tarea', [newIds]);
+  const add = (p: Partial<DailyTask> = {}) => {
+    const id = newId();
+    setNewIds((l) => [...l, id]);
+    save([...fresh().tasks, { id, title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...p }]);
+    return id;
+  };
   // Two confirmations: deleting is final (archiving is the soft option).
   const remove = async (t: DailyTask) => {
     if (!(await confirm({ title: `¿Borrar “${t.title}”?`, message: 'Se quita de la Daily para siempre. Si solo quieres sacarla de la vista, mejor archívala. Su página queda en Notas.', confirmLabel: 'Borrar', tone: 'danger' }))) return false;
@@ -250,11 +258,12 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const rows = useMemo(
     () =>
       doc.tasks.filter((t) => !!t.archived === showArchived).sort((a, b) => {
+        if (isNew(a) || isNew(b)) return Number(isNew(b)) - Number(isNew(a)) || b.order - a.order;
         const da = a.status === 'listo' ? 1 : 0;
         const db = b.status === 'listo' ? 1 : 0;
         return da - db || TAG_INFO[a.tag].rank - TAG_INFO[b.tag].rank || priorityOf(a, now).ms - priorityOf(b, now).ms || a.order - b.order;
       }),
-    [doc.tasks, now, showArchived]
+    [doc.tasks, now, showArchived, isNew]
   );
   const live = doc.tasks.filter((t) => !t.archived);
   const counts = { abiertas: live.filter((t) => t.status !== 'listo').length, atrasadas: live.filter((t) => priorityOf(t, now).tone === 'late').length, hoy: live.filter((t) => priorityOf(t, now).tone === 'soon').length };
@@ -268,7 +277,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       noClamp: true,
       cell: (t) => (
         <span className="group/row flex items-start gap-1">
-          <Editable label="Nombre" value={t.title} noConfirm onSave={async (v) => patch(t.id, { title: String(v ?? '').trim() || t.title })}>
+          <Editable label="Nombre" value={t.title} noConfirm required autoEdit={writing === t.id} placeholder="Nueva tarea" onEditEnd={() => setWriting(null)} onSave={async (v) => patch(t.id, { title: String(v ?? '').trim() || t.title })}>
             <b className={`line-clamp-2 font-semibold text-white ${t.status === 'listo' ? 'line-through opacity-60' : ''}`}>{t.title}</b>
           </Editable>
           {isClaude(t.by ?? '') && (
@@ -373,7 +382,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           </button>
         )}
         {compact && <a href="#daily" className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-zinc-300 hover:text-white">Abrir completa <ArrowUpRight className="h-4 w-4" /></a>}
-        <button type="button" onClick={() => add()} className={`${compact ? '' : 'ml-auto'} inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500`}>
+        <button type="button" onClick={() => setWriting(add())} className={`${compact ? '' : 'ml-auto'} inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500`}>
           <Plus className="h-4 w-4" /> Nueva tarea
         </button>
       </div>

@@ -58,7 +58,11 @@ export const Editable: React.FC<{
   disabled?: boolean;
   /** Save without the "¿Confirmas el cambio?" step (the caller asks once for several edits). */
   noConfirm?: boolean;
-}> = ({ label, value, kind = 'text', options, show, onSave, children, className, required, entities, noneLabel, newLabel, onCreate, disabled, noConfirm }) => {
+  /** Opens empty with the cursor blinking and `placeholder` in gray (a row just created). */
+  autoEdit?: boolean;
+  placeholder?: string;
+  onEditEnd?: () => void;
+}> = ({ label, value, kind = 'text', options, show, onSave, children, className, required, entities, noneLabel, newLabel, onCreate, disabled, noConfirm, autoEdit, placeholder, onEditEnd }) => {
   const canEdit = useContext(CanEditCtx);
   const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
@@ -68,6 +72,21 @@ export const Editable: React.FC<{
   const ref = useRef<HTMLInputElement & HTMLSelectElement>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
+  // The same row can be mounted twice (hidden table + Galería): when one ends, autoEdit turns off and the other closes too.
+  const wasAuto = useRef(false);
+  useEffect(() => {
+    if (autoEdit) {
+      setText('');
+      setEditing(true);
+    } else if (wasAuto.current) setEditing(false);
+    wasAuto.current = !!autoEdit;
+  }, [autoEdit]);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) onEditEnd?.();
+    wasEditing.current = editing;
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initialText = () => (value === null || value === undefined ? '' : kind === 'money' ? grp(String(value).replace('.', ',')) : String(value).slice(0, kind === 'date' ? 10 : undefined));
   const begin = (e: React.MouseEvent) => {
@@ -173,7 +192,8 @@ export const Editable: React.FC<{
     return (
       <input
         ref={ref}
-        className={`${cls} ${kind === 'money' ? 'text-right font-mono' : ''}`}
+        className={autoEdit ? 'w-full min-w-[90px] bg-transparent font-semibold text-white caret-sky-400 placeholder:text-zinc-500 focus:outline-none' : `${cls} ${kind === 'money' ? 'text-right font-mono' : ''}`}
+        placeholder={placeholder}
         type={kind === 'date' ? 'date' : 'text'}
         inputMode={kind === 'money' ? 'numeric' : undefined}
         value={text}
