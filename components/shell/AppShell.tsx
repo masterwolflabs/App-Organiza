@@ -30,6 +30,8 @@ import { AccentId, LightsId, loadAccent, loadLights, saveAppearance } from '@/ut
 import { openCloud, touchApp } from '@/utils/cloud';
 import { useMyRole } from '@/utils/mente';
 import { SpaceProvider, SpaceSwitch } from '@/components/organiza/space';
+import { GuidedTour, TourPrompt } from '@/components/tour/GuidedTour';
+import { Reminders } from '@/components/organiza/Reminders';
 
 /**
  * Esqueleto de la app (versión plantilla del app/page.tsx de Finance).
@@ -60,6 +62,15 @@ export function AppShell({ session }: { session: Session }) {
   const [lights, setLights] = useState<LightsId>('accent');
   const [ui, setUiState] = useState<UiPrefs>(DEFAULT_UI_PREFS);
 
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourAsk, setTourAsk] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TOUR_KEY) !== 'no' && !sessionStorage.getItem(TOUR_KEY)) setTourAsk(true);
+    } catch {
+      /* modo privado */
+    }
+  }, []);
   const role = useMyRole(user.id);
   const databaseStore = useMemo(() => supabaseDatabaseStore(user.id), [user.id]);
 
@@ -141,6 +152,7 @@ export function AppShell({ session }: { session: Session }) {
       { id: 'calc', kind: 'accion', title: 'Calculadora', subtitle: 'Básica, científica y conversor de monedas', icon: '🧮', keywords: 'calcular sumar restar multiplicar dividir porcentaje iva conversor moneda dolar', run: openCalculator },
       { id: 'config', kind: 'accion', title: 'Configuración', subtitle: 'Tema, paleta, luces y navegación', icon: '⚙️', run: openSettings },
       { id: 'cloud', kind: 'accion', title: 'Abrir App Master Cloud', icon: '☁️', run: goCloud },
+      { id: 'tour', kind: 'accion', title: 'Tutorial de la app', subtitle: 'Recorrido guiado con voz', icon: '🧭', keywords: 'ayuda guia tour', run: () => setTourOpen(true) },
     ],
     [openSettings, goCloud, openCalculator]
   );
@@ -196,6 +208,7 @@ export function AppShell({ session }: { session: Session }) {
             unreadCount={unread}
             onOpenNotifications={() => navigate('chat')}
             onOpenCalculator={openCalculator}
+            onOpenTour={() => setTourOpen(true)}
             displayName={displayName}
             avatarUrl={avatarUrl}
             extra={<SpaceSwitch />}
@@ -266,6 +279,26 @@ export function AppShell({ session }: { session: Session }) {
       {menteOpen && role && <MenteSingular role={role} onClose={() => setMenteOpen(false)} onOpenCloud={goCloud} />}
       {section === 'chat' && <ChatView onBack={() => navigate('inicio')} />}
 
+      <GuidedTour open={tourOpen} onEnterStep={(step) => step.section && navigate(step.section as AnySection)} onClose={() => setTourOpen(false)} />
+      {tourAsk && (
+        <TourPrompt
+          name={displayName.split(' ')[0]}
+          onStart={() => {
+            setTourAsk(false);
+            try { sessionStorage.setItem(TOUR_KEY, '1'); } catch { /* modo privado */ }
+            setTourOpen(true);
+          }}
+          onDismiss={(never) => {
+            setTourAsk(false);
+            try {
+              sessionStorage.setItem(TOUR_KEY, '1');
+              if (never) localStorage.setItem(TOUR_KEY, 'no');
+            } catch { /* modo privado */ }
+          }}
+        />
+      )}
+      <Reminders />
+
       {/* Calculadora de Finance: flota encima de todas las páginas y ventanas (portal, z-[95]). */}
       <CalculatorWidget ref={calculatorRef} />
       {/* Ayuda de 2 segundos: cualquier elemento con data-help (como en Finance). */}
@@ -290,6 +323,7 @@ export function AppShell({ session }: { session: Session }) {
   );
 }
 
+const TOUR_KEY = 'organiza-tour';
 const CHAT_SCOPE = { filter: APP.slug, send: APP.slug };
 
 /** Campana de la barra superior: mensajes sin leer del chat. */

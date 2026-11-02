@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Bell, Brain, Calculator, ChevronDown, Cloud, LogOut, Menu, Settings, UserRound } from 'lucide-react';
+import { Bell, Brain, Calculator, ChevronDown, Cloud, Compass, LogOut, Menu, Settings, UserRound } from 'lucide-react';
 import { APP } from '@/app.config';
 import { Brand } from '@/components/shell/Brand';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -24,6 +24,8 @@ interface TopbarProps {
   onOpenNotifications?: () => void;
   /** Calculadora flotante (components/calculator, de Finance). */
   onOpenCalculator?: () => void;
+  /** Volver a ver el tutorial. */
+  onOpenTour?: () => void;
 }
 
 /**
@@ -31,7 +33,7 @@ interface TopbarProps {
  * campana y menú de perfil. El ojo de "ocultar montos" no viene en la
  * plantilla: cada app lo agrega si muestra datos sensibles.
  */
-export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, extra, search, onOpenSidebar, onOpenUserCenter, onOpenCloud, onOpenMente, onLogout, unreadCount = 0, onOpenNotifications, onOpenCalculator }) => {
+export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, extra, search, onOpenSidebar, onOpenUserCenter, onOpenCloud, onOpenMente, onLogout, unreadCount = 0, onOpenNotifications, onOpenCalculator, onOpenTour }) => {
   const [open, setOpen] = useState(false);
   const firstName = displayName.split(' ')[0];
   const item = 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-200 hover:bg-zinc-800';
@@ -102,6 +104,11 @@ export const Topbar: React.FC<TopbarProps> = ({ displayName, avatarUrl, extra, s
               <button onClick={act(() => onOpenUserCenter('configuracion'))} className={item}>
                 <Settings className="h-4 w-4 text-zinc-400" /> Configuración
               </button>
+              {onOpenTour && (
+                <button onClick={act(onOpenTour)} className={item}>
+                  <Compass className="h-4 w-4 text-zinc-400" /> Tutorial de la app
+                </button>
+              )}
               <button onClick={act(onOpenCloud)} className={item}>
                 <Cloud className="h-4 w-4 text-sky-300" /> Abrir App Master Cloud
               </button>
