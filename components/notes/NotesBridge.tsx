@@ -31,7 +31,7 @@ export interface NotesBridgeValue {
   /** The record's name and its note's are one: saves the title and the name the link remembers. */
   renameLinked?: (noteId: string, title: string, linkId: string) => void;
   /** What shows under the title of the notes linked to this type (a Daily task's properties). */
-  linkPanel?: (type: NoteLinkType, panel: React.ComponentType<{ id: string }>, footer?: React.ComponentType<{ id: string; onClose: () => void }>) => void;
+  linkPanel?: (type: NoteLinkType, panel: React.ComponentType<{ id: string }>, footer?: React.ComponentType<{ id: string; onClose: () => void }>, template?: { label: string; html: string }) => void;
 }
 
 const NotesBridgeContext = createContext<NotesBridgeValue | null>(null);

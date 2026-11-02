@@ -287,6 +287,8 @@ interface NoteEditorProps {
   titleSlot?: React.ReactNode;
   /** The title as saved elsewhere (a task renamed from its table): the open note follows it. */
   liveTitle?: string;
+  /** While the page is blank, a button under the gray hint starts it from this. */
+  template?: { label: string; html: string };
 }
 
 export const NoteEditor: React.FC<NoteEditorProps> = ({
@@ -314,6 +316,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   footer,
   titleSlot,
   liveTitle,
+  template,
 }) => {
   const readOnly = role === 'viewer';
   const [draft, setDraft] = useState(initial);
@@ -606,7 +609,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       // Notion-style database inside the note (components/databases/DatabaseEmbed.tsx).
       DatabaseEmbedExtension,
       NoteImageWrap,
-      Placeholder.configure({ placeholder: readOnly ? '' : 'Escribe aquí… detalles, pendientes, contexto del movimiento.' }),
+      Placeholder.configure({ placeholder: readOnly ? '' : template ? 'Escribe aquí… detalles, pendientes, lo que quieras.' : 'Escribe aquí… detalles, pendientes, contexto del movimiento.' }),
     ],
     content: initial.bodyHtml,
     editorProps: {
@@ -1174,6 +1177,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     return () => cancelAnimationFrame(raf);
   }, [editor, draft.images, draft.bodyHtml, canvasW]);
 
+  const showTemplate = !!template && !readOnly && !draft.body.trim() && !liveText && draft.images.length === 0;
   const canvasMinHeight = draft.images.reduce((max, i) => Math.max(max, i.y + i.w * canvasW * i.ratio + 80), 0);
   const iconBtn =
     'flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900/70 transition-colors hover:bg-black/10 hover:text-zinc-900';
@@ -1561,13 +1565,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           <div
             ref={canvasRef}
-            className="relative mt-5"
+            className={`relative mt-5 ${showTemplate ? '[&_.note-prose]:!min-h-0' : ''}`}
             style={{ minHeight: canvasMinHeight || undefined }}
             onPointerDown={(e) => {
               if (!(e.target as HTMLElement).closest('[data-note-image]')) setSelectedImage(null);
             }}
           >
             <EditorContent editor={editor} />
+            {showTemplate && (
+              <button
+                type="button"
+                onClick={() => editor?.chain().focus().setContent(template.html, { emitUpdate: true }).run()}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-2.5 py-1.5 text-xs font-semibold text-zinc-900/60 hover:bg-black/10 hover:text-zinc-900"
+              >
+                <FileText className="h-3.5 w-3.5" /> Usar plantilla: {template.label}
+              </button>
+            )}
             {/* What's being heard, on the page itself; the final text replaces it. */}
             {liveText && (
               <p ref={liveRef} className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-900/50">

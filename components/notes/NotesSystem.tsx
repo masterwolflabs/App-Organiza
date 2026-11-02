@@ -45,7 +45,7 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [incomingShare, setIncomingShare] = useState<{ token: string; note: SharedLinkNote } | null>(null);
   const [toast, showToast] = useState<string | null>(null);
-  const [panels, setPanels] = useState<Partial<Record<string, { panel: React.ComponentType<{ id: string }>; footer?: React.ComponentType<{ id: string; onClose: () => void }> }>>>({});
+  const [panels, setPanels] = useState<Partial<Record<string, { panel: React.ComponentType<{ id: string }>; footer?: React.ComponentType<{ id: string; onClose: () => void }>; template?: { label: string; html: string } }>>>({});
 
   useEffect(() => {
     try {
@@ -157,7 +157,7 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
       const note = notesSys.findNote(noteId);
       if (note) notesSys.update(noteId, { title, links: (note.links ?? []).map((l) => (l.id === linkId ? { ...l, label: title } : l)) });
     },
-    linkPanel: (type, panel, footer) => setPanels((p) => (p[type]?.panel === panel ? p : { ...p, [type]: { panel, footer } })),
+    linkPanel: (type, panel, footer, template) => setPanels((p) => (p[type]?.panel === panel ? p : { ...p, [type]: { panel, footer, template } })),
   };
 
   // Arriving from a share link (/?share=<token>, after login if needed) or a
@@ -219,6 +219,7 @@ function useNotesState(session: ActiveSession, scope: ChatScope, ownerScope: str
               titleSlot={Panel && panelLink ? <Panel id={panelLink.id} /> : undefined}
               footer={Footer && panelLink ? <Footer id={panelLink.id} onClose={() => setOpenNote(null)} /> : undefined}
               liveTitle={live?.title}
+              template={panelLink ? panels[panelLink.type]?.template : undefined}
             />
           );
         })()}

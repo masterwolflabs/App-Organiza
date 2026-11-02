@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlignLeft, Archive, ArchiveRestore, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
-import { dailyPageHtml } from '@/utils/dailyPages';
+import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type ViewDef } from '@/components/tables/table';
 import { Editable } from '@/components/tables/editable';
@@ -345,7 +345,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     }
   }, [allNotes, doc.tasks, store?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkPanel = bridge?.linkPanel;
-  useEffect(() => linkPanel?.('task', TaskProperties, TaskFooter), [!!linkPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => linkPanel?.('task', TaskProperties, TaskFooter, TASK_TEMPLATE), [!!linkPanel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const actions: TaskActions = { onArchive: (t) => patch(t.id, { archived: !fresh().tasks.find((x) => x.id === t.id)?.archived }), onDelete: remove };
 

@@ -109,21 +109,18 @@ Object.assign(PAGES, {
   calculadora: review('la Calculadora', 'Úsala en modo básico, científico y conversor.'),
 });
 
+/** "Usar plantilla" under a blank task page (Emanuel, 2026-11-02). */
+export const TASK_TEMPLATE = {
+  label: 'Tarea',
+  html: [`<h2>🎯 Qué hay que hacer</h2>`, p('Escribe aquí **qué hay que hacer** y **por qué**.'), `<h2>✅ Paso a paso</h2>`, checks(['Primer paso…', 'Segundo paso…']), `<h2>📎 Archivos y notas</h2>`, p('Adjunta aquí capturas, PDFs o lo que sirva.')].join(''),
+};
+
 /** The starting page of a task (HTML for the note). */
 export function dailyPageHtml(t: DailyTask): string {
   const page = t.page ?? PAGES[t.id];
   const h = (emoji: string, title: string) => `<h2>${emoji} ${esc(title)}</h2>`;
-  if (!page) {
-    const lines = (t.description || '').split(/\n+/).filter(Boolean);
-    return [
-      h('🎯', 'Qué hay que hacer'),
-      lines.length ? lines.map(p).join('') : p('Escribe aquí **qué hay que hacer** y **por qué**.'),
-      h('✅', 'Paso a paso'),
-      checks(['Primer paso…', 'Segundo paso…']),
-      h('📎', 'Archivos y notas'),
-      p('Adjunta aquí capturas, PDFs o lo que sirva.'),
-    ].join('');
-  }
+  // No page of its own: it opens blank, with the gray hint, and the template is one click away.
+  if (!page) return (t.description || '').split(/\n+/).filter(Boolean).map(p).join('');
   return [
     page.done ? p(page.done) : '',
     h('🎯', 'Qué hay que hacer'),
