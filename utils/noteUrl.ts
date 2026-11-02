@@ -21,6 +21,7 @@ export function useNoteUrl(noteId: string | null, title: string, open: (id: stri
 
   // Sin una nota abierta antes, no hay nada que cerrar: un link recién llegado todavía se está abriendo.
   const before = useRef<string | null>(null);
+  const leaving = useRef(false);
   useEffect(() => {
     const was = before.current;
     before.current = noteId;
@@ -30,13 +31,22 @@ export function useNoteUrl(noteId: string | null, title: string, open: (id: stri
       const entry = { ...window.history.state, mwNote: noteId };
       if (inUrl) window.history.replaceState(entry, '', urlWith(noteId));
       else window.history.pushState(entry, '', urlWith(noteId));
-    } else if (inUrl && window.history.state?.mwNote === inUrl) window.history.back();
+    } else if (inUrl && window.history.state?.mwNote === inUrl) {
+      leaving.current = true;
+      window.history.back();
+    }
     else if (inUrl) window.history.replaceState(window.history.state, '', urlWith(null));
   }, [noteId]);
 
   useEffect(() => {
     const onPop = () => {
       const id = noteInUrl();
+      // Closing with the note's button only leaves it: never reopens one from the entry behind.
+      if (leaving.current) {
+        leaving.current = false;
+        if (id) window.history.replaceState(window.history.state, '', urlWith(null));
+        return;
+      }
       if (id && id !== cbs.current.noteId) cbs.current.open(id);
       else if (!id && cbs.current.noteId) cbs.current.close();
     };

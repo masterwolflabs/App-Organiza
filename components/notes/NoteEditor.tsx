@@ -450,7 +450,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
         report(ok);
       }
-    });
+    }).catch(() => report(false));
     return chain.current;
   }, [readOnly, broadcast, report]);
   useEffect(() => {
@@ -1087,7 +1087,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (closing.current) return;
     closing.current = true;
     stopAll();
-    await persist();
+    // A save that hangs or throws must never trap the person inside the note.
+    await Promise.race([persist().catch(() => {}), new Promise((done) => setTimeout(done, 4000))]);
     const d = draftRef.current;
     const empty = isDraftEmpty(d);
     if (!readOnly && !idRef.current && !empty) {
