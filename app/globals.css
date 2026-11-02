@@ -64,23 +64,18 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* Custom Scrollbar */
+/* No visible scrollbars anywhere (Emanuel: "esa barra negra, chao"). Everything
+   still scrolls with wheel / trackpad / touch. Unlayered on purpose: it wins
+   over Tailwind's [scrollbar-width:thin] utilities. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #09090b;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #0284c7;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Rich-text body of a note (TipTap). Unlayered on purpose so it wins over
