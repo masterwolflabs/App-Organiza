@@ -230,3 +230,19 @@ export const rankOf = (xp: number) => {
   while (i + 1 < RANKS.length && xp >= RANKS[i + 1].min) i++;
   return i;
 };
+
+/** Emoji por defecto según el nombre de la acción (después se cambia libre). */
+const EMOJI_RULES: [RegExp, string][] = [
+  [/levant|despert/, '🌅'], [/dorm|acost|sueñ|siesta/, '😴'], [/gym|entren|ejercic|pesas|flexion/, '🏋️'], [/corr|trot|running/, '🏃'],
+  [/camin|pase/, '🚶'], [/bici|cicl/, '🚴'], [/nad|piscina/, '🏊'], [/yoga|estir/, '🧘'], [/medit|respir/, '🧘'], [/or(a|ac)|rez|biblia|devocional/, '🙏'],
+  [/desayun/, '🍳'], [/almuerz|comer|comida|cena|once/, '🍽️'], [/cocin/, '👩‍🍳'], [/agua|hidrat/, '💧'], [/pastill|medic|vitamin/, '💊'],
+  [/duch|bañ|aseo/, '🚿'], [/lee|lectura|libro/, '📖'], [/estudi|clase|curso|aprend/, '📚'], [/escrib|diario|journal/, '✍️'],
+  [/trabaj|oficina|turno/, '💼'], [/reuni|llamad|cliente/, '👥'], [/correo|mail|bandeja/, '📧'], [/program|códig|codigo|desarroll/, '💻'],
+  [/limpi|orden|aseo de casa/, '🧹'], [/compra|supermerc/, '🛒'], [/viaj|vuelo/, '✈️'], [/maneja|auto|traslad/, '🚗'],
+  [/familia|hij|niñ/, '👨‍👩‍👧'], [/pareja|cita/, '❤️'], [/amig/, '🫂'], [/músic|music|guitarr|piano/, '🎵'], [/serie|pelí|peli|tele/, '📺'],
+  [/plan|organiz|agenda|semana/, '🗓️'], [/finanz|plata|dinero|presupuest/, '💰'], [/descans|pausa|relaj/, '☕'],
+];
+export function emojiFor(title: string) {
+  const t = title.toLowerCase();
+  return EMOJI_RULES.find(([re]) => re.test(t))?.[1] ?? '✨';
+}

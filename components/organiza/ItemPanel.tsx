@@ -11,8 +11,8 @@ import { FocusTimer } from '@/components/organiza/FocusTimer';
 import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { toTime } from '@/components/organiza/dayPlan';
-import { coverCss, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
-import { AlarmPicker, Categories, DurationWheel, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
+import { coverCss, emojiFor, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
+import { AlarmPicker, Categories, DurationWheel, EmojiPicker, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50';
@@ -64,8 +64,14 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
           <div className="space-y-6 p-5">
             {cover && <CoverPicker value={item.cover_url} rank={rank} title={item.title} onPick={(v) => { set({ cover_url: v }); setCover(false); }} />}
             <div className="flex items-center gap-2">
-              <input defaultValue={item.icon} key={`i${item.id}`} aria-label="Ícono" maxLength={4} placeholder="🙂" onBlur={(e) => e.target.value !== item.icon && set({ icon: e.target.value })} className="w-12 rounded-lg bg-white/[0.05] py-1.5 text-center text-xl outline-none ring-1 ring-white/10" />
-              <input defaultValue={item.title} key={`t${item.id}`} aria-label="Título" onBlur={(e) => e.target.value.trim() && e.target.value !== item.title && set({ title: e.target.value.trim() })} className="min-w-0 flex-1 rounded-lg bg-transparent font-display text-2xl font-semibold text-white outline-none focus:bg-white/[0.04]" />
+              <EmojiPicker value={item.icon || emojiFor(item.title)} onChange={(icon) => set({ icon })} />
+              <input defaultValue={item.title} key={`t${item.id}`} aria-label="Título" onBlur={(e) => {
+                const title = e.target.value.trim();
+                if (!title || title === item.title) return;
+                // Si el emoji era el automático, cambia con el nombre; si lo elegiste tú, se queda.
+                const auto = !item.icon || item.icon === emojiFor(item.title);
+                set(auto ? { title, icon: emojiFor(title) } : { title });
+              }} className="min-w-0 flex-1 rounded-lg bg-transparent font-display text-2xl font-semibold text-white outline-none focus:bg-white/[0.04]" />
             </div>
 
             <section className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/10" data-tour="registro">

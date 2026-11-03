@@ -307,3 +307,49 @@ export const Categories: React.FC<{ h: ReturnType<typeof useHorario>; value: str
     </div>
   );
 };
+
+/* ── Emoji de la acción ───────────────────────────────────────────────── */
+
+const EMOJI_SETS: { label: string; list: string[] }[] = [
+  { label: 'Rutina', list: ['🌅', '😴', '🚿', '🪥', '🛏️', '☕', '🍳', '🍽️', '💧', '💊', '🧹', '🧺'] },
+  { label: 'Cuerpo', list: ['🏋️', '🏃', '🚶', '🚴', '🏊', '🧘', '⚽', '🥊', '🤸', '🥗', '🍎', '❤️'] },
+  { label: 'Mente', list: ['📖', '📚', '✍️', '🙏', '🧠', '🎯', '🗓️', '📝', '🎧', '🎵', '🎨', '✨'] },
+  { label: 'Trabajo', list: ['💼', '💻', '📧', '👥', '📞', '📊', '💰', '🚀', '🛠️', '📦', '🏢', '🔥'] },
+  { label: 'Vida', list: ['👨‍👩‍👧', '🫂', '🐶', '🛒', '🚗', '✈️', '📺', '🎮', '🌳', '🏖️', '🎉', '⭐'] },
+];
+
+/** Botón con el emoji de la acción; al tocarlo, un menú para elegir otro (o escribir cualquiera). */
+export const EmojiPicker: React.FC<{ value: string; onChange: (e: string) => void }> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState('');
+  const pick = (e: string) => {
+    onChange(e);
+    setOpen(false);
+  };
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-label="Cambiar emoji" data-help="Cambiar emoji" className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.05] text-2xl ring-1 ring-white/10 transition hover:bg-white/[0.09]">{value}</button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1.5 w-72 space-y-2 rounded-2xl bg-[#1b1e24]/95 p-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
+            {EMOJI_SETS.map((g) => (
+              <div key={g.label}>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{g.label}</p>
+                <div className="grid grid-cols-6 gap-0.5">
+                  {g.list.map((e) => (
+                    <button key={e} type="button" onClick={() => pick(e)} className={`rounded-lg py-1 text-xl hover:bg-white/[0.08] ${e === value ? 'bg-white/[0.1]' : ''}`}>{e}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <form className="flex gap-1.5 border-t border-white/10 pt-2" onSubmit={(e) => { e.preventDefault(); if (own.trim()) pick(own.trim()); }}>
+              <input value={own} onChange={(e) => setOwn(e.target.value)} maxLength={8} placeholder="O escribe uno 😊" className="min-w-0 flex-1 rounded-lg bg-white/[0.05] px-2 py-1 text-sm text-white outline-none ring-1 ring-white/10" />
+              <button type="submit" className="rounded-lg bg-white/[0.1] px-2.5 text-sm font-medium text-white hover:bg-white/[0.16]">Usar</button>
+            </form>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
