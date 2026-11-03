@@ -27,7 +27,21 @@ export const TOUR_SCRIPT: TourScriptStep[] = [
   { id: 'fin', title: 'Listo, a ordenarse', body: 'Ya conoces lo importante. Empieza publicando tu primer horario. Puedes volver a ver este tutorial desde el menú de tu perfil.', section: 'inicio' },
 ];
 
-export const tourStep = (id: string) => TOUR_SCRIPT.find((s) => s.id === id) ?? null;
+/** Tour de una acción del Horario: se abre con el botón 🧭 Tour dentro del panel del bloque. */
+export const HABIT_TOUR: TourScriptStep[] = [
+  { id: 'h-intro', title: 'Tu acción, parte por parte', body: 'Cada bloque de tu horario es una acción: algo que haces en tu día. Te muestro cada parte para que la armes a tu medida.' },
+  { id: 'h-registro', title: '¿Lo hiciste hoy?', body: 'Cada día marcas si cumpliste. Cada cuadrito es un día: verde lo hiciste, rojo no. Mientras más días seguidos, más grande tu racha.', target: 'registro' },
+  { id: 'h-cuando', title: 'Cuándo', body: 'Elige los días en que se repite, la hora y cuánto dura. Lo que cambias aquí cambia en todos sus días.', target: 'hab-cuando' },
+  { id: 'h-importancia', title: 'Importancia', body: 'No negociable es lo que sostiene tu vida, como dormir, levantarte o entrenar: se bloquea en tu horario. Modificable se hace sí o sí, pero puede cambiar de hora. Flexible suma si alcanza, y es lo primero que se suelta cuando el día se complica.', target: 'hab-importancia' },
+  { id: 'h-categoria', title: 'Categoría', body: 'Agrupa tus acciones por área de tu vida, con emoji y color, y crea las tuyas con Nueva. Lo personal sostiene lo laboral: cuida eso primero. Si tienes varios horarios, aquí eliges a cuál pertenece.', target: 'hab-categoria' },
+  { id: 'h-aviso', title: 'Aviso', body: 'Notificación es un aviso suave. Alarma suena más y deja un cartel hasta que lo cierras. Elige cuántos minutos antes te avisa y el sonido que más te guste.', target: 'hab-aviso' },
+  { id: 'h-focus', title: 'Modo focus', body: 'Para el trabajo profundo: pone la acción a pantalla completa con su cuenta regresiva. Para que el teléfono tampoco te distraiga, crea un modo Concentración a esta misma hora.', target: 'hab-focus' },
+  { id: 'h-dentro', title: 'Dentro de esta tarea', body: 'Aquí van tus herramientas. El paso a paso es tu checklist del momento, como cinco flexiones, lavarte la cara o tomar tus pastillas. Las reglas son lo que no haces, como no revisar el teléfono al despertar. También puedes sumar tu sueño, un plan de entrenamiento, de comidas o una base de datos.', target: 'mundo' },
+  { id: 'h-nota', title: 'Descripción y nota', body: 'Anota los detalles en la descripción, o abre su nota para escribir con calma y pegar fotos o archivos.', target: 'hab-nota' },
+  { id: 'h-fin', title: 'Listo', body: 'Ya sabes armar una acción a tu medida. Repite este tour cuando quieras con el botón Tour, arriba del panel.' },
+];
+
+export const tourStep = (id: string) => TOUR_SCRIPT.find((s) => s.id === id) ?? HABIT_TOUR.find((s) => s.id === id) ?? null;
 export const spokenText = (s: TourScriptStep) => `${s.title}. ${s.body}`;
 
 /** Cambia cuando cambia el texto (hace que el audio guardado se renueve). */

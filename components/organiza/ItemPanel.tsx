@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, FileText, Flame, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Compass, FileText, Flame, Plus, Trash2, X } from 'lucide-react';
+import { GuidedTour } from '@/components/tour/GuidedTour';
+import { HABIT_TOUR } from '@/utils/tourScript';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -43,6 +45,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const [cover, setCover] = useState(false);
   const [adding, setAdding] = useState(false);
   const [focusing, setFocusing] = useState(false);
+  const [tour, setTour] = useState(false);
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -73,7 +76,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
         <aside role="dialog" aria-label={item.title} onClick={(e) => e.stopPropagation()} className="absolute inset-y-0 right-0 w-full max-w-xl overflow-y-auto bg-[#14161b] ring-1 ring-white/10">
           <div className="relative h-28 bg-white/[0.04]" style={coverCss(item.cover_url)}>
             <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute left-3 top-3 rounded-lg bg-black/45 p-1.5 text-[#fff] hover:bg-black/60"><X className="h-4 w-4" /></button>
-            <button type="button" onClick={() => setCover((v) => !v)} className="absolute right-3 top-3 rounded-lg bg-black/45 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-black/60">Portada</button>
+            <div className="absolute right-3 top-3 flex gap-1.5">
+              <button type="button" onClick={() => setTour(true)} data-help="Te explica cada parte de esta acción, paso a paso" className="inline-flex items-center gap-1 rounded-lg bg-black/45 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-black/60"><Compass className="h-3.5 w-3.5" /> Tour</button>
+              <button type="button" onClick={() => setCover((v) => !v)} className="rounded-lg bg-black/45 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-black/60">Portada</button>
+            </div>
           </div>
           <div className="space-y-6 p-5">
             {cover && <CoverPicker value={item.cover_url} rank={rank} onPick={(v) => { set({ cover_url: v }); setCover(false); }} />}
@@ -100,7 +106,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               <p className="mt-2 text-xs text-zinc-500">{scheduled ? `Cumpliste ${done} de ${scheduled} (${rate}%)` : 'Tu récord empieza con el primer día que marques.'}</p>
             </section>
 
-            <Group title="📅 Cuándo">
+            <Group title="📅 Cuándo" tour="hab-cuando">
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">Días</span><DaysPicker days={weekdays} onToggle={async (d) => {
                   const on = !weekdays.includes(d);
@@ -117,11 +123,11 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               </div>
             </Group>
 
-            <Group title="⚖️ Importancia">
+            <Group title="⚖️ Importancia" tour="hab-importancia">
               <Importance value={item.flex} onChange={(flex) => set({ flex, priority: LEVELS.findIndex((l) => l.id === flex) + 1 })} />
             </Group>
 
-            <Group title="🏷️ Categoría">
+            <Group title="🏷️ Categoría" tour="hab-categoria">
               <Categories h={h} value={item.label_id} onChange={(label_id) => set({ label_id })} />
               {h.schedules.length > 1 && (
                 <Field label="Horario">
@@ -132,7 +138,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               )}
             </Group>
 
-            <Group title="🔔 Aviso y concentración">
+            <Group title="🔔 Aviso y concentración" tour="hab-aviso">
               <Segmented value={item.alarm} options={ALARMS} onChange={(alarm) => set({ alarm })} />
               {item.alarm !== 'no' && (
                 <>
@@ -150,7 +156,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   <SoundPicker />
                 </>
               )}
-              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
+              <label data-tour="hab-focus" className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
                 <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Tiempo sin interrupciones: la tarea a pantalla completa con su cuenta regresiva</span></span>
                 <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
               </label>
@@ -162,8 +168,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               )}
             </Group>
 
+            <div data-tour="hab-nota" className="space-y-3">
             <Field label="Descripción"><textarea key={`d${item.id}`} defaultValue={item.description} rows={3} onBlur={(e) => e.target.value !== item.description && set({ description: e.target.value })} className={field} /></Field>
             {note && <button type="button" onClick={note.open} className="inline-flex items-center gap-2 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]"><FileText className="h-4 w-4" /> {note.exists ? 'Abrir su nota' : 'Crear su nota'}</button>}
+            </div>
 
             <section data-tour="mundo">
               <div className="flex items-center justify-between gap-3">
@@ -190,6 +198,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
           </div>
         </aside>
       </div>
+      <GuidedTour open={tour} steps={HABIT_TOUR} onEnterStep={() => {}} onClose={() => setTour(false)} />
       {focusing && <FocusTimer item={item} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
     </BodyPortal>
   );
@@ -245,8 +254,8 @@ const DaysPicker: React.FC<{ days: number[]; onToggle: (d: number) => void }> = 
   );
 };
 
-const Group: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="space-y-3">
+const Group: React.FC<{ title: string; tour?: string; children: React.ReactNode }> = ({ title, tour, children }) => (
+  <section data-tour={tour} className="space-y-3">
     <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{title}</h3>
     {children}
   </section>

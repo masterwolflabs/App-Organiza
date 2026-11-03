@@ -15,6 +15,8 @@ interface GuidedTourProps {
   /** Side effects when a step starts: abrir su sección. */
   onEnterStep: (step: TourScriptStep) => void;
   onClose: () => void;
+  /** Otro guion (p. ej. el tour de una acción del Horario). */
+  steps?: TourScriptStep[];
 }
 
 const VOICE_KEY = 'organiza-tour-voice';
@@ -89,7 +91,7 @@ function useTourVoice() {
 
 // --- Component ---------------------------------------------------------------
 
-export const GuidedTour: React.FC<GuidedTourProps> = ({ open, onEnterStep, onClose }) => {
+export const GuidedTour: React.FC<GuidedTourProps> = ({ open, onEnterStep, onClose, steps = TOUR_SCRIPT }) => {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -102,9 +104,9 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ open, onEnterStep, onClo
   const enterRef = useRef(onEnterStep);
   enterRef.current = onEnterStep;
 
-  const step = TOUR_SCRIPT[index];
+  const step = steps[index];
   const target = step.target;
-  const last = index === TOUR_SCRIPT.length - 1;
+  const last = index === steps.length - 1;
 
   useEffect(() => {
     try {
@@ -229,25 +231,25 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ open, onEnterStep, onClo
   return (
     <>
       {/* Click shield (the tour is driven only from its card). */}
-      <div className="fixed inset-0 z-[80]" onClick={(e) => e.stopPropagation()} />
+      <div className="fixed inset-0 z-[90]" onClick={(e) => e.stopPropagation()} />
       {hole ? (
         <div
-          className="pointer-events-none fixed z-[81] rounded-2xl ring-2 ring-sky-400/80 transition-all duration-300"
+          className="pointer-events-none fixed z-[91] rounded-2xl ring-2 ring-sky-400/80 transition-all duration-300"
           style={{ ...hole, boxShadow: '0 0 0 9999px rgba(3,4,8,0.74), 0 0 32px 4px rgba(56,189,248,0.35)' }}
         />
       ) : (
-        <div className="pointer-events-none fixed inset-0 z-[81] bg-[rgba(3,4,8,0.74)]" />
+        <div className="pointer-events-none fixed inset-0 z-[91] bg-[rgba(3,4,8,0.74)]" />
       )}
 
       <div
         role="dialog"
         aria-label={step.title}
-        className="fixed z-[82] rounded-2xl border border-white/10 bg-[#111216] p-5 shadow-2xl shadow-black/70"
+        className="fixed z-[92] rounded-2xl border border-white/10 bg-[#111216] p-5 shadow-2xl shadow-black/70"
         style={{ ...cardStyle, width: isPhone && hole ? undefined : cardW }}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-[11px] font-medium text-sky-400">
-            <Compass className="h-3.5 w-3.5" /> Tutorial · {index + 1} de {TOUR_SCRIPT.length}
+            <Compass className="h-3.5 w-3.5" /> Tutorial · {index + 1} de {steps.length}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -277,7 +279,7 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ open, onEnterStep, onClo
         <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{step.body}</p>
 
         <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]">
-          <div className="h-full rounded-full bg-sky-500 transition-all duration-300" style={{ width: `${((index + 1) / TOUR_SCRIPT.length) * 100}%` }} />
+          <div className="h-full rounded-full bg-sky-500 transition-all duration-300" style={{ width: `${((index + 1) / steps.length) * 100}%` }} />
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-2">
