@@ -19,7 +19,8 @@ const EmbedCheck: React.FC<{ video: string }> = ({ video }) => {
       alive = false;
     };
   }, [video]);
-  if (ok !== false) return null;
+  if (ok === null) return <p className="mt-2 text-[11px] text-zinc-500">Revisando si suena en Organiza…</p>;
+  if (ok) return <p className="mt-2 text-[11px] font-semibold text-emerald-300">✓ Suena en Organiza</p>;
   return <p className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">⚠️ Esta canción no puede sonar dentro de Organiza: su dueño (o el sello, por derechos) solo deja escucharla en YouTube. En el focus se salta y te da un botón para abrirla en YouTube. Si quieres que suene aquí, busca otra subida (por ejemplo «audio» o «letra») y usa 🔄 Cambiar.</p>;
 };
 

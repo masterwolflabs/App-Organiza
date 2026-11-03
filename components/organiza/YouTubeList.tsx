@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ListMusic, Pause, Play, Repeat, SkipForward } from 'lucide-react';
+import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
 
 /**
@@ -46,6 +46,8 @@ type YTPlayer = {
   getDuration: () => number;
   getVideoData?: () => { title?: string };
   getPlaylist?: () => string[] | null;
+  mute?: () => void;
+  unMute?: () => void;
   getPlaylistIndex?: () => number;
 };
 type YTNamespace = { Player: new (el: HTMLElement, opts: Record<string, unknown>) => YTPlayer; PlayerState: { ENDED: number; PLAYING: number; PAUSED: number } };
@@ -167,6 +169,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   // La última que YouTube no dejó tocar aquí (error 150: el dueño o el sello lo bloquean fuera de YouTube).
   const [blockedSong, setBlockedSong] = useState<number | null>(null);
   const [showList, setShowList] = useState(false);
+  // Silencio aparte de la pausa: la música sigue avanzando, sin sonido.
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
   const list = useRef(videos);
   list.current = videos;
   // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
@@ -203,6 +208,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           lengths.current[index] = e.target.getDuration?.() || lengths.current[index];
           if (startAt !== undefined && parsed.video) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
+          if (mutedRef.current) e.target.mute?.();
           if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
           slots.current[slot].readyAt = Date.now();
@@ -396,19 +402,22 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           <div key={i} ref={boxes[i]} className="absolute inset-0 transition-opacity duration-1000" style={{ opacity: i === active ? 1 : 0 }} />
         ))}
       </div>
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1 text-[11px] text-zinc-400">
-            {finished ? '🎵 Terminó tu lista' : `🎵 ${at + 1} de ${videos.length}`}
-            {!finished && v?.to !== undefined && ` · hasta ${fmtSeconds(v.to)}`}
-            {!finished && v?.loop && <Repeat className="h-3 w-3" />}
-            {skipped > 0 && <span className="text-amber-300">· {skipped} saltada{skipped > 1 ? 's' : ''}</span>}
-          </span>
-          <span className="block truncate text-xs font-semibold text-[#fff]">{title || 'Cargando…'}</span>
+      <div className="px-3 pt-2">
+        <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+          {finished ? '🎵 Terminó tu lista' : `🎵 ${at + 1} de ${videos.length}`}
+          {!finished && v?.to !== undefined && ` · hasta ${fmtSeconds(v.to)}`}
+          {!finished && v?.loop && <Repeat className="h-3 w-3" />}
+          {skipped > 0 && <span className="text-amber-300">· {skipped} saltada{skipped > 1 ? 's' : ''}</span>}
         </span>
-        <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} onClick={toggle} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
-        <button type="button" aria-label="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
-        <button type="button" aria-label="Siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
+        <span className="block truncate text-xs font-semibold text-[#fff]">{title || 'Cargando…'}</span>
+      </div>
+      <div className="flex items-center justify-center gap-1 px-2 pb-2 pt-1">
+        <button type="button" aria-label="Canción anterior" data-help="Canción anterior" disabled={at === 0 && !loopAll} onClick={() => { const p = at > 0 ? at - 1 : videos.length - 1; jump(p, videos[p].from ?? 0); }} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10 disabled:opacity-30"><SkipBack className="h-4 w-4" /></button>
+        <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} data-help={playing ? 'Pausar música (el reloj sigue)' : 'Seguir música'} onClick={toggle} className="rounded-full bg-white/[0.12] p-2 text-[#fff] hover:bg-white/20">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
+        <button type="button" aria-label="Canción siguiente" data-help="Canción siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
+        <span className="mx-1 h-4 w-px bg-white/15" />
+        <button type="button" aria-label={muted ? 'Activar sonido' : 'Silenciar'} data-help={muted ? 'Activar sonido' : 'Silenciar'} onClick={() => { const m = !muted; mutedRef.current = m; setMuted(m); slots.current.forEach((x) => (m ? x.player?.mute?.() : x.player?.unMute?.())); }} className={`rounded-lg p-1.5 hover:bg-white/10 ${muted ? 'text-rose-300' : 'text-zinc-200'}`}>{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
+        <button type="button" aria-label="Elegir canción" data-help="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
       </div>
       {blockedSong !== null && videos[blockedSong] && (
         <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
