@@ -10,7 +10,7 @@ export type Space = 'persona' | 'empresa';
 export type AlarmKind = 'no' | 'notificacion' | 'alarma';
 export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'youtube';
 /** Un video de la lista de YouTube de una acción: desde/hasta en segundos (vacío = completo). */
-export type Video = { url: string; from?: number; to?: number };
+export type Video = { url: string; from?: number; to?: number; loop?: boolean };
 
 export type Module = {
   id: string;
@@ -21,6 +21,10 @@ export type Module = {
   rows?: string[][];
   databaseId?: string;
   videos?: Video[];
+  /** Segundos en que una canción se funde con la siguiente (0 = corte seco). */
+  crossfade?: number;
+  /** Al terminar la última, vuelve a la primera. */
+  loopAll?: boolean;
 };
 
 export type Label = { id: string; owner_id?: string; space: Space; name: string; color: string; icon: string; sort?: number };

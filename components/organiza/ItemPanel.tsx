@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Compass, FileText, Flame, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Compass, FileText, Flame, Play, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { FocusSetup } from '@/components/organiza/FocusSetup';
 import { GuidedTour } from '@/components/tour/GuidedTour';
 import { HABIT_TOUR } from '@/utils/tourScript';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -25,6 +26,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const [adding, setAdding] = useState(false);
   const [focusing, setFocusing] = useState(false);
   const [tour, setTour] = useState(false);
+  const [setup, setSetup] = useState(false);
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -148,7 +150,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               </label>
               {item.focus && (
                 <>
-                  <button type="button" onClick={() => setFocusing(true)} className="w-full rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Empezar {item.minutes} minutos de focus</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setFocusing(true)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500"><Play className="h-4 w-4" /> Empezar {item.minutes} min de focus</button>
+                    <button type="button" onClick={() => setSetup(true)} data-help="Música, crossfade y bucle del focus" className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.1]"><Settings2 className="h-4 w-4" /> Configurar{(item.modules.find((m) => m.type === 'youtube')?.videos?.length ?? 0) ? <span className="rounded-full bg-sky-500/25 px-1.5 text-[11px] text-sky-200">🎵 {item.modules.find((m) => m.type === 'youtube')?.videos?.length ?? 0}</span> : null}</button>
+                  </div>
                   {!item.phone_focus && (
                     <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 px-3 py-2 ring-1 ring-amber-400/25">
                       <span className="mt-0.5 text-base">📱</span>
@@ -191,6 +196,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
         </aside>
       </div>
       <GuidedTour open={tour} steps={HABIT_TOUR} onEnterStep={() => {}} onClose={() => setTour(false)} />
+      {setup && <FocusSetup item={item} onSave={setModules} onStart={() => { setSetup(false); setFocusing(true); }} onClose={() => setSetup(false)} />}
       {focusing && <FocusTimer item={item} checks={c} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
     </BodyPortal>
   );

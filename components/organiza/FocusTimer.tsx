@@ -28,6 +28,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   const check = checks.checks.find((c) => c.ref === refOf(item.title) && c.day === today);
   const steps = item.modules.find((m) => m.type === 'habitos')?.habits ?? [];
   const done = check?.value.habits ?? [];
+  const music = item.modules.find((m) => m.type === 'youtube');
   const videos = item.modules.filter((m) => m.type === 'youtube').flatMap((m) => m.videos ?? []);
   const current = steps.findIndex((s) => !done.includes(s));
   const allDone = steps.length > 0 && current === -1;
@@ -99,7 +100,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
 
         {videos.length > 0 && (
           <div className="fixed bottom-4 right-4 z-10">
-            <YouTubeList videos={videos} />
+            <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} />
           </div>
         )}
       </div>
