@@ -27,7 +27,7 @@ agenda.
 | 4. Agendar por voz con tarjeta de confirmación | Pendiente |
 | 5. Revisión final en computador y celular | Pendiente |
 | 6. Persona/Empresa, Daily, horario publicable, mundo por tarea, checklist, Ruta, tour | Lista |
-| 7. Google, Apple, Notion, avisos e iPhone | Código listo, faltan llaves: `docs/CONEXIONES.md` |
+| 7. Google, Apple, Notion, avisos e iPhone | Llaves de Google y `SUPABASE_SERVICE_ROLE_KEY` puestas en Vercel (2026-11-03, cliente OAuth "Organiza", app En producción). Falta que Emanuel conecte su cuenta. Conexiones vive en Configuración (`SETTINGS_PAGES` de `components/views/index.ts`). Resto: `docs/CONEXIONES.md` |
 
 Pendientes concretos:
 
