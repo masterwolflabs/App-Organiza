@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Music, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
+import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
@@ -21,8 +22,11 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
 
+  // Un link pegado sin tocar «Agregar» también se guarda.
+  const pending = parseYouTube(url) ? [{ url: url.trim() }] : [];
+  const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false });
   const save = () => {
-    const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos, crossfade, loopAll };
+    const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll };
     onSave(current ? item.modules.map((m) => (m.id === current.id ? music : m)) : [...item.modules, music]);
   };
   const set = (i: number, p: Partial<Video>) => setVideos((l) => l.map((v, j) => (j === i ? { ...v, ...p } : v)));
@@ -38,15 +42,19 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
     setVideos((l) => [...l, { url: url.trim() }]);
     setUrl('');
   };
+  const guard = useGuardedClose(onClose);
+  // Avisa al cerrar (✕, afuera o Esc) si quedó algo sin guardar.
+  useEffect(() => guard.register(dirty ? save : null));
+  const close = guard.close;
   const total = videos.reduce((s, v) => s + (v.to !== undefined ? v.to - (v.from ?? 0) : 0), 0);
 
   return (
     <BodyPortal>
-      <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center" onClick={close}>
         <div role="dialog" aria-label="Configurar modo focus" onClick={(e) => e.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#14161b] p-5 ring-1 ring-white/10">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-semibold text-white"><Music className="h-4 w-4 text-sky-300" /> Música del focus · {item.icon} {item.title}</h2>
-            <button type="button" aria-label="Cerrar" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
+            <button type="button" aria-label="Cerrar" onClick={close} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <p className="mt-1 text-xs text-zinc-400">Pega tus canciones de YouTube en orden. Cada una suena desde y hasta donde digas, y se funden una con otra.</p>
 
@@ -102,6 +110,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
           </div>
           {total > 0 && <p className="mt-2 text-xs text-zinc-500">Con cortes: {fmtSeconds(total)} de música (tu acción dura {item.minutes} min).</p>}
 
+          {guard.bar}
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => { save(); onClose(); }} className="flex-1 rounded-xl bg-white/[0.08] py-2.5 text-sm font-semibold text-white hover:bg-white/[0.14]">Guardar</button>
             <button type="button" onClick={() => { save(); onStart(); }} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-[#fff] hover:bg-sky-500"><Play className="h-4 w-4" /> Guardar y empezar</button>

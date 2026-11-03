@@ -9,6 +9,7 @@ import { APP } from '@/app.config';
 import { useSpace } from '@/components/organiza/space';
 import { compressImageForNote } from '@/utils/image';
 import { COVERS, RANKS } from '@/components/organiza/model';
+import { useUnsaved } from '@/components/organiza/UnsavedGuard';
 
 /**
  * Portadas (Emanuel, 2026-11-03) — el sistema de portadas de todo el ecosistema, partiendo en Organiza:
@@ -93,8 +94,11 @@ const Gradient: React.FC<{ onPick: (c: string) => void }> = ({ onPick }) => {
   const [stops, setStops] = useState(['#0ea5e9', '#7c3aed']);
   const [angle, setAngle] = useState(135);
   const css = mode === 'auto' ? autoGradient(one) : `linear-gradient(${angle}deg, ${stops.join(', ')})`;
+  // Si armaste un degradado y cierras sin «Usar», la ventana pregunta si lo guardas.
+  const [touched, setTouched] = useState(false);
+  useUnsaved(touched, () => onPick(css));
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onChangeCapture={() => setTouched(true)} onClickCapture={(e) => (e.target as HTMLElement).closest('button')?.textContent?.includes('Color') && setTouched(true)}>
       <div className="flex gap-1 rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/10">
         {(['auto', 'manual'] as const).map((m) => (
           <button key={m} type="button" onClick={() => setMode(m)} className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-semibold ${mode === m ? 'bg-white/[0.12] text-white' : 'text-zinc-400'}`}>{m === 'auto' ? 'Automático' : 'Manual'}</button>
@@ -120,7 +124,7 @@ const Gradient: React.FC<{ onPick: (c: string) => void }> = ({ onPick }) => {
           <label className="flex items-center gap-3 text-xs text-zinc-400">Ángulo <input type="range" min={0} max={360} value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="flex-1 accent-sky-500" /> {angle}°</label>
         </div>
       )}
-      <button type="button" onClick={() => onPick(css)} className="w-full rounded-xl bg-sky-600 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Usar este degradado</button>
+      <button type="button" onClick={() => { setTouched(false); onPick(css); }} className="w-full rounded-xl bg-sky-600 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Usar este degradado</button>
     </div>
   );
 };

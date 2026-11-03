@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
+import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
 import { freeGaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
@@ -229,6 +230,7 @@ const SleepForm: React.FC<{ s: Schedule; onSave: (v: Sleep) => Promise<void> }> 
   const [wake, setWake] = useState(s.sleep?.wake ?? '07:00');
   const [goal, setGoal] = useState(s.sleep?.goal ?? 8);
   const hours = (((toMinutes(wake) - toMinutes(bed) + 1440) % 1440) || 1440) / 60;
+  useUnsaved(bed !== (s.sleep?.bed ?? '23:00') || wake !== (s.sleep?.wake ?? '07:00') || goal !== (s.sleep?.goal ?? 8), () => onSave({ bed, wake, goal }));
   const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10';
   return (
     <div>
@@ -545,19 +547,24 @@ const ListView: React.FC<ViewProps> = ({ items, labels, onOpen }) => (
 
 /* ── Ventanas ───────────────────────────────────────────────────────── */
 
-export const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
+/** Ventana del Horario. Si lo de adentro usa useUnsaved, al cerrar pregunta si guardar. */
+export const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
+  const guard = useGuardedClose(onClose);
+  return (
   <BodyPortal>
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={guard.close}>
       <div role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()} className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-[#14161b] p-5 ring-1 ring-white/10 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={guard.close} aria-label="Cerrar" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
-        {children}
+        <UnsavedScope register={guard.register}>{children}</UnsavedScope>
+        {guard.bar}
       </div>
     </div>
   </BodyPortal>
-);
+  );
+};
 
 const PublishDialog: React.FC<{ schedule: Schedule; items: Item[]; onClose: () => void; onPublish: (a: Schedule['alarms'], days: number[]) => Promise<boolean>; onSetAllAlarms: () => Promise<void>; onUnpublish: () => Promise<void> }> = ({ schedule, items, onClose, onPublish, onSetAllAlarms, onUnpublish }) => {
   const [alarms, setAlarms] = useState<Schedule['alarms']>(schedule.alarms);
