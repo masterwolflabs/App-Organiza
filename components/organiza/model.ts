@@ -8,7 +8,9 @@ import type React from 'react';
  */
 export type Space = 'persona' | 'empresa';
 export type AlarmKind = 'no' | 'notificacion' | 'alarma';
-export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base';
+export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'youtube';
+/** Un video de la lista de YouTube de una acción: desde/hasta en segundos (vacío = completo). */
+export type Video = { url: string; from?: number; to?: number };
 
 export type Module = {
   id: string;
@@ -18,6 +20,7 @@ export type Module = {
   columns?: string[];
   rows?: string[][];
   databaseId?: string;
+  videos?: Video[];
 };
 
 export type Label = { id: string; owner_id?: string; space: Space; name: string; color: string; icon: string; sort?: number };
@@ -62,6 +65,8 @@ export type Item = {
   category: string;
   priority: number;
   block: string;
+  /** Ya configuró Concentración en el teléfono para esta acción (el recordatorio no vuelve). */
+  phone_focus?: boolean;
 };
 export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
@@ -158,6 +163,7 @@ export const MODULE_CHOICES: { key: string; emoji: string; label: string; hint: 
   { key: 'entreno', emoji: '🏋️', label: 'Plan de entrenamiento', hint: 'Día, ejercicio, series y repeticiones', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de entrenamiento', columns: ['Día', 'Ejercicio', 'Series', 'Reps', 'Peso'], rows: [['Lunes', '', '', '', '']] }) },
   { key: 'comidas', emoji: '🍳', label: 'Plan de comidas', hint: 'Qué comes cada día de la semana', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de comidas', columns: ['Día', 'Desayuno', 'Almuerzo', 'Cena'], rows: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((d) => [d, '', '', '']) }) },
   { key: 'tabla', emoji: '🧾', label: 'Tabla libre', hint: 'Una tabla con las columnas que quieras', make: () => ({ id: mid(), type: 'tabla', title: 'Tabla', columns: ['Nombre', 'Detalle'], rows: [['', '']] }) },
+  { key: 'youtube', emoji: '🎵', label: 'Lista de YouTube', hint: 'Videos que suenan solos en el modo focus', make: () => ({ id: mid(), type: 'youtube', title: 'Lista de YouTube', videos: [] }) },
   { key: 'base', emoji: '🗃️', label: 'Base de datos', hint: 'Una base dentro de esta tarea, como en Notion', make: () => ({ id: mid(), type: 'base', title: 'Base de datos' }) },
 ];
 /** Lo que trae una tarea según su nombre; después se cambia libremente. */

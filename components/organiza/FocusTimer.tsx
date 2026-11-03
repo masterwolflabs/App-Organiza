@@ -1,34 +1,107 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Pause, Play, X } from 'lucide-react';
+import { Check, Pause, Play, TriangleAlert, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
-import { coverCss, type Item } from '@/components/organiza/model';
+import { YouTubeList } from '@/components/organiza/YouTubeList';
+import { coverCss, iso, refOf, type Item } from '@/components/organiza/model';
+import type { useChecks } from '@/components/organiza/useHorario';
 
-/** Modo focus: la tarea a pantalla completa con su tiempo corriendo. Al terminar la marca como hecha. */
-export const FocusTimer: React.FC<{ item: Item; onDone: () => void; onClose: () => void }> = ({ item, onDone, onClose }) => {
-  const [left, setLeft] = useState(item.minutes * 60);
+const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, '0')}`;
+
+/**
+ * Modo focus (Emanuel, 2026-11-03): la acción a pantalla completa con su tiempo. Si tiene Paso a paso,
+ * los pasos aparecen de a uno con el tiempo repartido entre ellos; la barra muestra lo que pasó y lo
+ * que queda, y si te atrasas sale «¡Apúrate!». Si tiene Lista de YouTube, suena sola.
+ */
+export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChecks>; onDone: () => void; onClose: () => void }> = ({ item, checks, onDone, onClose }) => {
+  const total = item.minutes * 60;
+  const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(true);
   useEffect(() => {
-    if (!running || left <= 0) return;
-    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [running, left]);
-  const m = String(Math.floor(left / 60)).padStart(2, '0');
-  const s = String(left % 60).padStart(2, '0');
+    if (!running) return;
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  const today = iso(new Date());
+  const check = checks.checks.find((c) => c.ref === refOf(item.title) && c.day === today);
+  const steps = item.modules.find((m) => m.type === 'habitos')?.habits ?? [];
+  const done = check?.value.habits ?? [];
+  const videos = item.modules.filter((m) => m.type === 'youtube').flatMap((m) => m.videos ?? []);
+  const current = steps.findIndex((s) => !done.includes(s));
+  const allDone = steps.length > 0 && current === -1;
+  const per = steps.length ? total / steps.length : total;
+
+  const left = total - elapsed;
+  const late = left < 0 || (current >= 0 && elapsed > (current + 1) * per);
+  const mark = (s: string) => checks.mark(item.title, today, check?.done ?? false, { ...check?.value, habits: done.includes(s) ? done.filter((x) => x !== s) : [...done, s] });
+
   return (
     <BodyPortal>
-      <div role="dialog" aria-label={`Focus: ${item.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col items-center justify-center bg-[#09090b] p-6 text-center">
+      <div role="dialog" aria-label={`Focus: ${item.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col items-center overflow-y-auto bg-[#09090b] p-6 text-center">
         <div className="absolute inset-0 opacity-25" style={coverCss(item.cover_url)} />
-        <button type="button" onClick={onClose} aria-label="Salir del modo focus" className="absolute right-4 top-4 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
-        <div className="relative">
+        {late && !allDone && <div className="pointer-events-none absolute inset-0 animate-pulse bg-rose-600/20" />}
+        <button type="button" onClick={onClose} aria-label="Salir del modo focus" className="absolute right-4 top-4 z-10 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
+
+        <div className="relative my-auto w-full max-w-md py-10">
           <p className="text-lg text-zinc-300">{item.icon} {item.title}</p>
-          <p className="mt-2 font-display text-7xl font-semibold tabular-nums text-[#fff] sm:text-8xl">{m}:{s}</p>
+          <p className={`mt-2 font-display text-7xl font-semibold tabular-nums sm:text-8xl ${left < 0 ? 'text-rose-400' : 'text-[#fff]'}`}>{left < 0 ? '+' : ''}{mmss(left)}</p>
+
+          {/* Barra: lo que pasó (adelante) y lo que queda; marcas donde termina cada paso. */}
+          <div className="mt-5">
+            <div className="relative h-2 overflow-hidden rounded-full bg-white/10">
+              <div className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${late ? 'bg-rose-500' : 'bg-emerald-400'}`} style={{ width: `${Math.min(100, (elapsed / total) * 100)}%` }} />
+              {steps.slice(0, -1).map((_, i) => <span key={i} className="absolute inset-y-0 w-px bg-white/30" style={{ left: `${((i + 1) / steps.length) * 100}%` }} />)}
+            </div>
+            <div className="mt-1.5 flex justify-between text-xs tabular-nums text-zinc-400">
+              <span>Llevas {mmss(elapsed)}</span>
+              <span>{left >= 0 ? `Quedan ${mmss(left)}` : `Te pasaste ${mmss(left)}`}</span>
+            </div>
+          </div>
+
+          {late && !allDone && (
+            <p role="alert" className="mx-auto mt-4 inline-flex items-center gap-2 rounded-xl bg-rose-500/20 px-3 py-2 text-sm font-semibold text-rose-200 ring-1 ring-rose-400/50">
+              <TriangleAlert className="h-4 w-4" /> {left < 0 ? '¡Se acabó el tiempo! Apúrate' : `¡Apúrate! Vas atrasado en «${steps[current]}»`}
+            </p>
+          )}
+
+          {steps.length > 0 && (
+            <div className="mt-6 space-y-2 text-left">
+              {steps.map((s, i) => {
+                const isDone = done.includes(s);
+                const isNow = i === current;
+                const ahead = current >= 0 && i > current;
+                if (ahead && i > current + 2) return null;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => mark(s)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 transition-all duration-300 ${isNow ? 'bg-white/15 py-4 ring-2 ring-white/40 backdrop-blur' : isDone ? 'bg-white/[0.04] py-2 opacity-60' : 'bg-white/[0.04] py-2.5'}`}
+                    style={ahead ? { opacity: 0.55 - (i - current - 1) * 0.2, transform: `scale(${1 - (i - current) * 0.03})` } : undefined}
+                  >
+                    <span className={`flex shrink-0 items-center justify-center rounded-full ring-2 ${isNow ? 'h-8 w-8 ring-white' : 'h-6 w-6 ring-white/40'} ${isDone ? 'bg-emerald-500 ring-emerald-400' : ''}`}>{isDone && <Check className="h-4 w-4 text-[#fff]" />}</span>
+                    <span className={`min-w-0 flex-1 ${isNow ? 'text-lg font-semibold text-[#fff]' : 'text-sm text-zinc-300'} ${isDone ? 'line-through' : ''}`}>{s}</span>
+                    <span className="text-xs tabular-nums text-zinc-400">{mmss(Math.round(per))}</span>
+                  </button>
+                );
+              })}
+              {allDone && <p className="pt-2 text-center text-lg font-semibold text-emerald-300">🎉 ¡Todo hecho!</p>}
+            </div>
+          )}
+
           <div className="mt-8 flex justify-center gap-3">
-            {left > 0 && <button type="button" onClick={() => setRunning((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-semibold text-[#fff] hover:bg-white/15">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {running ? 'Pausar' : 'Seguir'}</button>}
-            <button type="button" onClick={onDone} className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400">Terminé</button>
+            <button type="button" onClick={() => setRunning((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-semibold text-[#fff] hover:bg-white/15">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {running ? 'Pausar' : 'Seguir'}</button>
+            <button type="button" onClick={onDone} className={`rounded-xl px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400 ${allDone ? 'animate-pulse bg-emerald-400' : 'bg-emerald-500'}`}>Terminé</button>
           </div>
         </div>
+
+        {videos.length > 0 && (
+          <div className="fixed bottom-4 right-4 z-10">
+            <YouTubeList videos={videos} />
+          </div>
+        )}
       </div>
     </BodyPortal>
   );

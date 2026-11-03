@@ -8,6 +8,7 @@ import { createFromTemplate } from '@/components/databases/DatabasesView';
 import { DB_TEMPLATES } from '@/utils/databases';
 import type { UserDatabase } from '@/utils/databases';
 import { iso, refOf, type Item, type Module } from '@/components/organiza/model';
+import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
 import type { useChecks } from '@/components/organiza/useHorario';
 
 type Props = { item: Item; modules: Module[]; checks: ReturnType<typeof useChecks>; onChange: (m: Module[]) => void };
@@ -26,6 +27,7 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange }) =>
           </div>
           {(m.type === 'habitos' || m.type === 'reglas') && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
           {m.type === 'sueno' && <Sleep item={item} checks={checks} />}
+          {m.type === 'youtube' && <YouTubeEditor m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'tabla' && <Grid m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'base' && <Base m={m} patch={(p) => patch(m.id, p)} />}
         </article>
@@ -192,6 +194,47 @@ const Base: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }> = ({ m,
           {list.map((d) => <option key={d.id} value={d.id} className="bg-zinc-900">{d.title}</option>)}
         </select>
       )}
+    </div>
+  );
+};
+
+/** Lista de YouTube: links de videos (con desde/hasta) o de una playlist. Suena sola en el modo focus. */
+const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }> = ({ m, patch }) => {
+  const videos = m.videos ?? [];
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const set = (i: number, p: Partial<NonNullable<Module['videos']>[number]>) => patch({ videos: videos.map((v, j) => (j === i ? { ...v, ...p } : v)) });
+  return (
+    <div className="space-y-2">
+      {videos.map((v, i) => {
+        const p = parseYouTube(v.url);
+        return (
+          <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-1.5">
+            {p?.video ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`https://i.ytimg.com/vi/${p.video}/default.jpg`} alt="" className="h-9 w-12 shrink-0 rounded object-cover" />
+            ) : (
+              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-white/[0.06] text-[10px] text-zinc-400">Lista</span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs text-zinc-300">{i + 1}. {v.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+              {p?.video && (
+                <span className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-500">
+                  desde <input defaultValue={fmtSeconds(v.from)} placeholder="0:00" onBlur={(e) => set(i, { from: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
+                  hasta <input defaultValue={fmtSeconds(v.to)} placeholder="fin" onBlur={(e) => set(i, { to: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
+                </span>
+              )}
+            </span>
+            <button type="button" aria-label="Quitar video" onClick={() => patch({ videos: videos.filter((_, j) => j !== i) })} className="p-1 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        );
+      })}
+      <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (!parseYouTube(url)) return setError('Ese link no es de YouTube.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega un link de YouTube (video o playlist)" className={`${input} text-zinc-300`} />
+        <button type="submit" className="rounded-md px-2 text-sm font-semibold text-sky-300 hover:bg-white/[0.06]"><Plus className="h-4 w-4" /></button>
+      </form>
+      {error && <p className="text-xs text-rose-300">{error}</p>}
+      <p className="text-[11px] text-zinc-500">Suenan solos, uno tras otro, cuando empiezas el modo focus.</p>
     </div>
   );
 };

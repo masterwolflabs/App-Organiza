@@ -41,7 +41,8 @@ export const HorarioView: React.FC = () => {
     const now = new Date();
     if (i.weekday !== weekdayOf(now)) return null;
     const k = c.checks.find((x) => x.ref === refOf(i.title) && x.day === iso(now));
-    return k?.done ? 'hecho' : k ? 'no' : 'pendiente';
+    // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
+    return k?.done ? 'hecho' : k && (k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
   };
   const confirm = useConfirm();
   const [view, setViewState] = useState<ViewId>(() => {
@@ -317,8 +318,8 @@ const Pill: React.FC<{ color: string; children: React.ReactNode }> = ({ color, c
   </span>
 );
 
-type Status = 'hecho' | 'no' | 'pendiente' | null;
-const STATUS = { hecho: { label: '✅ Hecho hoy', color: '#22c55e' }, no: { label: '✖️ No lo hice hoy', color: '#f43f5e' }, pendiente: { label: 'Pendiente hoy', color: '#94a3b8' } };
+type Status = 'hecho' | 'curso' | 'no' | 'pendiente' | null;
+const STATUS = { hecho: { label: '✅ Hecho hoy', color: '#22c55e' }, curso: { label: '⏳ En eso hoy', color: '#f59e0b' }, no: { label: '✖️ No lo hice hoy', color: '#f43f5e' }, pendiente: { label: 'Pendiente hoy', color: '#94a3b8' } };
 const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.ReactNode; help: string }> = ({ color, icon: I, children, help }) => (
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );

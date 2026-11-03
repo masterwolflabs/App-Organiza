@@ -149,7 +149,13 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               {item.focus && (
                 <>
                   <button type="button" onClick={() => setFocusing(true)} className="w-full rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Empezar {item.minutes} minutos de focus</button>
-                  <p className="text-xs leading-relaxed text-zinc-400">📱 <b className="font-semibold text-zinc-300">Para que el teléfono tampoco te distraiga:</b> en iPhone ve a Ajustes → Concentración → <b className="font-semibold text-zinc-300">+</b> → crea uno para «{item.title}» y prográmalo a las {item.time}. En Android: Ajustes → Bienestar digital → Modo concentración.</p>
+                  {!item.phone_focus && (
+                    <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 px-3 py-2 ring-1 ring-amber-400/25">
+                      <span className="mt-0.5 text-base">📱</span>
+                      <p className="min-w-0 flex-1 text-xs leading-relaxed text-zinc-300"><b className="font-semibold text-amber-200">Pendiente:</b> configura Concentración en tu teléfono a las {item.time}. iPhone: Ajustes → Concentración → <b>+</b>. Android: Ajustes → Bienestar digital → Modo concentración.</p>
+                      <button type="button" onClick={() => set({ phone_focus: true })} className="shrink-0 rounded-lg bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/30">Ya lo hice</button>
+                    </div>
+                  )}
                 </>
               )}
             </Group>
@@ -185,7 +191,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
         </aside>
       </div>
       <GuidedTour open={tour} steps={HABIT_TOUR} onEnterStep={() => {}} onClose={() => setTour(false)} />
-      {focusing && <FocusTimer item={item} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
+      {focusing && <FocusTimer item={item} checks={c} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
     </BodyPortal>
   );
 };
