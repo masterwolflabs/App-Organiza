@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { FileText, Flame, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, FileText, Flame, Plus, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -20,7 +20,7 @@ const ALARMS: { id: AlarmKind; label: string }[] = [
 ];
 
 /** La tarea abierta: sus datos, su registro y el mundo que tiene adentro. */
-export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>; c: ReturnType<typeof useChecks>; onClose: () => void }> = ({ item, h, c, onClose }) => {
+export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>; c: ReturnType<typeof useChecks>; onClose: () => void; onOpen?: (id: string) => void }> = ({ item, h, c, onClose, onOpen }) => {
   const confirm = useConfirm();
   const [cover, setCover] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -79,7 +79,15 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
             </section>
 
             <section className="grid grid-cols-2 gap-3">
-              <Field label="Día"><select value={item.weekday} onChange={(e) => set({ weekday: Number(e.target.value) })} className={field}>{WEEK.map((w, i) => <option key={w} value={i} className="bg-zinc-900">{w}</option>)}</select></Field>
+              <div><span className="mb-1 block text-xs font-medium text-zinc-400">Días</span><DaysPicker days={weekdays} onToggle={async (d) => {
+                const on = !weekdays.includes(d);
+                // Quitar el día de este mismo bloque: el panel sigue en otro día que queda.
+                if (!on && d === item.weekday) {
+                  const other = h.activeItems.find((i) => i.id !== item.id && i.schedule_id === item.schedule_id && refOf(i.title) === ref);
+                  if (other) onOpen?.(other.id);
+                }
+                await h.repeatOn(item, d, on);
+              }} /></div>
               <Field label="Hora"><input type="time" value={item.time} onChange={(e) => e.target.value && set({ time: e.target.value })} className={field} /></Field>
               <Field label="Duración (min)"><input type="number" min={5} step={5} value={item.minutes} onChange={(e) => Number(e.target.value) > 0 && set({ minutes: Number(e.target.value) })} className={field} /></Field>
               <Field label="Termina"><input type="time" value={toTime(toMinutes(item.time) + item.minutes)} onChange={(e) => e.target.value && set({ minutes: ((toMinutes(e.target.value) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} className={field} /></Field>
@@ -92,14 +100,6 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               <Field label="Aviso"><select value={item.alarm} onChange={(e) => set({ alarm: e.target.value as AlarmKind })} className={field}>{ALARMS.map((a) => <option key={a.id} value={a.id} className="bg-zinc-900">{a.label}</option>)}</select></Field>
               <Field label="Minutos antes"><input type="number" min={0} step={5} disabled={item.alarm === 'no'} value={item.alarm_before} onChange={(e) => set({ alarm_before: Math.max(0, Number(e.target.value)) })} className={`${field} disabled:opacity-40`} /></Field>
             </section>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-zinc-400">Se repite</span>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEK.map((w, d) => (
-                  <button key={w} type="button" aria-pressed={weekdays.includes(d)} disabled={weekdays.length === 1 && weekdays[0] === d} onClick={() => h.repeatOn(item, d, !weekdays.includes(d))} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${weekdays.includes(d) ? 'bg-sky-600 text-[#fff] ring-sky-500' : 'text-zinc-400 ring-white/15 hover:bg-white/[0.06]'}`}>{w.slice(0, 3)}</button>
-                ))}
-              </div>
-            </div>
             <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
               <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Marca esta tarea como tiempo sin interrupciones</span></span>
               <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
@@ -146,3 +146,45 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </label>
 );
 
+
+const SHORT = WEEK.map((w) => w.slice(0, 3));
+
+/** «Lun, Mié, Vie» · «Lunes a viernes» · «Todos los días». */
+function daysText(days: number[]) {
+  const d = [...days].sort((a, b) => a - b).join();
+  if (d === '0,1,2,3,4,5,6') return 'Todos los días';
+  if (d === '0,1,2,3,4') return 'Lunes a viernes';
+  if (d === '5,6') return 'Fin de semana';
+  if (days.length === 1) return WEEK[days[0]];
+  return [...days].sort((a, b) => a - b).map((x) => SHORT[x]).join(', ');
+}
+
+/** Los días del bloque en un solo campo: se marcan y desmarcan en el menú (siempre queda uno). */
+const DaysPicker: React.FC<{ days: number[]; onToggle: (d: number) => void }> = ({ days, onToggle }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={`${field} flex items-center justify-between gap-2 text-left`}>
+        <span className="truncate">{daysText(days)}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div role="menu" className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl bg-[#1b1e24] p-1 shadow-2xl ring-1 ring-white/10">
+            {WEEK.map((w, d) => {
+              const on = days.includes(d);
+              const last = on && days.length === 1;
+              return (
+                <button key={w} type="button" role="menuitemcheckbox" aria-checked={on} disabled={last} onClick={() => onToggle(d)} data-help={last ? 'Un bloque necesita al menos un día' : undefined} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-200 hover:bg-white/[0.06] disabled:opacity-60">
+                  <span className={`flex h-4 w-4 items-center justify-center rounded ring-1 ${on ? 'bg-sky-600 ring-sky-500' : 'ring-white/25'}`}>{on && <Check className="h-3 w-3 text-[#fff]" />}</span>
+                  {w}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};

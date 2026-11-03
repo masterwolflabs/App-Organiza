@@ -152,7 +152,7 @@ export const HorarioView: React.FC = () => {
         <Trash2 className="h-3.5 w-3.5" /> Borrar este horario
       </button>
 
-      {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} />}
+      {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} onOpen={setOpenId} />}
       {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => h.publish(s.id, a, days)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
       {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
       {panel === 'nuevo' && <Dialog title="Nuevo horario" onClose={() => setPanel(null)}><TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} /></Dialog>}
