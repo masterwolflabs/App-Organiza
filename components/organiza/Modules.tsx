@@ -8,6 +8,7 @@ import { createFromTemplate } from '@/components/databases/DatabasesView';
 import { DB_TEMPLATES } from '@/utils/databases';
 import type { UserDatabase } from '@/utils/databases';
 import { iso, refOf, type Item, type Module } from '@/components/organiza/model';
+import { Box, moveItem, useDragList } from '@/components/organiza/PanelSections';
 import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
 import type { useChecks } from '@/components/organiza/useHorario';
 
@@ -17,20 +18,43 @@ const input = 'w-full min-w-0 rounded-md bg-transparent px-1.5 py-1 text-sm text
 /** El mundo de una tarea: cada bloque se agrega, se renombra y se borra. */
 export const Modules: React.FC<Props> = ({ item, modules, checks, onChange }) => {
   const patch = (id: string, p: Partial<Module>) => onChange(modules.map((m) => (m.id === id ? { ...m, ...p } : m)));
+  // Cada bloque se pliega con la flecha y se mueve con la manija ⋮⋮ (el plegado se recuerda en este dispositivo).
+  const [closed, setClosed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('organiza-bloques-plegados') ?? '[]');
+    } catch {
+      return [];
+    }
+  });
+  const toggle = (id: string) => {
+    const next = closed.includes(id) ? closed.filter((x) => x !== id) : [...closed, id];
+    setClosed(next);
+    try {
+      localStorage.setItem('organiza-bloques-plegados', JSON.stringify(next));
+    } catch {
+      /* modo privado */
+    }
+  };
+  const { list, drag, start } = useDragList((from, to) => onChange(moveItem(modules, from, to)));
+  const shown = drag ? moveItem(modules, drag.from, drag.to) : modules;
   return (
-    <div className="mt-3 space-y-3">
-      {modules.map((m) => (
-        <article key={m.id} className="rounded-2xl bg-white/[0.03] p-3 ring-1 ring-white/10">
-          <div className="mb-2 flex items-center gap-2">
-            <input key={m.id} defaultValue={m.title} aria-label="Nombre del bloque" onBlur={(e) => e.target.value.trim() && patch(m.id, { title: e.target.value.trim() })} className={`${input} font-semibold`} />
-            <button type="button" aria-label={`Quitar ${m.title}`} onClick={() => onChange(modules.filter((x) => x.id !== m.id))} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
-          </div>
+    <div ref={list} className="space-y-3">
+      {shown.map((m) => (
+        <Box
+          key={m.id}
+          open={!closed.includes(m.id)}
+          onToggle={() => toggle(m.id)}
+          onGrip={(e) => start(e, modules.indexOf(m))}
+          dragging={drag !== null && modules[drag.from]?.id === m.id}
+          title={<input key={m.id} defaultValue={m.title} aria-label="Nombre del bloque" onClick={(e) => e.stopPropagation()} onBlur={(e) => e.target.value.trim() && patch(m.id, { title: e.target.value.trim() })} className={`${input} font-semibold`} />}
+          extra={<button type="button" aria-label={`Quitar ${m.title}`} onClick={() => onChange(modules.filter((x) => x.id !== m.id))} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>}
+        >
           {(m.type === 'habitos' || m.type === 'reglas') && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
           {m.type === 'sueno' && <Sleep item={item} checks={checks} />}
           {m.type === 'youtube' && <YouTubeEditor m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'tabla' && <Grid m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'base' && <Base m={m} patch={(p) => patch(m.id, p)} />}
-        </article>
+        </Box>
       ))}
     </div>
   );

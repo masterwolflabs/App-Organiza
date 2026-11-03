@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Compass, FileText, Flame, Play, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { FocusSetup } from '@/components/organiza/FocusSetup';
+import { PanelSections } from '@/components/organiza/PanelSections';
 import { GuidedTour } from '@/components/tour/GuidedTour';
 import { HABIT_TOUR } from '@/utils/tourScript';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -80,12 +81,9 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               }} className="min-w-0 flex-1 rounded-lg bg-transparent font-display text-2xl font-semibold text-white outline-none focus:bg-white/[0.04]" />
             </div>
 
-            <section className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/10" data-tour="registro">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-white">¿Lo hiciste hoy?</h3>
-                <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300"><Flame className="h-4 w-4" /> {streak} {streak === 1 ? 'día' : 'días'}</span>
-              </div>
-              <div className="mt-3 flex gap-2">
+            <PanelSections storage="organiza-panel" sections={[
+              { id: 'registro', tour: 'registro', title: '✅ ¿Lo hiciste hoy?', extra: <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300"><Flame className="h-4 w-4" /> {streak} {streak === 1 ? 'día' : 'días'}</span>, body: (<>
+              <div className="flex gap-2">
                 <button type="button" aria-pressed={todayCheck?.done === true} onClick={async () => {
                   if (todayCheck?.done) {
                     if (await confirm({ title: '¿Quieres deshacer esto?', message: 'Se quita el «lo hice» de hoy.', confirmLabel: 'Sí, deshacer', tone: 'danger' })) undoToday();
@@ -105,9 +103,8 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 })}
               </div>
               <p className="mt-2 text-xs text-zinc-500">{scheduled ? `Cumpliste ${done} de ${scheduled} (${rate}%)` : 'Tu récord empieza con el primer día que marques.'}</p>
-            </section>
-
-            <Group title="📅 Cuándo" tour="hab-cuando">
+              </>) },
+              { id: 'cuando', tour: 'hab-cuando', title: '📅 Cuándo', body: (<>
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">📆 Elige tus días</span><DaysPicker days={weekdays} onToggle={async (d) => {
                   const on = !weekdays.includes(d);
@@ -122,13 +119,11 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={item.minutes} onChange={(minutes) => set({ minutes })} /></div>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(item.time) + item.minutes)} onChange={(end) => set({ minutes: ((toMinutes(end) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} /></div>
               </div>
-            </Group>
-
-            <Group title="⚖️ Importancia" tour="hab-importancia">
+</>) },
+              { id: 'importancia', tour: 'hab-importancia', title: '⚖️ Importancia', body: (<>
               <Importance value={item.flex} onChange={(flex) => set({ flex, priority: LEVELS.findIndex((l) => l.id === flex) + 1 })} />
-            </Group>
-
-            <Group title="🏷️ Categoría" tour="hab-categoria">
+</>) },
+              { id: 'categoria', tour: 'hab-categoria', title: '🏷️ Categoría', body: (<>
               <Categories h={h} value={item.label_id} onChange={(label_id) => set({ label_id })} />
               {h.schedules.length > 1 && (
                 <Field label="Horario">
@@ -137,9 +132,8 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   </select>
                 </Field>
               )}
-            </Group>
-
-            <Group title="🔔 Aviso y concentración" tour="hab-aviso">
+</>) },
+              { id: 'aviso', tour: 'hab-aviso', title: '🔔 Aviso y sonido', body: (<>
               <AlarmPicker value={item.alarm} onChange={(alarm) => set({ alarm })} />
               {item.alarm !== 'no' && (
                 <>
@@ -157,7 +151,9 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   <SoundList kind={item.alarm === 'alarma' ? 'alarma' : 'notificacion'} />
                 </>
               )}
-              <label data-tour="hab-focus" className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
+</>) },
+              { id: 'focus', tour: 'hab-focus', title: '🎯 Modo focus', body: (<>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
                 <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Tiempo sin interrupciones: la tarea a pantalla completa con su cuenta regresiva</span></span>
                 <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
               </label>
@@ -176,18 +172,12 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   )}
                 </>
               )}
-            </Group>
-
-            <div data-tour="hab-nota" className="space-y-3">
+</>) },
+              { id: 'nota', tour: 'hab-nota', title: '📝 Descripción y nota', body: (<>
             <Field label="Descripción"><textarea key={`d${item.id}`} defaultValue={item.description} rows={3} onBlur={(e) => e.target.value !== item.description && set({ description: e.target.value })} className={field} /></Field>
             {note && <button type="button" onClick={note.open} className="inline-flex items-center gap-2 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]"><FileText className="h-4 w-4" /> {note.exists ? 'Abrir su nota' : 'Crear su nota'}</button>}
-            </div>
-
-            <section data-tour="mundo">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-white">Dentro de esta tarea</h3>
-                <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1 text-sm font-semibold text-sky-300 hover:text-sky-200"><Plus className="h-4 w-4" /> Agregar</button>
-              </div>
+</>) },
+              { id: 'dentro', tour: 'mundo', title: '🧩 Dentro de esta tarea', extra: <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1 text-sm font-semibold text-sky-300 hover:text-sky-200"><Plus className="h-4 w-4" /> Agregar</button>, body: (<>
               {adding && (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {MODULE_CHOICES.map((m) => (
@@ -200,7 +190,8 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               )}
               <Modules item={item} modules={item.modules} checks={c} onChange={setModules} />
               {!item.modules.length && !adding && <p className="mt-2 text-sm text-zinc-500">Agrega microhábitos, tu sueño, un plan de entrenamiento, de comidas o una base de datos.</p>}
-            </section>
+</>) },
+            ]} />
 
             <div className="flex justify-end">
               <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar “${item.title}”?`, message: 'Tu récord de esta actividad queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) { await h.removeItem(item.id); onClose(); } }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /> Borrar tarea</button>
