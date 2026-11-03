@@ -1,13 +1,27 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Music, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ListMusic, Loader2, Music, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
-import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
+import { canEmbed, fmtSeconds, parseYouTube, playlistIds, toSeconds } from '@/components/organiza/YouTubeList';
 import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
+
+/** Aviso si quien subió el video no deja reproducirlo fuera de YouTube. */
+const EmbedCheck: React.FC<{ video: string }> = ({ video }) => {
+  const [ok, setOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    canEmbed(video).then((v) => alive && setOk(v));
+    return () => {
+      alive = false;
+    };
+  }, [video]);
+  if (ok !== false) return null;
+  return <p className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">⚠️ Este video no se puede reproducir fuera de YouTube (lo bloqueó quien lo subió). En el focus se va a saltar: busca otra subida de la misma canción.</p>;
+};
 
 /**
  * ⚙️ Configurar el modo focus de una acción (Emanuel, 2026-11-03): la música que suena — cada canción
@@ -23,7 +37,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [error, setError] = useState('');
 
   // Un link pegado sin tocar «Agregar» también se guarda.
-  const pending = parseYouTube(url) ? [{ url: url.trim() }] : [];
+  const pending = parseYouTube(url) && !parseYouTube(url)?.list ? [{ url: url.trim() }] : [];
   const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false });
   const save = () => {
     const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll };
@@ -36,10 +50,29 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
     n.splice(Math.max(0, Math.min(n.length, i + d)), 0, v);
     return n;
   });
+  // Link de una playlist: se pregunta si van sus canciones por separado, la playlist entera o solo esa canción.
+  const [askList, setAskList] = useState<{ list: string; video?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const add = () => {
-    if (!parseYouTube(url)) return setError('Ese link no es de YouTube.');
+    const p = parseYouTube(url);
+    if (!p) return setError('Ese link no es de YouTube.');
     setError('');
+    if (p.list) return setAskList({ list: p.list, video: p.video });
     setVideos((l) => [...l, { url: url.trim() }]);
+    setUrl('');
+  };
+  const addList = async (how: 'separadas' | 'entera' | 'una') => {
+    if (!askList) return;
+    if (how === 'una' && askList.video) setVideos((l) => [...l, { url: `https://www.youtube.com/watch?v=${askList.video}` }]);
+    if (how === 'entera') setVideos((l) => [...l, { url: `https://www.youtube.com/playlist?list=${askList.list}` }]);
+    if (how === 'separadas') {
+      setBusy(true);
+      const ids = await playlistIds(askList.list);
+      setBusy(false);
+      if (!ids.length) return setError('No pude leer esa playlist (¿es privada?). Agrégala entera o canción por canción.');
+      setVideos((l) => [...l, ...ids.map((id) => ({ url: `https://www.youtube.com/watch?v=${id}` }))]);
+    }
+    setAskList(null);
     setUrl('');
   };
   const guard = useGuardedClose(onClose);
@@ -78,6 +111,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     </div>
                     <button type="button" aria-label="Quitar" onClick={() => setVideos((l) => l.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                   </div>
+                  {p?.video && <EmbedCheck video={p.video} />}
                   {p?.video && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
                       <label className="flex items-center gap-1">Desde <input defaultValue={fmtSeconds(v.from) || '0:00'} onBlur={(e) => set(i, { from: toSeconds(e.target.value) || undefined })} className="w-14 rounded-md bg-white/[0.06] px-1.5 py-1 text-center text-zinc-100 outline-none ring-1 ring-white/10" /></label>
@@ -95,6 +129,17 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega un link de YouTube (canción o playlist)" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
             <button type="submit" className="inline-flex items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14]"><Plus className="h-4 w-4" /> Agregar</button>
           </form>
+          {askList && (
+            <div className="mt-2 rounded-xl bg-sky-500/10 p-3 ring-1 ring-sky-400/30">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-sky-100"><ListMusic className="h-4 w-4" /> Ese link es de una playlist. ¿Qué agrego?</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button type="button" disabled={busy} onClick={() => addList('separadas')} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-60">{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Sus canciones por separado</button>
+                <button type="button" onClick={() => addList('entera')} className="rounded-lg bg-white/[0.08] px-2.5 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">La playlist entera</button>
+                {askList.video && <button type="button" onClick={() => addList('una')} className="rounded-lg bg-white/[0.08] px-2.5 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">Solo esta canción</button>}
+              </div>
+              <p className="mt-1.5 text-[11px] text-zinc-400">Por separado puedes poner desde/hasta a cada una.</p>
+            </div>
+          )}
           {error && <p className="mt-1.5 text-xs text-rose-300">{error}</p>}
 
           <div className="mt-5 space-y-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/10">

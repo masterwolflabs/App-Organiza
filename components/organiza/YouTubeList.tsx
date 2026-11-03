@@ -45,6 +45,8 @@ type YTPlayer = {
   getCurrentTime: () => number;
   getDuration: () => number;
   getVideoData?: () => { title?: string };
+  getPlaylist?: () => string[] | null;
+  getPlaylistIndex?: () => number;
 };
 type YTNamespace = { Player: new (el: HTMLElement, opts: Record<string, unknown>) => YTPlayer; PlayerState: { ENDED: number; PLAYING: number; PAUSED: number } };
 declare global {
@@ -70,7 +72,83 @@ function loadYT(): Promise<YTNamespace> {
   return loading;
 }
 
-type Slot = { player: YTPlayer | null; index: number; ready: boolean };
+/** ¿Este video se puede reproducir fuera de YouTube? (quien lo sube puede bloquearlo). Reproductor oculto, en silencio. */
+const embedCache = new Map<string, Promise<boolean>>();
+export function canEmbed(video: string): Promise<boolean> {
+  if (!embedCache.has(video)) {
+    embedCache.set(video, loadYT().then((YT) => new Promise<boolean>((resolve) => {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:0';
+      document.body.appendChild(host);
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        try {
+          p.destroy();
+        } catch {
+          /* ya no está */
+        }
+        host.remove();
+        resolve(ok);
+      };
+      const p = new YT.Player(host, {
+        width: 1,
+        height: 1,
+        videoId: video,
+        playerVars: { autoplay: 1, mute: 1 },
+        events: {
+          onError: () => finish(false),
+          onStateChange: (e: { data: number }) => e.data === YT.PlayerState.PLAYING && finish(true),
+        },
+      });
+      setTimeout(() => finish(true), 8000);
+    })));
+  }
+  return embedCache.get(video)!;
+}
+
+/** Los videos de una playlist (para agregarlos por separado). Usa un reproductor oculto; sin llaves. */
+export async function playlistIds(list: string): Promise<string[]> {
+  const YT = await loadYT();
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:0';
+  document.body.appendChild(host);
+  return new Promise((resolve) => {
+    let tries = 0;
+    let done = false;
+    const finish = (ids: string[]) => {
+      if (done) return;
+      done = true;
+      try {
+        p.destroy();
+      } catch {
+        /* ya no está */
+      }
+      host.remove();
+      resolve(ids);
+    };
+    const p = new YT.Player(host, {
+      width: 1,
+      height: 1,
+      playerVars: { listType: 'playlist', list, autoplay: 0 },
+      events: {
+        onReady: () => {
+          const poll = () => {
+            const ids = p.getPlaylist?.() ?? [];
+            if (ids.length || ++tries > 30) finish(ids);
+            else setTimeout(poll, 200);
+          };
+          poll();
+        },
+        onError: () => finish([]),
+      },
+    });
+    setTimeout(() => finish([]), 10000);
+  });
+}
+
+type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; loadedAt?: number; readyAt?: number };
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
 export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number } }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek }) => {
@@ -84,6 +162,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const playingRef = useRef(true);
   const [title, setTitle] = useState('');
   const [finished, setFinished] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [skipped, setSkipped] = useState(0);
   const list = useRef(videos);
   list.current = videos;
   // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
@@ -98,7 +178,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const box = boxes[slot].current;
     if (!v || !parsed || !box) return false;
     slots.current[slot].player?.destroy();
-    slots.current[slot] = { player: null, index, ready: false };
+    slots.current[slot] = { player: null, index, ready: false, loadedAt: Date.now() };
     const host = document.createElement('div');
     box.innerHTML = '';
     box.appendChild(host);
@@ -122,15 +202,32 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           e.target.setVolume(volume);
           if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
+          slots.current[slot].readyAt = Date.now();
           if (slot === activeRef.current) setTitle(e.target.getVideoData?.().title ?? '');
         },
         onStateChange: (e: { data: number; target: YTPlayer }) => {
+          slots.current[slot].state = e.data;
           if (slot !== activeRef.current) return;
-          if (e.data === YT.PlayerState.PLAYING) setTitle(e.target.getVideoData?.().title ?? '');
-          // Fin natural del video (sin «hasta»): el reloj de abajo decide qué sigue.
-          if (e.data === YT.PlayerState.ENDED) advance();
+          if (e.data === YT.PlayerState.PLAYING) {
+            setTitle(e.target.getVideoData?.().title ?? '');
+            setBlocked(false);
+          }
+          if (e.data === YT.PlayerState.ENDED) {
+            // Playlist entera: sigue sola por dentro; se pasa a la siguiente recién al terminar su último video.
+            if (!parsed.video) {
+              const all = e.target.getPlaylist?.() ?? [];
+              if ((e.target.getPlaylistIndex?.() ?? 0) < all.length - 1) return;
+            }
+            advance();
+          }
         },
-        onError: () => slot === activeRef.current && advance(true),
+        // Video que no se puede reproducir fuera de YouTube: se salta, aunque pase en pleno crossfade.
+        onError: () => {
+          if (slot !== activeRef.current) return;
+          setSkipped((n) => n + 1);
+          fading.current = false;
+          setTimeout(() => advance(true), 0);
+        },
       },
     });
     return true;
@@ -250,7 +347,19 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const t = setInterval(() => {
       const cur = slots.current[activeRef.current];
       const v = list.current[cur.index];
-      if (!cur.player || !cur.ready || !v || fading.current || !playingRef.current) return;
+      if (!v || !cur.player || !playingRef.current) return;
+      // No cargó en 12 s: se salta.
+      if (!cur.ready) {
+        if (Date.now() - (cur.loadedAt ?? Date.now()) > 12000) {
+          setSkipped((n) => n + 1);
+          fading.current = false;
+          advance(true);
+        }
+        return;
+      }
+      // El navegador no la dejó sonar sola: se pide un toque.
+      if (cur.state !== 1 && cur.state !== 3 && Date.now() - (cur.readyAt ?? Date.now()) > 3500) setBlocked(true);
+      if (fading.current || !parseYouTube(v.url)?.video) return;
       const now = cur.player.getCurrentTime?.() ?? 0;
       const end = v.to ?? cur.player.getDuration?.() ?? 0;
       if (!end) return;
@@ -273,6 +382,12 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   return (
     <div className="w-72 overflow-hidden rounded-2xl bg-black/50 ring-1 ring-white/15 backdrop-blur-xl">
       <div className="relative aspect-video w-full bg-black">
+        {blocked && !finished && (
+          <button type="button" onClick={() => { slots.current[activeRef.current].player?.playVideo(); setBlocked(false); }} className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/70 text-sm font-semibold text-[#fff]">
+            <Play className="h-6 w-6" /> Toca para que siga la música
+            <span className="text-[11px] font-normal text-zinc-300">Tu navegador la pausó</span>
+          </button>
+        )}
         {[0, 1].map((i) => (
           <div key={i} ref={boxes[i]} className="absolute inset-0 transition-opacity duration-1000" style={{ opacity: i === active ? 1 : 0 }} />
         ))}
@@ -283,6 +398,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
             {finished ? '🎵 Terminó tu lista' : `🎵 ${at + 1} de ${videos.length}`}
             {!finished && v?.to !== undefined && ` · hasta ${fmtSeconds(v.to)}`}
             {!finished && v?.loop && <Repeat className="h-3 w-3" />}
+            {skipped > 0 && <span className="text-amber-300">· {skipped} saltada{skipped > 1 ? 's' : ''}</span>}
           </span>
           <span className="block truncate text-xs font-semibold text-[#fff]">{title || 'Cargando…'}</span>
         </span>
