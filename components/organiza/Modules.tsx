@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Check, Plus, Trash2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { DatabaseTable } from '@/components/databases/DatabaseTable';
 import { useDatabaseStore } from '@/utils/useDatabases';
 import { createFromTemplate } from '@/components/databases/DatabasesView';
@@ -47,13 +47,49 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
     const habitsDone = doneList.includes(h) ? doneList.filter((x) => x !== h) : [...doneList, h];
     checks.mark(item.title, today, check?.done ?? false, { ...check?.value, [key]: habitsDone });
   };
+  // Cambiar el texto: el paso conserva su lugar y, si ya estaba marcado hoy, sigue marcado.
+  const rename = (from: string, to: string) => {
+    const t = to.trim();
+    if (!t || t === from || habits.includes(t)) return;
+    patch({ habits: habits.map((x) => (x === from ? t : x)) });
+    if (doneList.includes(from)) checks.mark(item.title, today, check?.done ?? false, { ...check?.value, [key]: doneList.map((x) => (x === from ? t : x)) });
+  };
+  // Mover: se arrastra desde la manija ⋮⋮ (mouse o dedo) y se suelta en su nuevo lugar.
+  const list = useRef<HTMLUListElement>(null);
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const startDrag = (e: React.PointerEvent, from: number) => {
+    e.preventDefault();
+    let to = from;
+    setDrag({ from, to });
+    const move = (ev: PointerEvent) => {
+      const rows = Array.from(list.current?.children ?? []) as HTMLElement[];
+      const at = rows.findIndex((r) => ev.clientY < r.getBoundingClientRect().top + r.offsetHeight / 2);
+      to = at === -1 ? rows.length - 1 : at > from ? at - 1 : at;
+      setDrag({ from, to });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setDrag(null);
+      if (to !== from) {
+        const next = [...habits];
+        const [it] = next.splice(from, 1);
+        next.splice(to, 0, it);
+        patch({ habits: next });
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const shown = drag ? (() => { const n = [...habits]; const [it] = n.splice(drag.from, 1); n.splice(drag.to, 0, it); return n; })() : habits;
   return (
     <>
-      <ul className="space-y-1">
-        {habits.map((h) => (
-          <li key={h} className="flex items-center gap-2">
+      <ul ref={list} className="space-y-1">
+        {shown.map((h) => (
+          <li key={h} className={`group/step flex items-center gap-2 rounded-lg ${drag && habits[drag.from] === h ? 'bg-white/[0.06] ring-1 ring-sky-400/40' : ''}`}>
+            <button type="button" aria-label={`Mover ${h}`} data-help="Arrastra para mover" onPointerDown={(e) => startDrag(e, habits.indexOf(h))} className="cursor-grab touch-none p-0.5 text-zinc-600 opacity-60 hover:text-zinc-300 group-hover/step:opacity-100 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button>
             <button type="button" role="checkbox" aria-checked={doneList.includes(h)} aria-label={h} onClick={() => toggle(h)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ring-1 ${doneList.includes(h) ? 'bg-emerald-500 text-[#fff] ring-emerald-400' : 'ring-white/20'}`}>{doneList.includes(h) && <Check className="h-3.5 w-3.5" />}</button>
-            <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{h}</span>
+            <input key={h} defaultValue={h} aria-label="Editar paso" onBlur={(e) => rename(h, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = h; e.currentTarget.blur(); } }} className={`${input} text-zinc-200`} />
             <button type="button" aria-label={`Quitar ${h}`} onClick={() => patch({ habits: habits.filter((x) => x !== h) })} className="p-1 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
           </li>
         ))}
