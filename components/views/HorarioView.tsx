@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Bell, BellRing, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, Target, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { freeGaps, toTime } from '@/components/organiza/dayPlan';
-import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor } from '@/components/organiza/model';
+import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 type ViewId = 'tablero' | 'semana' | 'mi-semana' | 'galeria' | 'lista';
@@ -28,6 +28,13 @@ const VIEW_KEY = 'organiza-horario-view';
 export const HorarioView: React.FC = () => {
   const h = useHorario();
   const c = useChecks();
+  // Lo que marcaste hoy en «¿Lo hiciste hoy?» se ve en la tarjeta de hoy.
+  const todayStatus = (i: Item): Status => {
+    const now = new Date();
+    if (i.weekday !== weekdayOf(now)) return null;
+    const k = c.checks.find((x) => x.ref === refOf(i.title) && x.day === iso(now));
+    return k?.done ? 'hecho' : k ? 'no' : 'pendiente';
+  };
   const confirm = useConfirm();
   const [view, setViewState] = useState<ViewId>(() => {
     try {
@@ -135,7 +142,7 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <div className="mt-5">
-        {view === 'tablero' && <Board items={shown} labels={h.labels} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} status={todayStatus} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -294,9 +301,14 @@ const Pill: React.FC<{ color: string; children: React.ReactNode }> = ({ color, c
   </span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, onOpen, draggable }) => {
+type Status = 'hecho' | 'no' | 'pendiente' | null;
+const STATUS = { hecho: { label: '✅ Hecho hoy', color: '#22c55e' }, no: { label: '✖️ No lo hice hoy', color: '#f43f5e' }, pendiente: { label: 'Pendiente hoy', color: '#94a3b8' } };
+const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.ReactNode; help: string }> = ({ color, icon: I, children, help }) => (
+  <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
+);
+
+const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
-  const stage = stageOf(item.stage);
   return (
     <button
       type="button"
@@ -313,15 +325,15 @@ const Card: React.FC<{ item: Item; labels: Label[]; onOpen: (id: string) => void
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
         <div className="flex flex-col items-start gap-1.5">
-          <Pill color={stage.color}>{stage.label}</Pill>
-          {label && <Pill color={label.color}>{label.name}</Pill>}
+          {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
+          {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
         </div>
         <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
           <span>{item.time}</span>
           <span className="ml-auto flex items-center gap-1.5">
-            {item.focus && <span data-help="Modo focus"><Focus className="h-3.5 w-3.5 text-violet-300" /></span>}
-            {item.alarm === 'alarma' && <span data-help="Alarma"><BellRing className="h-3.5 w-3.5 text-amber-300" /></span>}
-            {item.alarm === 'notificacion' && <span data-help="Notificación"><Bell className="h-3.5 w-3.5 text-sky-300" /></span>}
+            {item.focus && <Chip color="#a78bfa" icon={Target} help="Tiene modo focus">Focus</Chip>}
+            {item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
+            {item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
           </span>
         </div>
       </div>
@@ -333,7 +345,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; onOpen: (id: string) => void
 
 type ViewProps = { items: Item[]; labels: Label[]; onOpen: (id: string) => void };
 
-const Board: React.FC<ViewProps & { onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { status?: (i: Item) => Status; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, onOpen, onAdd, onMove }) => {
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
   return (
@@ -355,7 +367,7 @@ const Board: React.FC<ViewProps & { onAdd: (d: number) => void; onMove: (id: str
               return (
                 <React.Fragment key={i.id}>
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} status={status?.(i)} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
