@@ -9,14 +9,16 @@ import { DB_TEMPLATES } from '@/utils/databases';
 import type { UserDatabase } from '@/utils/databases';
 import { iso, refOf, type Item, type Module } from '@/components/organiza/model';
 import { Box, moveItem, useDragList } from '@/components/organiza/PanelSections';
+import { PlanLink } from '@/components/organiza/Planner';
+import { slotFor } from '@/components/organiza/plan';
 import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
 import type { useChecks } from '@/components/organiza/useHorario';
 
-type Props = { item: Item; modules: Module[]; checks: ReturnType<typeof useChecks>; onChange: (m: Module[]) => void };
+type Props = { item: Item; modules: Module[]; checks: ReturnType<typeof useChecks>; onChange: (m: Module[]) => void; weekdays?: number[] };
 const input = 'w-full min-w-0 rounded-md bg-transparent px-1.5 py-1 text-sm text-white outline-none focus:bg-white/[0.06]';
 
 /** El mundo de una tarea: cada bloque se agrega, se renombra y se borra. */
-export const Modules: React.FC<Props> = ({ item, modules, checks, onChange }) => {
+export const Modules: React.FC<Props> = ({ item, modules, checks, onChange, weekdays }) => {
   const patch = (id: string, p: Partial<Module>) => onChange(modules.map((m) => (m.id === id ? { ...m, ...p } : m)));
   // Cada bloque se pliega con la flecha y se mueve con la manija ⋮⋮ (el plegado se recuerda en este dispositivo).
   const [closed, setClosed] = useState<string[]>(() => {
@@ -52,6 +54,8 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange }) =>
           {(m.type === 'habitos' || m.type === 'reglas') && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
           {m.type === 'sueno' && <Sleep item={item} checks={checks} />}
           {m.type === 'youtube' && <YouTubeEditor m={m} patch={(p) => patch(m.id, p)} />}
+          {m.type === 'alimentacion' && <PlanLink kind="meals" weekdays={weekdays?.length ? weekdays : [item.weekday]} slot={slotFor(item.title)} />}
+          {m.type === 'entrenamiento' && <PlanLink kind="workouts" weekdays={weekdays?.length ? weekdays : [item.weekday]} />}
           {m.type === 'tabla' && <Grid m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'base' && <Base m={m} patch={(p) => patch(m.id, p)} />}
         </Box>

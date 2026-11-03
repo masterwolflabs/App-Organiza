@@ -88,3 +88,7 @@ claude
 - Los cambios de base de datos solo agregan cosas. No borres tablas ni columnas.
 - Las claves privadas nunca van en el código. Las de IA viven solo en la nube.
 - Para traer mejoras de la plantilla: `npm run update:template`.
+
+## Alimentación y Entrenamiento (3 nov 2026, rama `organiza-alimentacion-entrenamiento`)
+
+Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza/Planner.tsx` (grilla semanal, fichas con portada, metas) y `components/organiza/plan.ts` (`usePlan`, `useNutrition`). Tablas `organiza_meals`, `organiza_workouts`, `organiza_nutrition` (`docs/sql/34`, ya aplicada). Una acción se conecta con los módulos `alimentacion` / `entrenamiento` (`PlanLink`), que muestran lo del día de la acción. Pendiente: organizar compras (tarea `organizar-compras`).

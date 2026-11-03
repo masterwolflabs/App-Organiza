@@ -15,6 +15,7 @@ import { DailyPage } from '@/components/views/DailyPage';
 import { ChecklistView } from '@/components/views/ChecklistView';
 import { RutaView } from '@/components/views/RutaView';
 import { ConexionesView } from '@/components/views/ConexionesView';
+import { AlimentacionView, EntrenamientoView } from '@/components/organiza/Planner';
 
 export type ViewProps = { onOpenSettings: () => void; onOpenCloud: () => void };
 
@@ -28,6 +29,8 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   checklist: ChecklistView,
   ruta: RutaView,
   conexiones: ConexionesView,
+  alimentacion: AlimentacionView,
+  entrenamiento: EntrenamientoView,
 };
 
 /** Páginas propias de Organiza dentro de Configuración. */
