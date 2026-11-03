@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { AlarmClock, Bell, BellRing, Target, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { useCalendar } from '@/components/calendar/useCalendar';
+import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
+import { AlarmClock, Bell, BellRing, CalendarClock, Target, TriangleAlert, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -28,6 +30,11 @@ const VIEW_KEY = 'organiza-horario-view';
 export const HorarioView: React.FC = () => {
   const h = useHorario();
   const c = useChecks();
+  // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
+  const weekStart = useMemo(() => startOfWeek(new Date()), []);
+  const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
+  const cal = useCalendar(weekStart, weekEnd);
+  const occ = useMemo(() => expand(cal.events.filter((e) => e.source !== 'horario'), weekStart, weekEnd), [cal.events, weekStart, weekEnd]);
   // Lo que marcaste hoy en «¿Lo hiciste hoy?» se ve en la tarjeta de hoy.
   const todayStatus = (i: Item): Status => {
     const now = new Date();
@@ -142,7 +149,7 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <div className="mt-5">
-        {view === 'tablero' && <Board items={shown} labels={h.labels} status={todayStatus} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} status={todayStatus} weekStart={weekStart} occ={occ} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -307,7 +314,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occurrence[]; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, clash = [], onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -315,7 +322,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; onOpen: (id
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
-      className="block w-full overflow-hidden rounded-xl bg-white/[0.04] text-left ring-1 ring-white/10 transition hover:bg-white/[0.08]"
+      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length ? 'ring-rose-400/60' : 'ring-white/10'}`}
       style={label ? { background: `linear-gradient(0deg, ${label.color}12, ${label.color}12)` } : undefined}
     >
       {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
@@ -326,6 +333,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; onOpen: (id
         </p>
         <div className="flex flex-col items-start gap-1.5">
           {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
+          {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
           {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
         </div>
         <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
@@ -341,16 +349,28 @@ const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; onOpen: (id
   );
 };
 
+const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
 /* ── Vistas ─────────────────────────────────────────────────────────── */
 
 type ViewProps = { items: Item[]; labels: Label[]; onOpen: (id: string) => void };
 
-const Board: React.FC<ViewProps & { status?: (i: Item) => Status; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, onOpen, onAdd, onMove }) => {
+/** Eventos del calendario que se cruzan con un bloque de ese día. */
+const clashes = (i: Item, day: Occurrence[]) => {
+  const a = toMinutes(i.time);
+  const b = a + i.minutes;
+  return day.filter((o) => !o.ev.all_day && minutesOf(o.start) < b && (sameDay(o.start, o.end) ? minutesOf(o.end) : 1440) > a);
+};
+
+const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, weekStart, occ = [], onOpen, onAdd, onMove }) => {
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
   return (
     <div ref={scroller} className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" data-tour="tablero">
-      {WEEK.map((name, d) => (
+      {WEEK.map((name, d) => {
+        const date = weekStart ? addDays(weekStart, d) : null;
+        const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
+        return (
         <section
           key={name}
           onDragOver={(e) => e.preventDefault()}
@@ -358,16 +378,28 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; onAdd: (d: num
             const id = e.dataTransfer.getData('text/plain');
             if (id) onMove(id, d);
           }}
-          className="w-64 shrink-0 rounded-2xl bg-white/[0.025] p-2 ring-1 ring-white/5"
+          className="relative w-64 shrink-0 overflow-hidden rounded-2xl bg-white/[0.025] p-2 ring-1 ring-white/5"
         >
-          <h2 className="px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${d === today ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}</span></h2>
-          <div className="mt-1 space-y-2">
+          {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
+          <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${d === today ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
+          <div className="relative mt-1 space-y-2">
+            {dayOcc.length > 0 && (
+              <div className="space-y-1">
+                {dayOcc.map((o) => (
+                  <p key={o.key} data-help="Está en tu calendario ese día" className="flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-xs text-zinc-200" style={{ borderColor: `${colorOf(o.ev)}88`, background: `${colorOf(o.ev)}14` }}>
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0" style={{ color: colorOf(o.ev) }} />
+                    <span className="tabular-nums text-zinc-400">{o.ev.all_day ? 'Todo el día' : fmtTime(o.start)}</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold">{o.ev.title}</span>
+                  </p>
+                ))}
+              </div>
+            )}
             {items.filter((i) => i.weekday === d).map((i, n, day) => {
               const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
               return (
                 <React.Fragment key={i.id}>
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} status={status?.(i)} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} status={status?.(i)} clash={clashes(i, dayOcc)} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
@@ -376,7 +408,8 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; onAdd: (d: num
             </button>
           </div>
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 };
