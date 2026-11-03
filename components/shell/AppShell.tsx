@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js';
 import { APP } from '@/app.config';
 import { ALL_SECTIONS, AnySection } from '@/utils/sections';
-import { VIEWS } from '@/components/views';
+import { SETTINGS_PAGES, VIEWS } from '@/components/views';
 import { supabase } from '@/lib/supabaseClient';
 import { AmbientBackdrop } from '@/components/shell/AmbientBackdrop';
 import { Sidebar } from '@/components/shell/Sidebar';
@@ -49,6 +49,15 @@ export function AppShell({ session }: { session: Session }) {
   const [section, setSection] = useState<AnySection>('inicio');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userCenter, setUserCenter] = useState<UserSection | null>(null);
+  // Perfil y Configuración ocupan una entrada del historial: Atrás del navegador (o deslizar) los cierra.
+  const openUserCenter = useCallback((s: UserSection) => {
+    if (!history.state?.userCenter) history.pushState({ ...history.state, userCenter: true }, '', window.location.href);
+    setUserCenter(s);
+  }, []);
+  const closeUserCenter = useCallback(() => {
+    if (history.state?.userCenter) history.back();
+    else setUserCenter(null);
+  }, []);
   const [menteOpen, setMenteOpen] = useState(false);
   // IA: la conversación abierta sobrevive al navegar; con el chat abierto, ocupa toda la pantalla.
   const [iaConversationId, setIaConversationId] = useState<string | null>(null);
@@ -147,7 +156,7 @@ export function AppShell({ session }: { session: Session }) {
     enabled: !fullScreen,
   });
 
-  const openSettings = useCallback(() => setUserCenter('configuracion'), []);
+  const openSettings = useCallback(() => openUserCenter('configuracion'), [openUserCenter]);
   const goCloud = useCallback(() => {
     openCloud();
   }, []);
@@ -166,8 +175,8 @@ export function AppShell({ session }: { session: Session }) {
   const getSearchItems = (): SearchItem[] => [
     ...quick,
     ...ALL_SECTIONS.map((s): SearchItem => ({ id: `s-${s.key}`, kind: 'seccion', title: s.label, run: () => navigate(s.key) })),
-    { id: 'perfil', kind: 'ajuste', title: 'Perfil', keywords: 'nombre foto cuenta', run: () => setUserCenter('perfil') },
-    { id: 'seguridad', kind: 'ajuste', title: 'Seguridad e inicio de sesión', keywords: 'contraseña dispositivos sesiones', run: () => setUserCenter('seguridad') },
+    { id: 'perfil', kind: 'ajuste', title: 'Perfil', keywords: 'nombre foto cuenta', run: () => openUserCenter('perfil') },
+    { id: 'seguridad', kind: 'ajuste', title: 'Seguridad e inicio de sesión', keywords: 'contraseña dispositivos sesiones', run: () => openUserCenter('seguridad') },
     { id: 'tema', kind: 'ajuste', title: 'Tema claro u oscuro', keywords: 'apariencia color paleta luces', run: openSettings },
     ...(openMente ? [{ id: 'mente', kind: 'accion' as const, title: 'Mente Singular', keywords: 'administración admin laboratorio auditoría', icon: '🧠', run: openMente }] : []),
     // Agrega aquí los registros de tu app: { kind: 'registro', title, subtitle, amount?, run }
@@ -220,7 +229,7 @@ export function AppShell({ session }: { session: Session }) {
             extra={<SpaceSwitch />}
             search={<GlobalSearch getItems={getSearchItems} quick={quick} />}
             onOpenSidebar={() => setSidebarOpen(true)}
-            onOpenUserCenter={setUserCenter}
+            onOpenUserCenter={openUserCenter}
             onOpenCloud={goCloud}
             onOpenMente={openMente}
             onLogout={() => supabase.auth.signOut()}
@@ -258,7 +267,8 @@ export function AppShell({ session }: { session: Session }) {
             providers: (user.identities ?? []).map((i) => i.provider),
           }}
           initial={userCenter}
-          onClose={() => setUserCenter(null)}
+          pages={SETTINGS_PAGES}
+          onClose={closeUserCenter}
           onProfileSaved={setProfileName}
           settings={{
             theme,

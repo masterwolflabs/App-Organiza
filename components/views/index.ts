@@ -3,7 +3,9 @@
  * Archivo propio de cada app (la plantilla nunca lo pisa).
  */
 import type React from 'react';
+import { Plug } from 'lucide-react';
 import type { SectionKey } from '@/app.config';
+import type { SettingsPage } from '@/components/user/UserCenter';
 import { HoyView } from '@/components/views/HoyView';
 import { CalendarioView } from '@/components/views/CalendarioView';
 import { HorarioView } from '@/components/views/HorarioView';
@@ -27,3 +29,6 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   ruta: RutaView,
   conexiones: ConexionesView,
 };
+
+/** Páginas propias de Organiza dentro de Configuración. */
+export const SETTINGS_PAGES: SettingsPage[] = [{ key: 'conexiones', label: 'Conexiones', icon: Plug, View: ConexionesView }];

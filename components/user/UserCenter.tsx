@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Check, Database, Gem, HardDrive, Loader2, Palette, Settings, ShieldCheck, UserRound, Vault } from 'lucide-react';
-import { APP } from '@/app.config';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Check, Database, Gem, HardDrive, Loader2, Palette, Settings, ShieldCheck, UserRound, Vault, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -11,7 +10,16 @@ import { ThemePref } from '@/utils/theme';
 import { UiPrefs } from '@/utils/uiPrefs';
 import { EdgeDrawer } from '@/components/ui/EdgeDrawer';
 
-export type UserSection = 'perfil' | 'seguridad' | 'configuracion';
+/** 'perfil' | 'seguridad' | 'configuracion', o la clave de una página propia de la app (SETTINGS_PAGES). */
+export type UserSection = string;
+
+/** Página de ajustes propia de una app (p. ej. Conexiones en Organiza), en components/views/index.ts. */
+export interface SettingsPage {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  View: React.FC;
+}
 
 export interface UserInfo {
   id: string;
@@ -45,59 +53,83 @@ const SOON: { label: string; icon: React.ElementType }[] = [
   { label: 'Datos y privacidad', icon: Database },
 ];
 
-/** Centro de usuario a pantalla completa (versión plantilla del de Finance). */
+/**
+ * Centro de usuario a pantalla completa (versión plantilla del de Finance). La barra de arriba
+ * con ← y ✕ siempre se ve (el menú izquierdo se esconde en el computador); Esc también cierra.
+ */
 export const UserCenter: React.FC<{
   user: UserInfo;
   initial: UserSection;
   settings: SettingsApi;
+  pages?: SettingsPage[];
   onClose: () => void;
   onProfileSaved: (displayName: string) => void;
-}> = ({ user, initial, settings, onClose, onProfileSaved }) => {
+}> = ({ user, initial, settings, pages = [], onClose, onProfileSaved }) => {
   const [section, setSection] = useState<UserSection>(initial);
+  useEffect(() => setSection(initial), [initial]);
+  const nav = [...NAV, ...pages];
+  const Page = pages.find((p) => p.key === section)?.View;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
     <BodyPortal>
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#09090b] text-white md:flex-row">
-        <EdgeDrawer className="flex shrink-0 flex-col gap-1 border-b border-zinc-800 bg-[#0c0c0f] p-3 md:w-72 md:border-b-0 md:border-r">
-          <button onClick={onClose} className="mb-2 flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white">
-            <ArrowLeft className="h-4 w-4" /> Volver a {APP.name}
+      <div className="fixed inset-0 z-[60] flex flex-col bg-[#09090b] text-white">
+        <header className="flex shrink-0 items-center gap-3 border-b border-zinc-800/80 px-4 py-3 sm:px-6">
+          <button onClick={onClose} aria-label="Volver" data-help="Volver" className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.06] hover:text-white">
+            <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="mb-2 hidden items-center gap-3 px-3 py-2 md:flex">
-            <UserAvatar name={user.displayName} url={user.avatarUrl} className="h-10 w-10 text-sm" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{user.displayName}</div>
-              <div className="truncate text-xs text-zinc-500">{user.email}</div>
+          <UserAvatar name={user.displayName} url={user.avatarUrl} className="h-8 w-8 text-xs" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{user.displayName}</p>
+            <p className="truncate text-[11px] text-zinc-500">{user.email}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" data-help="Cerrar" className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.06] hover:text-white md:flex">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <EdgeDrawer className="flex shrink-0 flex-col gap-1 border-b border-zinc-800 bg-[#0c0c0f] p-3 md:w-72 md:border-b-0 md:border-r">
+            <nav className="flex gap-1 overflow-x-auto md:flex-col">
+              {nav.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setSection(key)}
+                  className={`flex shrink-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${
+                    section === key ? 'border-sky-500/30 bg-sky-600/15 text-sky-300' : 'border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-4 hidden space-y-1 md:block">
+              <p className="px-3 text-[11px] font-medium text-zinc-600">Próximamente</p>
+              {SOON.map(({ label, icon: Icon }) => (
+                <div key={label} className="flex items-center gap-3 px-3 py-2 text-sm text-zinc-600">
+                  <Icon className="h-4 w-4" /> {label}
+                </div>
+              ))}
             </div>
-          </div>
-          <nav className="flex gap-1 overflow-x-auto md:flex-col">
-            {NAV.map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setSection(key)}
-                className={`flex shrink-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${
-                  section === key ? 'border-sky-500/30 bg-sky-600/15 text-sky-300' : 'border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
-              >
-                <Icon className="h-4 w-4" /> {label}
-              </button>
-            ))}
-          </nav>
-          <div className="mt-4 hidden space-y-1 md:block">
-            <p className="px-3 text-[11px] font-medium text-zinc-600">Próximamente</p>
-            {SOON.map(({ label, icon: Icon }) => (
-              <div key={label} className="flex items-center gap-3 px-3 py-2 text-sm text-zinc-600">
-                <Icon className="h-4 w-4" /> {label}
-              </div>
-            ))}
-          </div>
-        </EdgeDrawer>
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
-          <div className="mx-auto max-w-2xl space-y-6">
-            {section === 'perfil' && <Perfil user={user} onSaved={onProfileSaved} />}
-            {section === 'seguridad' && <Seguridad user={user} />}
-            {section === 'configuracion' && <Configuracion settings={settings} />}
-          </div>
-        </main>
+          </EdgeDrawer>
+          <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
+            <div className="mx-auto max-w-2xl space-y-6">
+              {section === 'perfil' && <Perfil user={user} onSaved={onProfileSaved} />}
+              {section === 'seguridad' && <Seguridad user={user} />}
+              {section === 'configuracion' && <Configuracion settings={settings} pages={pages} go={setSection} />}
+              {Page && <Page />}
+            </div>
+          </main>
+        </div>
       </div>
     </BodyPortal>
   );
@@ -253,9 +285,18 @@ const Switch: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: str
   </label>
 );
 
-const Configuracion: React.FC<{ settings: SettingsApi }> = ({ settings: s }) => (
+const Configuracion: React.FC<{ settings: SettingsApi; pages: SettingsPage[]; go: (key: UserSection) => void }> = ({ settings: s, pages, go }) => (
   <>
     <Title title="Configuración" text="Se guarda en este navegador." />
+    {pages.length > 0 && (
+      <div className="flex flex-wrap gap-2">
+        {pages.map(({ key, label, icon: Icon }) => (
+          <button key={key} type="button" onClick={() => go(key)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold hover:bg-white/[0.06]">
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
+      </div>
+    )}
     <Card title="Tema">
       <div className="flex flex-wrap gap-2">
         {(
