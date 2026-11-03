@@ -33,6 +33,7 @@ import { useMyRole } from '@/utils/mente';
 import { SpaceProvider, SpaceSwitch } from '@/components/organiza/space';
 import { GuidedTour, TourPrompt } from '@/components/tour/GuidedTour';
 import { Reminders } from '@/components/organiza/Reminders';
+import { AutoFocus } from '@/components/organiza/AutoFocus';
 
 /**
  * Esqueleto de la app (versión plantilla del app/page.tsx de Finance).
@@ -314,6 +315,7 @@ export function AppShell({ session }: { session: Session }) {
         />
       )}
       <Reminders />
+      <AutoFocus />
 
       {/* Calculadora de Finance: flota encima de todas las páginas y ventanas (portal, z-[95]). */}
       <CalculatorWidget ref={calculatorRef} />

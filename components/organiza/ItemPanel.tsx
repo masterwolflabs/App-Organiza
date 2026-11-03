@@ -159,6 +159,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               </label>
               {item.focus && (
                 <>
+                  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
+                    <span><b className="block text-sm font-semibold text-white">⏰ Abrirse solo a las {item.time}</b><span className="text-xs text-zinc-400">Con Organiza abierta, el focus se abre a esa hora (la de tu dispositivo, donde estés). Lo puedes cerrar cuando quieras.</span></span>
+                    <input type="checkbox" checked={!!item.auto_focus} onChange={(e) => set({ auto_focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
+                  </label>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setFocusing(true)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500"><Play className="h-4 w-4" /> Empezar {item.minutes} min de focus</button>
                     <button type="button" onClick={() => setSetup(true)} data-help="Música, crossfade y bucle del focus" className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.1]"><Settings2 className="h-4 w-4" /> Configurar{(item.modules.find((m) => m.type === 'youtube')?.videos?.length ?? 0) ? <span className="rounded-full bg-sky-500/25 px-1.5 text-[11px] text-sky-200">🎵 {item.modules.find((m) => m.type === 'youtube')?.videos?.length ?? 0}</span> : null}</button>
