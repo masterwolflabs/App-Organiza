@@ -164,6 +164,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const [finished, setFinished] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [skipped, setSkipped] = useState(0);
+  // La última que YouTube no dejó tocar aquí (error 150: el dueño o el sello lo bloquean fuera de YouTube).
+  const [blockedSong, setBlockedSong] = useState<number | null>(null);
   const [showList, setShowList] = useState(false);
   const list = useRef(videos);
   list.current = videos;
@@ -226,6 +228,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         onError: () => {
           if (slot !== activeRef.current) return;
           setSkipped((n) => n + 1);
+          setBlockedSong(index);
           fading.current = false;
           setTimeout(() => advance(true), 0);
         },
@@ -407,6 +410,12 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         <button type="button" aria-label="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
         <button type="button" aria-label="Siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
       </div>
+      {blockedSong !== null && videos[blockedSong] && (
+        <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+          ⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube.{' '}
+          <a href={`https://www.youtube.com/watch?v=${parseYouTube(videos[blockedSong].url)?.video ?? ''}&t=${Math.floor(videos[blockedSong].from ?? 0)}s`} target="_blank" rel="noreferrer" className="font-semibold underline">Abrir en YouTube ↗</a>
+        </p>
+      )}
       {showList && (
         <ul className="max-h-48 overflow-y-auto border-t border-white/10 py-1">
           {videos.map((x, i) => {

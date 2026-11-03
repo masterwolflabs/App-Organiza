@@ -20,7 +20,7 @@ const EmbedCheck: React.FC<{ video: string }> = ({ video }) => {
     };
   }, [video]);
   if (ok !== false) return null;
-  return <p className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">⚠️ Este video no se puede reproducir fuera de YouTube (lo bloqueó quien lo subió). En el focus se va a saltar: busca otra subida de la misma canción.</p>;
+  return <p className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">⚠️ Esta canción no puede sonar dentro de Organiza: su dueño (o el sello, por derechos) solo deja escucharla en YouTube. En el focus se salta y te da un botón para abrirla en YouTube. Si quieres que suene aquí, busca otra subida (por ejemplo «audio» o «letra») y usa 🔄 Cambiar.</p>;
 };
 
 /**
