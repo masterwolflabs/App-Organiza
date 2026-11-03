@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDb } from '@/components/organiza/db';
 import { useSpace } from '@/components/organiza/space';
-import { dayItems, scheduleFor, type DayPlan } from '@/components/organiza/dayPlan';
+import { dayItems, scheduleFor, type DayPlan, freeTime } from '@/components/organiza/dayPlan';
 import { ALL_DAYS, daysOf, toMinutes, type Sleep, BYDAY_OF, EMANUEL_LABELS, iso, modulesFor, refOf, TEMPLATES, weekdayOf, type Check, type DayClose, type Item, type Label, type Schedule } from '@/components/organiza/model';
 
 const ACTIVE = 'organiza-schedule';
@@ -81,9 +81,12 @@ export function useHorario() {
   }, [db, items, touch]);
 
   const addItem = useCallback(async (scheduleId: string, weekday: number, p: Partial<Item> = {}) => {
-    const sort = items.filter((i) => i.schedule_id === scheduleId && i.weekday === weekday).length;
+    const sameDay = items.filter((i) => i.schedule_id === scheduleId && i.weekday === weekday);
+    const sort = sameDay.length;
     const title = p.title ?? 'Nueva tarea';
-    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time: '09:00', minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p });
+    // Nace en la primera hora libre desde las 9:00 (no encima de otra acción).
+    const time = freeTime(sameDay, '09:00', p.minutes ?? 30);
+    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time, minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p });
     if (made) setItems((l) => [...l, made]);
     touch(scheduleId);
     return made ?? null;

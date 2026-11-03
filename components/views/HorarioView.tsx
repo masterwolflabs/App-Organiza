@@ -10,7 +10,7 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
-import { freeGaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
+import { freeGaps, overlaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
@@ -332,7 +332,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; streak?: number; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, streak = 0, status = null, clash = [], move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: number; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak = 0, status = null, clash = [], move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -340,7 +340,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; streak?: number; status?: St
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
-      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length ? 'ring-rose-400/60' : 'ring-white/10'}`}
+      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length ? 'ring-rose-400/60' : 'ring-white/10'}`}
       style={label ? { background: `linear-gradient(0deg, ${label.color}12, ${label.color}12)` } : undefined}
     >
       {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
@@ -357,6 +357,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; streak?: number; status?: St
             </span>
           )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+          {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
           {!move?.off && move?.time && <Pill color="#38bdf8">↪ Este día a las {move.time}</Pill>}
           {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
@@ -442,7 +443,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: I
               return (
                 <React.Fragment key={i.id}>
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} streak={streak?.(i)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}

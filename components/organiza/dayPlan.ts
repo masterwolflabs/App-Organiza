@@ -28,6 +28,31 @@ export function dayItems(date: Date, schedules: Schedule[], items: Item[], plan?
   return [...own, ...extras].sort(byTime);
 }
 
+/** Bloques ocupados en minutos del día; lo que pasa de medianoche (dormir) también ocupa la mañana. */
+const spans = (list: Pick<Item, 'time' | 'minutes'>[]) => list.flatMap((i): [number, number][] => {
+  const a = toMinutes(i.time);
+  const b = a + i.minutes;
+  return b > 1440 ? [[a, b], [0, b - 1440]] : [[a, b]];
+});
+
+/** Qué acciones se cruzan con un bloque de `minutes` que empieza en `time`. */
+export const overlaps = <T extends Pick<Item, 'time' | 'minutes'>>(busy: T[], time: string, minutes: number) => {
+  const t = toMinutes(time);
+  return busy.filter((i) => spans([i]).some(([a, b]) => t < b && t + minutes > a));
+};
+
+/** Primera hora libre desde `wanted` donde cabe un bloque de `minutes` sin cruzarse con nada (Emanuel, 2026-11-03). */
+export function freeTime(busy: Pick<Item, 'time' | 'minutes'>[], wanted: string, minutes: number): string {
+  const blocks = spans(busy);
+  let t = toMinutes(wanted);
+  for (let k = 0; k < 300 && t + minutes <= 1440; k++) {
+    const hit = blocks.filter(([a, b]) => t < b && t + minutes > a);
+    if (!hit.length) return toTime(t);
+    t = Math.max(...hit.map(([, b]) => b));
+  }
+  return wanted;
+}
+
 /** Los espacios entre actividades. Son tiempo libre: no son tareas ni se llenan solos. */
 export function freeGaps(list: Pick<Item, 'time' | 'minutes'>[]): Gap[] {
   const sorted = [...list].sort((a, b) => toMinutes(a.time) - toMinutes(b.time));

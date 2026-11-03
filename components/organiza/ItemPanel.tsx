@@ -12,7 +12,7 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { FocusTimer } from '@/components/organiza/FocusTimer';
 import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
-import { toTime } from '@/components/organiza/dayPlan';
+import { freeTime, overlaps, toTime } from '@/components/organiza/dayPlan';
 import { coverCss, emojiFor, honesty, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
 import { AlarmPicker, Categories, DurationWheel, EmojiPicker, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
@@ -28,6 +28,17 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const [focusing, setFocusing] = useState(false);
   const [tour, setTour] = useState(false);
   const [setup, setSetup] = useState(false);
+  const [notice, setNotice] = useState('');
+  // Cambiar la hora: si choca con otra acción en alguno de sus días, rebota a la siguiente hora libre y avisa.
+  const setTime = (wanted: string) => {
+    const busy = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && weekdays.includes(i.weekday) && refOf(i.title) !== ref);
+    const time = freeTime(busy, wanted, item.minutes);
+    if (time !== wanted) {
+      const who = [...new Set(overlaps(busy, wanted, item.minutes).map((i) => i.title))].join(', ');
+      setNotice(`⏰ Quedó a las ${time} para no chocar con ${who}.`);
+    } else setNotice('');
+    set({ time });
+  };
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -115,10 +126,11 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   }
                   await h.repeatOn(item, d, on);
                 }} /></div>
-                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={item.time} onChange={(time) => set({ time })} /></div>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={item.time} onChange={setTime} /></div>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={item.minutes} onChange={(minutes) => set({ minutes })} /></div>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(item.time) + item.minutes)} onChange={(end) => set({ minutes: ((toMinutes(end) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} /></div>
               </div>
+              {notice && <p className="rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-200 ring-1 ring-sky-400/25">{notice}</p>}
 </>) },
               { id: 'importancia', tour: 'hab-importancia', title: '⚖️ Importancia', body: (<>
               <Importance value={item.flex} onChange={(flex) => set({ flex, priority: LEVELS.findIndex((l) => l.id === flex) + 1 })} />
