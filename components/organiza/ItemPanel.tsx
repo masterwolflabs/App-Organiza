@@ -204,7 +204,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   ))}
                 </div>
               )}
-              <Modules item={item} modules={item.modules} checks={c} onChange={setModules} />
+              <Modules item={item} modules={item.modules} checks={c} onChange={setModules} weekdays={weekdays} />
               {!item.modules.length && !adding && <p className="mt-2 text-sm text-zinc-500">Agrega microhábitos, tu sueño, un plan de entrenamiento, de comidas o una base de datos.</p>}
 </>) },
             ]} />

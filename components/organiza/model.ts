@@ -8,7 +8,7 @@ import type React from 'react';
  */
 export type Space = 'persona' | 'empresa';
 export type AlarmKind = 'no' | 'notificacion' | 'alarma';
-export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'youtube';
+export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'youtube' | 'alimentacion' | 'entrenamiento';
 /** Un video de la lista de YouTube de una acción: desde/hasta en segundos (vacío = completo). */
 export type Video = { url: string; from?: number; to?: number; loop?: boolean };
 
@@ -167,7 +167,8 @@ export const MODULE_CHOICES: { key: string; emoji: string; label: string; hint: 
   { key: 'reglas', emoji: '📏', label: 'Reglas', hint: 'Lo que no haces en este momento (ej.: no revisar el teléfono)', make: () => ({ id: mid(), type: 'reglas', title: 'Reglas', habits: ['No revisar el teléfono'] }) },
   { key: 'sueno', emoji: '😴', label: 'Sueño', hint: 'A qué hora te acostaste y te levantaste', make: () => ({ id: mid(), type: 'sueno', title: 'Mi sueño' }) },
   { key: 'entreno', emoji: '🏋️', label: 'Plan de entrenamiento', hint: 'Día, ejercicio, series y repeticiones', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de entrenamiento', columns: ['Día', 'Ejercicio', 'Series', 'Reps', 'Peso'], rows: [['Lunes', '', '', '', '']] }) },
-  { key: 'comidas', emoji: '🍳', label: 'Plan de comidas', hint: 'Qué comes cada día de la semana', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de comidas', columns: ['Día', 'Desayuno', 'Almuerzo', 'Cena'], rows: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((d) => [d, '', '', '']) }) },
+  { key: 'alimentacion', emoji: '🍳', label: 'Conectar a Alimentación', hint: 'Lo que vas a comer ese día, con foto y cómo prepararlo', make: () => ({ id: mid(), type: 'alimentacion', title: 'Alimentación' }) },
+  { key: 'entrenamiento', emoji: '🏋️', label: 'Conectar a Entrenamiento', hint: 'Lo que entrenas ese día: ejercicios, series y reps', make: () => ({ id: mid(), type: 'entrenamiento', title: 'Entrenamiento' }) },
   { key: 'tabla', emoji: '🧾', label: 'Tabla libre', hint: 'Una tabla con las columnas que quieras', make: () => ({ id: mid(), type: 'tabla', title: 'Tabla', columns: ['Nombre', 'Detalle'], rows: [['', '']] }) },
   { key: 'youtube', emoji: '🎵', label: 'Lista de YouTube', hint: 'Videos que suenan solos en el modo focus', make: () => ({ id: mid(), type: 'youtube', title: 'Lista de YouTube', videos: [] }) },
   { key: 'base', emoji: '🗃️', label: 'Base de datos', hint: 'Una base dentro de esta tarea, como en Notion', make: () => ({ id: mid(), type: 'base', title: 'Base de datos' }) },
@@ -178,8 +179,8 @@ export function modulesFor(title: string): Module[] {
   const pick = (k: string) => MODULE_CHOICES.find((m) => m.key === k)!.make();
   if (/levantar/.test(t)) return [{ ...pick('habitos'), habits: ['5 flexiones', 'Lavarme la cara', 'Tomar mis pastillas', 'Oración de 1 minuto', 'Cambiarme de ropa'] }, { ...pick('reglas'), habits: ['No revisar el teléfono al despertar'] }, pick('sueno')];
   if (/acostar|dormir/.test(t)) return [pick('sueno'), { ...pick('reglas'), habits: ['Sin pantallas 30 min antes'] }];
-  if (/gym|entren/.test(t)) return [pick('entreno')];
-  if (/cocin|desayuno|almuerzo|cena/.test(t)) return [pick('comidas')];
+  if (/gym|entren|ejercic/.test(t)) return [pick('entrenamiento')];
+  if (/cocin|desayun|almuerz|cena|comida/.test(t)) return [pick('alimentacion')];
   return [];
 }
 
