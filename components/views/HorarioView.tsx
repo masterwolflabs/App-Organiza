@@ -11,7 +11,7 @@ import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
 import { freeGaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
-import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf } from '@/components/organiza/model';
+import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 type ViewId = 'tablero' | 'semana' | 'mi-semana' | 'galeria' | 'lista';
@@ -38,6 +38,12 @@ export const HorarioView: React.FC = () => {
   const cal = useCalendar(weekStart, weekEnd);
   const occ = useMemo(() => expand(cal.events.filter((e) => e.source !== 'horario'), weekStart, weekEnd), [cal.events, weekStart, weekEnd]);
   // Lo que marcaste hoy en «¿Lo hiciste hoy?» se ve en la tarjeta de hoy.
+  // Racha de cada acción (la misma cuenta que «¿Lo hiciste hoy?» del panel).
+  const streakFor = (i: Item) => {
+    const ref = refOf(i.title);
+    const days = [...new Set(h.activeItems.filter((x) => x.schedule_id === i.schedule_id && refOf(x.title) === ref).map((x) => x.weekday))];
+    return streakOf(ref, days, c.checks);
+  };
   const todayStatus = (i: Item): Status => {
     const now = new Date();
     if (i.weekday !== weekdayOf(now)) return null;
@@ -160,7 +166,7 @@ export const HorarioView: React.FC = () => {
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, moves) => h.setPlan(iso(date), { moves })} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, moves) => h.setPlan(iso(date), { moves })} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -326,7 +332,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, clash = [], move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; streak?: number; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, streak = 0, status = null, clash = [], move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -344,7 +350,12 @@ const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occ
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
         <div className="flex flex-col items-start gap-1.5">
-          {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
+          {(status || streak > 0) && (
+            <span className="flex flex-wrap items-center gap-1.5">
+              {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
+              {streak > 0 && <Pill color="#f59e0b">🔥 {streak} {streak === 1 ? 'día' : 'días'}</Pill>}
+            </span>
+          )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
           {!move?.off && move?.time && <Pill color="#38bdf8">↪ Este día a las {move.time}</Pill>}
@@ -376,7 +387,7 @@ const clashes = (i: Item, day: Occurrence[]) => {
   return day.filter((o) => !o.ev.all_day && minutesOf(o.start) < b && (sameDay(o.start, o.end) ? minutesOf(o.end) : 1440) > a);
 };
 
-const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
   const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
@@ -431,7 +442,7 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Da
               return (
                 <React.Fragment key={i.id}>
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} streak={streak?.(i)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
