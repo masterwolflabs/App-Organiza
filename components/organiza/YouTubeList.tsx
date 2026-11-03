@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Pause, Play, Repeat, SkipForward } from 'lucide-react';
+import { ListMusic, Pause, Play, Repeat, SkipForward } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
 
 /**
@@ -164,6 +164,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const [finished, setFinished] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [skipped, setSkipped] = useState(0);
+  const [showList, setShowList] = useState(false);
   const list = useRef(videos);
   list.current = videos;
   // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
@@ -403,8 +404,30 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           <span className="block truncate text-xs font-semibold text-[#fff]">{title || 'Cargando…'}</span>
         </span>
         <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} onClick={toggle} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
+        <button type="button" aria-label="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
         <button type="button" aria-label="Siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
       </div>
+      {showList && (
+        <ul className="max-h-48 overflow-y-auto border-t border-white/10 py-1">
+          {videos.map((x, i) => {
+            const id = parseYouTube(x.url)?.video;
+            return (
+              <li key={i}>
+                <button type="button" onClick={() => { jump(i, x.from ?? 0); setShowList(false); }} className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-white/10 ${i === at ? 'text-sky-200' : 'text-zinc-200'}`}>
+                  {id ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={`https://i.ytimg.com/vi/${id}/default.jpg`} alt="" className="h-7 w-10 rounded object-cover" />
+                  ) : (
+                    <span className="flex h-7 w-10 items-center justify-center rounded bg-white/10 text-[9px]">Lista</span>
+                  )}
+                  <span className="flex-1">Canción {i + 1}{x.to !== undefined ? ` · hasta ${fmtSeconds(x.to)}` : ''}</span>
+                  {i === at && <span>▶</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };

@@ -35,6 +35,9 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [loopAll, setLoopAll] = useState(current?.loopAll ?? false);
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
+  // Cambiar el link de una canción: conserva desde/hasta y bucle.
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
 
   // Un link pegado sin tocar «Agregar» también se guarda.
   const pending = parseYouTube(url) && !parseYouTube(url)?.list ? [{ url: url.trim() }] : [];
@@ -104,7 +107,18 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     ) : (
                       <span className="flex h-11 w-20 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-xs text-zinc-400">Playlist</span>
                     )}
-                    <input defaultValue={v.url} onBlur={(e) => parseYouTube(e.target.value) && set(i, { url: e.target.value.trim() })} aria-label="Link" className="min-w-0 flex-1 rounded-lg bg-transparent px-1.5 py-1 text-xs text-zinc-300 outline-none focus:bg-white/[0.05]" />
+                    {editing === i ? (
+                      <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={(e) => { e.preventDefault(); const p2 = parseYouTube(draft); if (!p2 || p2.list && !p2.video) return setError('Pega el link de una canción de YouTube.'); setError(''); set(i, { url: draft.trim() }); setEditing(null); }}>
+                        <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Pega el link nuevo" aria-label="Link nuevo" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-sky-400/50" />
+                        <button type="submit" className="rounded-lg bg-sky-600 px-2 text-xs font-semibold text-[#fff]">Listo</button>
+                        <button type="button" onClick={() => setEditing(null)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
+                      </form>
+                    ) : (
+                      <>
+                        <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300">{v.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                        <button type="button" onClick={() => { setEditing(i); setDraft(''); }} className="shrink-0 rounded-lg bg-white/[0.06] px-2 py-1 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.12]">🔄 Cambiar</button>
+                      </>
+                    )}
                     <div className="flex shrink-0 flex-col">
                       <button type="button" aria-label="Subir" disabled={!i} onClick={() => move(i, -1)} className="p-0.5 text-zinc-500 hover:text-white disabled:opacity-20"><ArrowUp className="h-3.5 w-3.5" /></button>
                       <button type="button" aria-label="Bajar" disabled={i === videos.length - 1} onClick={() => move(i, 1)} className="p-0.5 text-zinc-500 hover:text-white disabled:opacity-20"><ArrowDown className="h-3.5 w-3.5" /></button>
