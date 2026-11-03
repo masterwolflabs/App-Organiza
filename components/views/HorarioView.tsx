@@ -3,13 +3,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, Target, TriangleAlert, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
-import { freeGaps, toTime } from '@/components/organiza/dayPlan';
+import { freeGaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
@@ -31,7 +31,8 @@ export const HorarioView: React.FC = () => {
   const h = useHorario();
   const c = useChecks();
   // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
-  const weekStart = useMemo(() => startOfWeek(new Date()), []);
+  const [weekShift, setWeekShift] = useState(0);
+  const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekShift * 7), [weekShift]);
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
   const cal = useCalendar(weekStart, weekEnd);
   const occ = useMemo(() => expand(cal.events.filter((e) => e.source !== 'horario'), weekStart, weekEnd), [cal.events, weekStart, weekEnd]);
@@ -149,7 +150,15 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <div className="mt-5">
-        {view === 'tablero' && <Board items={shown} labels={h.labels} status={todayStatus} weekStart={weekStart} occ={occ} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && (
+          <div className="mb-3 flex items-center gap-2">
+            <button type="button" aria-label="Semana anterior" onClick={() => setWeekShift((w) => w - 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="min-w-36 text-center text-sm font-semibold text-zinc-200">{weekStart.getDate()} {MONTHS_SHORT[weekStart.getMonth()]} – {addDays(weekStart, 6).getDate()} {MONTHS_SHORT[addDays(weekStart, 6).getMonth()]}</span>
+            <button type="button" aria-label="Semana siguiente" onClick={() => setWeekShift((w) => w + 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronRight className="h-4 w-4" /></button>
+            {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
+          </div>
+        )}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, moves) => h.setPlan(iso(date), { moves })} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -314,7 +323,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occurrence[]; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, clash = [], onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, status = null, clash = [], move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -334,6 +343,8 @@ const Card: React.FC<{ item: Item; labels: Label[]; status?: Status; clash?: Occ
         <div className="flex flex-col items-start gap-1.5">
           {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+          {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
+          {!move?.off && move?.time && <Pill color="#38bdf8">↪ Este día a las {move.time}</Pill>}
           {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
         </div>
         <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
@@ -362,7 +373,8 @@ const clashes = (i: Item, day: Occurrence[]) => {
   return day.filter((o) => !o.ev.all_day && minutesOf(o.start) < b && (sameDay(o.start, o.end) ? minutesOf(o.end) : 1440) > a);
 };
 
-const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, weekStart, occ = [], onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
+  const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
   return (
@@ -370,6 +382,9 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Da
       {WEEK.map((name, d) => {
         const date = weekStart ? addDays(weekStart, d) : null;
         const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
+        const plan = date ? planOf?.(date) ?? null : null;
+        const dayItems = items.filter((i) => i.weekday === d);
+        const hasClash = dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
           key={name}
@@ -381,7 +396,7 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Da
           className="relative w-64 shrink-0 overflow-hidden rounded-2xl bg-white/[0.025] p-2 ring-1 ring-white/5"
         >
           {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
-          <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${d === today ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
+          <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
           <div className="relative mt-1 space-y-2">
             {dayOcc.length > 0 && (
               <div className="space-y-1">
@@ -394,12 +409,26 @@ const Board: React.FC<ViewProps & { status?: (i: Item) => Status; weekStart?: Da
                 ))}
               </div>
             )}
-            {items.filter((i) => i.weekday === d).map((i, n, day) => {
+            {hasClash && date && onApply && proposal?.d !== d && (
+              <button type="button" onClick={() => setProposal({ d, ...proposeDay(dayItems, dayOcc, plan) })} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs font-semibold text-rose-200 ring-1 ring-rose-400/30 hover:bg-rose-500/25"><Sparkles className="h-3.5 w-3.5" /> Reacomodar este día</button>
+            )}
+            {proposal?.d === d && date && (
+              <div className="space-y-1.5 rounded-xl bg-[#17191f] p-2.5 text-xs ring-1 ring-sky-400/30">
+                <p className="font-semibold text-white">Propuesta para el {name.toLowerCase()} {date.getDate()}</p>
+                {proposal.lines.length ? proposal.lines.map((l, k) => <p key={k} className={l.tone === 'lock' ? 'text-rose-200' : l.tone === 'off' ? 'text-zinc-400' : 'text-sky-200'}>{l.tone === 'lock' ? '🔒' : l.tone === 'off' ? '⏸️' : '↪'} {l.text}</p>) : <p className="text-zinc-400">No hay nada que se pueda mover solo.</p>}
+                <p className="text-[11px] text-zinc-500">Solo cambia ese día: tu horario queda igual.</p>
+                <div className="flex gap-1.5 pt-1">
+                  <button type="button" onClick={() => { onApply?.(date, proposal.moves); setProposal(null); }} className="flex-1 rounded-lg bg-sky-600 py-1 font-semibold text-[#fff] hover:bg-sky-500">Aplicar</button>
+                  <button type="button" onClick={() => setProposal(null)} className="flex-1 rounded-lg bg-white/[0.06] py-1 font-semibold text-zinc-300 hover:bg-white/[0.1]">Cancelar</button>
+                </div>
+              </div>
+            )}
+            {dayItems.map((i, n, day) => {
               const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
               return (
                 <React.Fragment key={i.id}>
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} status={status?.(i)} clash={clashes(i, dayOcc)} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}

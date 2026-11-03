@@ -82,3 +82,37 @@ export function dayStats(list: Item[], checkOf: (i: Item) => Check | undefined) 
   const done = live.filter((i) => stateOf(checkOf(i)) === 'completada').length;
   return { done, total: live.length, pct: live.length ? Math.round((done / live.length) * 100) : 0 };
 }
+
+/* ── Choques con el calendario ─────────────────────────────────────── */
+
+type Occ = { ev: { title: string; all_day: boolean }; start: Date; end: Date; key: string };
+export type Moves = DayPlan['moves'];
+/**
+ * Propuesta para un día con choques: cada evento del calendario cuenta como fijo y se reacomoda con
+ * las reglas de siempre (lo no negociable no se mueve, lo modificable busca espacio, lo flexible se suelta).
+ */
+export function proposeDay(dayItems: Item[], events: Occ[], plan: DayPlan | null) {
+  const moves: Moves = { ...plan?.moves };
+  const lines: { text: string; tone: 'move' | 'off' | 'lock' }[] = [];
+  let list = dayItems.filter((i) => !moves[i.id]?.off).map((i) => ({ ...i, time: moves[i.id]?.time ?? i.time }));
+  for (const o of events.filter((e) => !e.ev.all_day)) {
+    const minutes = Math.max(5, Math.round((+o.end - +o.start) / 60000));
+    const p = reorganize(list, { time: toTime(o.start.getHours() * 60 + o.start.getMinutes()), minutes });
+    for (const m of p.moved) {
+      if (m.item.id.startsWith('ev:')) continue;
+      moves[m.item.id] = { ...moves[m.item.id], time: m.to };
+      lines.push({ text: `${m.item.title} → ${m.to}`, tone: 'move' });
+    }
+    for (const i of p.off) {
+      if (i.id.startsWith('ev:')) continue;
+      moves[i.id] = { ...moves[i.id], off: true };
+      lines.push({ text: `${i.title}: se aplaza este día`, tone: 'off' });
+    }
+    for (const i of p.blocked) if (!i.id.startsWith('ev:')) lines.push({ text: `${i.title} es no negociable y choca con ${o.ev.title}: decide tú`, tone: 'lock' });
+    const gone = new Set(p.off.map((i) => i.id));
+    list = list.filter((i) => !gone.has(i.id)).map((i) => ({ ...i, time: moves[i.id]?.time ?? i.time }));
+    list.push({ ...dayItems[0], id: `ev:${o.key}`, title: o.ev.title, time: toTime(o.start.getHours() * 60 + o.start.getMinutes()), minutes, flex: 'obligatorio' });
+  }
+  return { moves, lines };
+}
+
