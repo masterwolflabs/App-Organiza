@@ -12,32 +12,11 @@ import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { toTime } from '@/components/organiza/dayPlan';
 import { coverCss, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
-import { getSound, playSound, setSound, SOUNDS, type SoundId } from '@/components/organiza/sounds';
+import { AlarmPicker, Categories, DurationWheel, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50';
-const ALARMS: { id: AlarmKind; label: string; hint: string }[] = [
-  { id: 'no', label: 'Sin aviso', hint: 'No te avisa' },
-  { id: 'notificacion', label: 'Notificación', hint: 'Un aviso suave y dos sonidos' },
-  { id: 'alarma', label: 'Alarma', hint: 'Suena más y deja un cartel hasta que lo cierras' },
-];
 const BEFORE = [0, 1, 5, 10, 15, 30];
-
-/** Cuánto se protege una acción (antes «Tipo de bloque» + «Prioridad»). */
-const LEVELS: { id: Flex; label: string; hint: string }[] = [
-  { id: 'obligatorio', label: 'No negociable', hint: 'Se bloquea en tu horario: no se mueve ni se salta. Si lo corres o lo saltas, la app te lo hace notar. Ej.: dormir, levantarte, entrenar, desayunar bien.' },
-  { id: 'flexible', label: 'Modificable', hint: 'Se hace sí o sí, pero puede cambiar de hora si el día lo pide. Ej.: almuerzo, estudiar, revisar correos.' },
-  { id: 'secundario', label: 'Flexible', hint: 'Suma si alcanza. Si el día se complica, es lo primero que se suelta. Ej.: ver una serie, ordenar el clóset.' },
-];
-const COLORS = ['#f59e0b', '#22c55e', '#38bdf8', '#a78bfa', '#f472b6', '#ef4444', '#94a3b8'];
-const SUGGESTED = [
-  { icon: '🧘', name: 'Personal', color: '#22c55e' },
-  { icon: '❤️', name: 'Salud', color: '#ef4444' },
-  { icon: '💼', name: 'Trabajo', color: '#38bdf8' },
-  { icon: '🏠', name: 'Hogar', color: '#f59e0b' },
-  { icon: '📚', name: 'Aprender', color: '#a78bfa' },
-  { icon: '👨‍👩‍👧', name: 'Familia y amigos', color: '#f472b6' },
-];
 
 /** La tarea abierta: sus datos, su registro y el mundo que tiene adentro. */
 export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>; c: ReturnType<typeof useChecks>; onClose: () => void; onOpen?: (id: string) => void }> = ({ item, h, c, onClose, onOpen }) => {
@@ -50,9 +29,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
   // Una acción con varios días es una sola: lo que cambias aquí cambia en todos sus días.
+  // El bloque abierto cambia al tiro; sus otros días se guardan a la vez.
   const set = async (p: Partial<Item>) => {
-    const same = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && refOf(i.title) === refOf(item.title));
-    for (const i of same.length ? same : [item]) await h.patchItem(i.id, p);
+    const others = h.activeItems.filter((i) => i.id !== item.id && i.schedule_id === item.schedule_id && refOf(i.title) === refOf(item.title));
+    await Promise.all([h.patchItem(item.id, p), ...others.map((i) => h.patchItem(i.id, p))]);
   };
   const setModules = (modules: Module[]) => set({ modules });
   const today = iso(new Date());
@@ -108,7 +88,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
 
             <Group title="📅 Cuándo" tour="hab-cuando">
               <div className="grid grid-cols-2 gap-3">
-                <div><span className="mb-1 block text-xs font-medium text-zinc-400">Días</span><DaysPicker days={weekdays} onToggle={async (d) => {
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">📆 Elige tus días</span><DaysPicker days={weekdays} onToggle={async (d) => {
                   const on = !weekdays.includes(d);
                   // Quitar el día de este mismo bloque: el panel sigue en otro día que queda.
                   if (!on && d === item.weekday) {
@@ -117,9 +97,9 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   }
                   await h.repeatOn(item, d, on);
                 }} /></div>
-                <Field label="Hora"><input type="time" value={item.time} onChange={(e) => e.target.value && set({ time: e.target.value })} className={field} /></Field>
-                <Field label="Duración (min)"><input type="number" min={1} step={1} value={item.minutes} onChange={(e) => Number(e.target.value) > 0 && set({ minutes: Number(e.target.value) })} className={field} /></Field>
-                <Field label="Termina"><input type="time" value={toTime(toMinutes(item.time) + item.minutes)} onChange={(e) => e.target.value && set({ minutes: ((toMinutes(e.target.value) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} className={field} /></Field>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={item.time} onChange={(time) => set({ time })} /></div>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={item.minutes} onChange={(minutes) => set({ minutes })} /></div>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(item.time) + item.minutes)} onChange={(end) => set({ minutes: ((toMinutes(end) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} /></div>
               </div>
             </Group>
 
@@ -139,7 +119,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
             </Group>
 
             <Group title="🔔 Aviso y concentración" tour="hab-aviso">
-              <Segmented value={item.alarm} options={ALARMS} onChange={(alarm) => set({ alarm })} />
+              <AlarmPicker value={item.alarm} onChange={(alarm) => set({ alarm })} />
               {item.alarm !== 'no' && (
                 <>
                   <div>
@@ -153,7 +133,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                       </label>
                     </div>
                   </div>
-                  <SoundPicker />
+                  <SoundList kind={item.alarm === 'alarma' ? 'alarma' : 'notificacion'} />
                 </>
               )}
               <label data-tour="hab-focus" className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
@@ -229,7 +209,7 @@ const DaysPicker: React.FC<{ days: number[]; onToggle: (d: number) => void }> = 
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={`${field} flex items-center justify-between gap-2 text-left`}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 rounded-xl bg-white/[0.05] px-3 py-2.5 text-left text-base font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/[0.08]">
         <span className="truncate">{daysText(days)}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
       </button>
@@ -261,92 +241,3 @@ const Group: React.FC<{ title: string; tour?: string; children: React.ReactNode 
   </section>
 );
 
-/** Perilla de tres puntos con su explicación debajo. */
-const Importance: React.FC<{ value: Flex; onChange: (f: Flex) => void }> = ({ value, onChange }) => {
-  const at = Math.max(0, LEVELS.findIndex((l) => l.id === value));
-  return (
-    <div>
-      <div className="relative grid grid-cols-3 rounded-xl bg-white/[0.05] p-1 ring-1 ring-white/10">
-        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-lg bg-sky-600 shadow transition-transform duration-300 ease-out" style={{ transform: `translateX(${at * 100}%)` }} />
-        {LEVELS.map((l, i) => (
-          <button key={l.id} type="button" aria-pressed={i === at} onClick={() => onChange(l.id)} className={`relative z-10 rounded-lg px-2 py-1.5 text-sm font-semibold transition-colors ${i === at ? 'text-[#fff]' : 'text-zinc-400 hover:text-zinc-200'}`}>{l.label}</button>
-        ))}
-      </div>
-      <p key={value} className="mt-2 text-xs leading-relaxed text-zinc-400">{LEVELS[at].hint}</p>
-    </div>
-  );
-};
-
-/** Botones de una sola opción, con la explicación de la elegida. */
-function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: string; hint: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div>
-      <div className="flex gap-1 rounded-xl bg-white/[0.05] p-1 ring-1 ring-white/10">
-        {options.map((o) => (
-          <button key={o.id} type="button" aria-pressed={o.id === value} onClick={() => onChange(o.id)} className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-semibold transition-colors ${o.id === value ? 'bg-white/[0.12] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}>{o.label}</button>
-        ))}
-      </div>
-      <p className="mt-1.5 text-xs text-zinc-500">{options.find((o) => o.id === value)?.hint}</p>
-    </div>
-  );
-}
-
-/** Sonido de los avisos en este dispositivo, con botón para escucharlo. */
-const SoundPicker: React.FC = () => {
-  const [sound, set] = useState<SoundId>(() => getSound());
-  return (
-    <div>
-      <span className="mb-1 block text-xs font-medium text-zinc-400">Sonido (en este dispositivo)</span>
-      <div className="flex flex-wrap gap-1.5">
-        {SOUNDS.map((x) => (
-          <button key={x.id} type="button" onClick={() => { set(x.id); setSound(x.id); playSound(3, x.id); }} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${sound === x.id ? 'bg-sky-600 text-[#fff] ring-sky-500' : 'text-zinc-300 ring-white/15 hover:bg-white/[0.06]'}`}>🔊 {x.label}</button>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/** Categorías propias con emoji y color (son las etiquetas del Horario: también filtran y pintan la semana). */
-const Categories: React.FC<{ h: ReturnType<typeof useHorario>; value: string | null; onChange: (id: string | null) => void }> = ({ h, value, onChange }) => {
-  const [adding, setAdding] = useState(false);
-  const [icon, setIcon] = useState('✨');
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(COLORS[0]);
-  const create = async (n: string, c: string, i: string) => {
-    const made = await h.ensureLabel(n, c, i);
-    if (made) onChange(made.id);
-  };
-  const missing = SUGGESTED.filter((x) => !h.labels.some((l) => l.name === x.name));
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {h.labels.map((l) => {
-          const on = l.id === value;
-          return (
-            <button key={l.id} type="button" aria-pressed={on} onClick={() => onChange(on ? null : l.id)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition" style={{ background: on ? `${l.color}33` : `${l.color}12`, color: on ? '#fff' : undefined, boxShadow: on ? `inset 0 0 0 1.5px ${l.color}` : undefined }}>
-              <span aria-hidden>{l.icon || '•'}</span>
-              <span className={on ? 'text-white' : 'text-zinc-300'}>{l.name}</span>
-            </button>
-          );
-        })}
-        <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-semibold text-sky-300 border border-dashed border-white/20 hover:bg-white/[0.05]"><Plus className="h-3.5 w-3.5" /> Nueva</button>
-      </div>
-      {missing.length > 0 && h.labels.length < 4 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-zinc-500">Ideas:</span>
-          {missing.map((x) => (
-            <button key={x.name} type="button" onClick={() => create(x.name, x.color, x.icon)} className="rounded-full px-2 py-0.5 text-xs text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.05] hover:text-zinc-200">{x.icon} {x.name}</button>
-          ))}
-        </div>
-      )}
-      {adding && (
-        <form className="flex flex-wrap items-center gap-2 rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-white/10" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; await create(name.trim(), color, icon); setName(''); setAdding(false); }}>
-          <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} aria-label="Emoji" className="w-11 rounded-lg bg-white/[0.05] py-1 text-center text-lg outline-none ring-1 ring-white/10" />
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Nombre de la categoría" className="min-w-0 flex-1 rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10" />
-          <div className="flex gap-1">{COLORS.map((c) => <button key={c} type="button" aria-label={`Color ${c}`} onClick={() => setColor(c)} className={`h-5 w-5 rounded-full ${color === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} />)}</div>
-          <button type="submit" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-[#fff] hover:bg-sky-500">Crear</button>
-        </form>
-      )}
-    </div>
-  );
-};

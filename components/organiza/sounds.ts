@@ -1,47 +1,126 @@
-/** Sonidos de los avisos del Horario. Se elige uno por dispositivo (Configuración del aviso en cada bloque). */
-export const SOUNDS = [
-  { id: 'clasico', label: 'Clásico', notes: [880, 660] },
-  { id: 'suave', label: 'Suave', notes: [523, 659, 784] },
-  { id: 'campana', label: 'Campana', notes: [1046, 784] },
-  { id: 'digital', label: 'Digital', notes: [1200, 1200, 900] },
-] as const;
-export type SoundId = (typeof SOUNDS)[number]['id'];
+/**
+ * Sonidos de los avisos del Horario, hechos aquí mismo (no se copian archivos de Apple: son suyos).
+ * La lista imita su interfaz: alarmas por un lado, notificaciones por otro. Se elige uno de cada uno
+ * por dispositivo. La alarma suena en bucle hasta que se cierra (máximo 1 minuto).
+ */
+type Note = [freq: number, seconds: number, wave?: OscillatorType];
+type Sound = { id: string; label: string; phrase: Note[]; gap: number };
 
-const KEY = 'organiza-sonido';
-export function getSound(): SoundId {
+export const ALARM_SOUNDS: Sound[] = [
+  { id: 'amanecer', label: 'Amanecer', phrase: [[523, 0.18], [659, 0.18], [784, 0.18], [1046, 0.35]], gap: 0.5 },
+  { id: 'faro', label: 'Faro', phrase: [[880, 0.12], [880, 0.12], [880, 0.12], [880, 0.12]], gap: 0.6 },
+  { id: 'pulso', label: 'Pulso', phrase: [[740, 0.09, 'square'], [0, 0.06], [740, 0.09, 'square'], [0, 0.06], [740, 0.09, 'square']], gap: 0.55 },
+  { id: 'cristal', label: 'Cristal', phrase: [[1318, 0.15, 'triangle'], [1568, 0.15, 'triangle'], [2093, 0.4, 'triangle']], gap: 0.6 },
+  { id: 'brisa', label: 'Brisa', phrase: [[392, 0.3], [494, 0.3], [587, 0.5]], gap: 0.7 },
+  { id: 'campanario', label: 'Campanario', phrase: [[784, 0.5, 'triangle'], [659, 0.5, 'triangle'], [523, 0.8, 'triangle']], gap: 0.4 },
+  { id: 'orbita', label: 'Órbita', phrase: [[600, 0.1, 'sawtooth'], [900, 0.1, 'sawtooth'], [1200, 0.1, 'sawtooth'], [900, 0.1, 'sawtooth']], gap: 0.5 },
+  { id: 'despertar', label: 'Despertar suave', phrase: [[330, 0.4], [392, 0.4], [440, 0.6]], gap: 1 },
+];
+
+export const NOTIF_SOUNDS: Sound[] = [
+  { id: 'nota', label: 'Nota', phrase: [[988, 0.12], [1318, 0.25]], gap: 0 },
+  { id: 'gota', label: 'Gota', phrase: [[1400, 0.06], [900, 0.18]], gap: 0 },
+  { id: 'acorde', label: 'Acorde', phrase: [[523, 0.1], [659, 0.1], [784, 0.3]], gap: 0 },
+  { id: 'burbuja', label: 'Burbuja', phrase: [[600, 0.07], [800, 0.07], [1000, 0.12]], gap: 0 },
+  { id: 'destello', label: 'Destello', phrase: [[2093, 0.08, 'triangle'], [2637, 0.2, 'triangle']], gap: 0 },
+  { id: 'teclas', label: 'Teclas', phrase: [[1046, 0.05, 'square'], [0, 0.04], [1175, 0.05, 'square'], [0, 0.04], [1318, 0.1, 'square']], gap: 0 },
+];
+
+export type SoundKind = 'alarma' | 'notificacion';
+export const soundsOf = (k: SoundKind) => (k === 'alarma' ? ALARM_SOUNDS : NOTIF_SOUNDS);
+const KEY = (k: SoundKind) => `organiza-sonido-${k}`;
+
+export function getSound(k: SoundKind): string {
   try {
-    const v = localStorage.getItem(KEY);
-    if (SOUNDS.some((s) => s.id === v)) return v as SoundId;
+    const v = localStorage.getItem(KEY(k));
+    if (v && soundsOf(k).some((s) => s.id === v)) return v;
   } catch {
     /* modo privado */
   }
-  return 'clasico';
+  return soundsOf(k)[0].id;
 }
-export function setSound(id: SoundId) {
+export function setSound(k: SoundKind, id: string) {
   try {
-    localStorage.setItem(KEY, id);
+    localStorage.setItem(KEY(k), id);
   } catch {
     /* modo privado */
   }
 }
 
-/** Suena `times` notas del sonido elegido (notificación 2, alarma 6). */
-export function playSound(times: number, id: SoundId = getSound()) {
-  try {
-    const notes = SOUNDS.find((s) => s.id === id)?.notes ?? SOUNDS[0].notes;
-    const ctx = new AudioContext();
-    for (let i = 0; i < times; i++) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = id === 'digital' ? 'square' : id === 'campana' ? 'triangle' : 'sine';
-      osc.frequency.value = notes[i % notes.length];
-      const at = ctx.currentTime + i * 0.35;
-      gain.gain.setValueAtTime(id === 'digital' ? 0.06 : 0.15, at);
-      gain.gain.exponentialRampToValueAtTime(0.001, at + (id === 'campana' ? 0.6 : 0.28));
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + (id === 'campana' ? 0.6 : 0.28));
+let shared: AudioContext | null = null;
+const ctx = () => (shared ??= new AudioContext());
+
+/** Agenda una frase desde `at`; devuelve cuánto dura. */
+function phrase(c: AudioContext, s: Sound, at: number) {
+  let t = at;
+  for (const [freq, dur, wave = 'sine'] of s.phrase) {
+    if (freq) {
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = wave;
+      osc.frequency.value = freq;
+      const vol = wave === 'square' || wave === 'sawtooth' ? 0.05 : 0.16;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain).connect(c.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
     }
+    t += dur;
+  }
+  return t - at;
+}
+
+const find = (k: SoundKind, id?: string) => soundsOf(k).find((s) => s.id === (id ?? getSound(k))) ?? soundsOf(k)[0];
+
+/** Suena una vez (notificaciones). */
+export function playOnce(k: SoundKind, id?: string) {
+  try {
+    const c = ctx();
+    phrase(c, find(k, id), c.currentTime + 0.02);
+  } catch {
+    /* sin audio */
+  }
+}
+
+/** Suena en bucle hasta que se llama a la función que devuelve (o hasta `max` segundos). */
+export function playLoop(k: SoundKind, id?: string, max = 60): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const until = Date.now() + max * 1000;
+  try {
+    const c = ctx();
+    const s = find(k, id);
+    const round = () => {
+      if (stopped || Date.now() > until) return;
+      const len = phrase(c, s, c.currentTime + 0.02);
+      timer = setTimeout(round, (len + Math.max(s.gap, 0.3)) * 1000);
+    };
+    round();
+  } catch {
+    /* sin audio */
+  }
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
+
+/** El «clic» de la rueda al pasar cada número, como el temporizador del iPhone. */
+export function tick() {
+  try {
+    const c = ctx();
+    const t = c.currentTime;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1800;
+    gain.gain.setValueAtTime(0.04, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.015);
+    osc.connect(gain).connect(c.destination);
+    osc.start(t);
+    osc.stop(t + 0.02);
   } catch {
     /* sin audio */
   }

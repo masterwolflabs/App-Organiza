@@ -100,7 +100,7 @@ export function useHorario() {
   const ensureLabel = useCallback(async (name: string, color: string, icon = '') => {
     const found = labels.find((l) => l.name === name);
     if (found) return found;
-    const [made] = await db.insert<Label>('organiza_labels', { space, name, color, icon });
+    const [made] = await db.insert<Label>('organiza_labels', { space, name, color, icon, sort: Math.max(0, ...labels.map((l) => (l.sort ?? 0) + 1)) });
     if (made) setLabels((l) => [...l, made]);
     return made ?? null;
   }, [db, labels, space]);
@@ -108,6 +108,12 @@ export function useHorario() {
   const patchLabel = useCallback(async (id: string, p: Partial<Label>) => {
     setLabels((l) => l.map((x) => (x.id === id ? { ...x, ...p } : x)));
     await db.update('organiza_labels', { id }, p);
+  }, [db]);
+
+  /** Nuevo orden de las categorías (la primera es la que más se cuida). */
+  const orderLabels = useCallback(async (ids: string[]) => {
+    setLabels((l) => l.map((x) => ({ ...x, sort: ids.indexOf(x.id) })));
+    for (const [sort, id] of ids.entries()) await db.update('organiza_labels', { id }, { sort });
   }, [db]);
 
   const removeLabel = useCallback(async (id: string) => {
@@ -282,7 +288,7 @@ export function useHorario() {
     [items, schedules]
   );
 
-  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
+  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, orderLabels, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */

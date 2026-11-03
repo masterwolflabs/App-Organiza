@@ -20,7 +20,7 @@ export type Module = {
   databaseId?: string;
 };
 
-export type Label = { id: string; owner_id?: string; space: Space; name: string; color: string; icon: string };
+export type Label = { id: string; owner_id?: string; space: Space; name: string; color: string; icon: string; sort?: number };
 export type Schedule = {
   id: string;
   space: Space;
