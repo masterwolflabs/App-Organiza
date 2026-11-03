@@ -43,7 +43,7 @@ export const HorarioView: React.FC = () => {
     if (i.weekday !== weekdayOf(now)) return null;
     const k = c.checks.find((x) => x.ref === refOf(i.title) && x.day === iso(now));
     // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
-    return k?.done ? 'hecho' : k && (k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
+    return k?.done ? 'hecho' : k && (k.value.started || k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
   };
   const confirm = useConfirm();
   const [view, setViewState] = useState<ViewId>(() => {

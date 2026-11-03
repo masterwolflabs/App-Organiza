@@ -12,7 +12,7 @@ import { FocusTimer } from '@/components/organiza/FocusTimer';
 import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { toTime } from '@/components/organiza/dayPlan';
-import { coverCss, emojiFor, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
+import { coverCss, emojiFor, honesty, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
 import { AlarmPicker, Categories, DurationWheel, EmojiPicker, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
 
@@ -43,6 +43,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
   const mine = c.checks.filter((x) => x.ref === ref);
   const streak = streakOf(ref, weekdays, c.checks);
   const todayCheck = mine.find((x) => x.day === today);
+  // Empezado (focus abierto o pasos marcados) pero sin cerrar: «En eso hoy».
+  const inProgress = !!todayCheck && !todayCheck.done && !!(todayCheck.value.started || todayCheck.value.habits?.length || todayCheck.value.rules?.length);
+  // Deshacer «lo hice»: si ya ibas en eso, vuelve a «en curso»; si no, queda sin marcar.
+  const undoToday = () => (todayCheck && (todayCheck.value.started || todayCheck.value.habits?.length) ? c.mark(item.title, today, false, todayCheck.value) : c.unmark(item.title, today));
   const scheduled = mine.length;
   const done = mine.filter((x) => x.done).length;
   const rate = scheduled ? Math.round((done / scheduled) * 100) : 0;
@@ -82,9 +86,18 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300"><Flame className="h-4 w-4" /> {streak} {streak === 1 ? 'día' : 'días'}</span>
               </div>
               <div className="mt-3 flex gap-2">
-                <button type="button" aria-pressed={todayCheck?.done === true} onClick={() => todayCheck?.done ? c.unmark(item.title, today) : c.mark(item.title, today, true)} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${todayCheck?.done ? 'bg-emerald-500/20 text-emerald-200 ring-emerald-400/40' : 'bg-white/[0.04] text-zinc-200 ring-white/10'}`}>Sí, lo hice</button>
-                <button type="button" aria-pressed={todayCheck?.done === false} onClick={() => todayCheck?.done === false ? c.unmark(item.title, today) : c.mark(item.title, today, false)} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${todayCheck?.done === false ? 'bg-rose-500/20 text-rose-200 ring-rose-400/40' : 'bg-white/[0.04] text-zinc-200 ring-white/10'}`}>No lo hice</button>
+                <button type="button" aria-pressed={todayCheck?.done === true} onClick={async () => {
+                  if (todayCheck?.done) {
+                    if (await confirm({ title: '¿Quieres deshacer esto?', message: 'Se quita el «lo hice» de hoy.', confirmLabel: 'Sí, deshacer', tone: 'danger' })) undoToday();
+                  } else if (await confirm({ title: '¿Seguro que lo hiciste?', message: honesty(), confirmLabel: 'Sí, lo hice' })) c.mark(item.title, today, true);
+                }} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${todayCheck?.done ? 'bg-emerald-500/20 text-emerald-200 ring-emerald-400/40' : 'bg-white/[0.04] text-zinc-200 ring-white/10'}`}>Sí, lo hice</button>
+                <button type="button" aria-pressed={todayCheck?.done === false && !inProgress} onClick={async () => {
+                  if (todayCheck?.done === false && !inProgress) {
+                    if (await confirm({ title: '¿Quieres deshacer esto?', message: 'Se quita el «no lo hice» de hoy.', confirmLabel: 'Sí, deshacer', tone: 'danger' })) c.unmark(item.title, today);
+                  } else c.mark(item.title, today, false, {});
+                }} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${todayCheck?.done === false && !inProgress ? 'bg-rose-500/20 text-rose-200 ring-rose-400/40' : 'bg-white/[0.04] text-zinc-200 ring-white/10'}`}>No lo hice</button>
               </div>
+              {inProgress && !todayCheck?.done && <p className="mt-2 text-xs text-amber-300">⏳ En eso hoy: empezaste y no lo has terminado.</p>}
               <div className="mt-4 grid grid-cols-14 gap-1" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }} aria-label="Últimos 28 días">
                 {last.map((d) => {
                   const x = mine.find((k) => k.day === iso(d));
@@ -197,7 +210,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
       </div>
       <GuidedTour open={tour} steps={HABIT_TOUR} onEnterStep={() => {}} onClose={() => setTour(false)} />
       {setup && <FocusSetup item={item} onSave={setModules} onStart={() => { setSetup(false); setFocusing(true); }} onClose={() => setSetup(false)} />}
-      {focusing && <FocusTimer item={item} checks={c} onClose={() => setFocusing(false)} onDone={() => { c.mark(item.title, today, true); setFocusing(false); }} />}
+      {focusing && <FocusTimer item={item} checks={c} onClose={() => setFocusing(false)} onDone={() => setFocusing(false)} />}
     </BodyPortal>
   );
 };

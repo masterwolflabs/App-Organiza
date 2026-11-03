@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { YouTubeList } from '@/components/organiza/YouTubeList';
-import { coverCss, iso, refOf, type Item } from '@/components/organiza/model';
+import { coverCss, honesty, iso, refOf, type Item } from '@/components/organiza/model';
+import { useConfirm } from '@/components/ui/confirm';
 import type { useChecks } from '@/components/organiza/useHorario';
 
 const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, '0')}`;
@@ -43,14 +44,31 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
 
   const left = total - elapsed;
   const late = left < 0 || (current >= 0 && elapsed > (current + 1) * per);
-  const mark = (s: string) => checks.mark(item.title, today, check?.done ?? false, { ...check?.value, habits: done.includes(s) ? done.filter((x) => x !== s) : [...done, s] });
+  // Al marcar el último paso, la acción queda hecha sola (sin preguntar: si hiciste todo, lo hiciste).
+  const mark = (s: string) => {
+    const next = done.includes(s) ? done.filter((x) => x !== s) : [...done, s];
+    const complete = steps.length > 0 && steps.every((x) => next.includes(x));
+    checks.mark(item.title, today, complete || (check?.done ?? false), { ...check?.value, started: true, habits: next });
+  };
+  const confirm = useConfirm();
+  // Salir sin terminar deja la acción «en curso» (si no estaba hecha).
+  const leave = () => {
+    if (!check?.done) checks.mark(item.title, today, false, { ...check?.value, started: true });
+    onClose();
+  };
+  // «Terminé»: con todo el paso a paso hecho, directo; si faltan pasos, pide honestidad.
+  const finish = async () => {
+    if (!allDone && !check?.done && !(await confirm({ title: '¿Seguro que lo terminaste?', message: honesty(), confirmLabel: 'Sí, lo hice' }))) return;
+    checks.mark(item.title, today, true, { ...check?.value, started: true });
+    onDone();
+  };
 
   return (
     <BodyPortal>
       <div role="dialog" aria-label={`Focus: ${item.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col items-center overflow-y-auto bg-[#09090b] p-6 text-center">
         <div className="absolute inset-0 opacity-25" style={coverCss(item.cover_url)} />
         {late && !allDone && <div className="pointer-events-none absolute inset-0 animate-pulse bg-rose-600/20" />}
-        <button type="button" onClick={onClose} aria-label="Salir del modo focus" className="absolute right-4 top-4 z-10 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
+        <button type="button" onClick={leave} aria-label="Salir del modo focus" className="absolute right-4 top-4 z-10 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
 
         <div className="relative my-auto w-full max-w-md py-10">
           <p className="text-lg text-zinc-300">{item.icon} {item.title}</p>
@@ -108,7 +126,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
           </div>
           <div className="mt-4 flex justify-center gap-3">
             <button type="button" onClick={() => setRunning((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-semibold text-[#fff] hover:bg-white/15">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {running ? 'Pausar' : 'Seguir'}</button>
-            <button type="button" onClick={onDone} className={`rounded-xl px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400 ${allDone ? 'animate-pulse bg-emerald-400' : 'bg-emerald-500'}`}>Terminé</button>
+            <button type="button" onClick={finish} className={`rounded-xl px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400 ${allDone ? 'animate-pulse bg-emerald-400' : 'bg-emerald-500'}`}>Terminé</button>
           </div>
           {videos.length > 0 && (
             <div className="relative mx-auto mt-5 max-w-md">

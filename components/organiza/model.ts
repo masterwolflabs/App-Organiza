@@ -72,7 +72,7 @@ export type Item = {
   /** Ya configuró Concentración en el teléfono para esta acción (el recordatorio no vuelve). */
   phone_focus?: boolean;
 };
-export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
+export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; started?: boolean; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
 
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -256,3 +256,28 @@ export function emojiFor(title: string) {
   const t = title.toLowerCase();
   return EMOJI_RULES.find(([re]) => re.test(t))?.[1] ?? '✨';
 }
+
+/** Frases chiquitas al confirmar «Sí, lo hice»: que el registro sea honesto. */
+export const HONESTY = [
+  'No te mientas a ti mismo.',
+  'El único que pierde si te autoengañas eres tú.',
+  'Tu registro vale lo que vale tu honestidad.',
+  'Marcarlo no lo hace hecho: hacerlo, sí.',
+  'Nadie te está mirando. Justo por eso importa.',
+  'La disciplina empieza por decirte la verdad.',
+  'Si no lo hiciste, mañana es otra oportunidad.',
+  'Una racha falsa no te lleva a ningún lado.',
+  'Sé el testigo honesto de tu propio progreso.',
+  'Lo que no mides con verdad, no lo puedes mejorar.',
+  'No sabotees tu avance con un clic.',
+  'La confianza en ti se construye cumpliéndote.',
+  'Tu yo de mañana te agradece la verdad de hoy.',
+  'Un «no» honesto vale más que un «sí» inventado.',
+  'Los resultados no se engañan.',
+  'Respeta tu palabra, aunque sea contigo.',
+  'Hecho es hecho. A medias no cuenta.',
+  'La verdad duele menos que el estancamiento.',
+  'Tu progreso real empieza con un registro real.',
+  'Sé honesto: es tu vida la que estás ordenando.',
+];
+export const honesty = () => HONESTY[Math.floor(Math.random() * HONESTY.length)];

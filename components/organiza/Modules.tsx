@@ -47,7 +47,9 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
   const habits = m.habits ?? [];
   const toggle = (h: string) => {
     const habitsDone = doneList.includes(h) ? doneList.filter((x) => x !== h) : [...doneList, h];
-    checks.mark(item.title, today, check?.done ?? false, { ...check?.value, [key]: habitsDone });
+    // Paso a paso completo → la acción queda hecha sola.
+    const complete = key === 'habits' && habits.length > 0 && habits.every((x) => habitsDone.includes(x));
+    checks.mark(item.title, today, complete || (check?.done ?? false), { ...check?.value, [key]: habitsDone });
   };
   // Cambiar el texto: el paso conserva su lugar y, si ya estaba marcado hoy, sigue marcado.
   const rename = (from: string, to: string) => {

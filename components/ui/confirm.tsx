@@ -52,7 +52,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {pending &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" onClick={() => close(pending.input ? null : false)}>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => close(pending.input ? null : false)}>
             <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#11151c] p-5 shadow-2xl">
               <div className="flex items-start gap-3">
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${danger ? 'bg-rose-500/15 text-rose-300' : 'bg-sky-500/15 text-sky-300'}`}>
