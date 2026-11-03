@@ -62,7 +62,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
             </div>
           </div>
           <div className="space-y-6 p-5">
-            {cover && <CoverPicker value={item.cover_url} rank={rank} onPick={(v) => { set({ cover_url: v }); setCover(false); }} />}
+            {cover && <CoverPicker value={item.cover_url} rank={rank} title={item.title} onPick={(v) => { set({ cover_url: v }); setCover(false); }} />}
             <div className="flex items-center gap-2">
               <input defaultValue={item.icon} key={`i${item.id}`} aria-label="Ícono" maxLength={4} placeholder="🙂" onBlur={(e) => e.target.value !== item.icon && set({ icon: e.target.value })} className="w-12 rounded-lg bg-white/[0.05] py-1.5 text-center text-xl outline-none ring-1 ring-white/10" />
               <input defaultValue={item.title} key={`t${item.id}`} aria-label="Título" onBlur={(e) => e.target.value.trim() && e.target.value !== item.title && set({ title: e.target.value.trim() })} className="min-w-0 flex-1 rounded-lg bg-transparent font-display text-2xl font-semibold text-white outline-none focus:bg-white/[0.04]" />
