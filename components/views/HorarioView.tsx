@@ -157,7 +157,7 @@ export const HorarioView: React.FC = () => {
       {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
       {panel === 'nuevo' && <Dialog title="Nuevo horario" onClose={() => setPanel(null)}><TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} /></Dialog>}
       {panel === 'etiquetas' && <LabelsDialog h={h} onClose={() => setPanel(null)} />}
-      {panel === 'portada' && <Dialog title="Portada del horario" onClose={() => setPanel(null)}><CoverPicker value={s.cover_url} rank={rank} onPick={(cover) => { h.patchSchedule(s.id, { cover_url: cover }); setPanel(null); }} /></Dialog>}
+      {panel === 'portada' && <Dialog title="Portada del horario" onClose={() => setPanel(null)}><CoverPicker value={s.cover_url} rank={rank} title={s.name} onPick={(cover) => { h.patchSchedule(s.id, { cover_url: cover }); setPanel(null); }} /></Dialog>}
     </div>
   );
 };

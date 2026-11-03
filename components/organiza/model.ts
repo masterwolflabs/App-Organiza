@@ -144,6 +144,7 @@ export const COVERS = [
 export const coverCss = (c: string | null | undefined): React.CSSProperties | undefined => {
   if (!c) return undefined;
   const g = COVERS.find((x) => x.id === c);
+  if (!g && c.startsWith('linear-gradient(')) return { background: c };
   return g ? { background: g.css } : { backgroundImage: `url("${c}")`, backgroundSize: 'cover', backgroundPosition: 'center' };
 };
 
