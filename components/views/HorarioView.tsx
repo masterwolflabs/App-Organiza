@@ -129,7 +129,7 @@ export const HorarioView: React.FC = () => {
             </button>
           ))}
           <button type="button" onClick={() => setPanel('etiquetas')} data-tour="etiquetas" className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-zinc-400 hover:text-white">
-            <Tags className="h-3.5 w-3.5" /> Etiquetas
+            <Tags className="h-3.5 w-3.5" /> Categorías
           </button>
         </div>
       </div>
@@ -547,12 +547,12 @@ const PublishDialog: React.FC<{ schedule: Schedule; items: Item[]; onClose: () =
 const LabelsDialog: React.FC<{ h: ReturnType<typeof useHorario>; onClose: () => void }> = ({ h, onClose }) => {
   const [name, setName] = useState('');
   return (
-    <Dialog title="Etiquetas" onClose={onClose}>
+    <Dialog title="Categorías" onClose={onClose}>
       <ul className="space-y-3">
         {h.labels.map((l) => (
           <li key={l.id} className="space-y-2 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/10">
             <div className="flex items-center gap-2">
-              <input defaultValue={l.name} aria-label="Nombre de la etiqueta" onBlur={(e) => e.target.value.trim() && h.patchLabel(l.id, { name: e.target.value.trim() })} className="min-w-0 flex-1 rounded-md bg-transparent px-1 text-sm font-semibold text-white outline-none focus:bg-white/[0.06]" />
+              <input defaultValue={l.name} aria-label="Nombre de la categoría" onBlur={(e) => e.target.value.trim() && h.patchLabel(l.id, { name: e.target.value.trim() })} className="min-w-0 flex-1 rounded-md bg-transparent px-1 text-sm font-semibold text-white outline-none focus:bg-white/[0.06]" />
               <button type="button" aria-label={`Borrar ${l.name}`} onClick={() => h.removeLabel(l.id)} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -563,7 +563,7 @@ const LabelsDialog: React.FC<{ h: ReturnType<typeof useHorario>; onClose: () => 
         ))}
       </ul>
       <form className="mt-3 flex gap-2" onSubmit={async (e) => { e.preventDefault(); if (name.trim()) { await h.ensureLabel(name.trim(), LABEL_COLORS[h.labels.length % LABEL_COLORS.length]); setName(''); } }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nueva etiqueta" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nueva categoría" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10" />
         <button type="submit" className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff]">Agregar</button>
       </form>
     </Dialog>

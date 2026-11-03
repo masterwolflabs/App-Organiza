@@ -8,7 +8,7 @@ import type React from 'react';
  */
 export type Space = 'persona' | 'empresa';
 export type AlarmKind = 'no' | 'notificacion' | 'alarma';
-export type ModuleType = 'habitos' | 'sueno' | 'tabla' | 'base';
+export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base';
 
 export type Module = {
   id: string;
@@ -63,7 +63,7 @@ export type Item = {
   priority: number;
   block: string;
 };
-export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
+export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
 
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -151,7 +151,8 @@ export const coverCss = (c: string | null | undefined): React.CSSProperties | un
 
 const mid = () => Math.random().toString(36).slice(2, 9);
 export const MODULE_CHOICES: { key: string; emoji: string; label: string; hint: string; make: () => Module }[] = [
-  { key: 'habitos', emoji: '✅', label: 'Microhábitos', hint: 'Una lista corta que marcas cada día', make: () => ({ id: mid(), type: 'habitos', title: 'Microhábitos', habits: ['Tender la cama', 'Tomar agua'] }) },
+  { key: 'habitos', emoji: '✅', label: 'Paso a paso', hint: 'Los pasos que marcas cada día (5 flexiones, lavarte la cara…)', make: () => ({ id: mid(), type: 'habitos', title: 'Paso a paso', habits: ['Tender la cama', 'Tomar agua'] }) },
+  { key: 'reglas', emoji: '📏', label: 'Reglas', hint: 'Lo que no haces en este momento (ej.: no revisar el teléfono)', make: () => ({ id: mid(), type: 'reglas', title: 'Reglas', habits: ['No revisar el teléfono'] }) },
   { key: 'sueno', emoji: '😴', label: 'Sueño', hint: 'A qué hora te acostaste y te levantaste', make: () => ({ id: mid(), type: 'sueno', title: 'Mi sueño' }) },
   { key: 'entreno', emoji: '🏋️', label: 'Plan de entrenamiento', hint: 'Día, ejercicio, series y repeticiones', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de entrenamiento', columns: ['Día', 'Ejercicio', 'Series', 'Reps', 'Peso'], rows: [['Lunes', '', '', '', '']] }) },
   { key: 'comidas', emoji: '🍳', label: 'Plan de comidas', hint: 'Qué comes cada día de la semana', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de comidas', columns: ['Día', 'Desayuno', 'Almuerzo', 'Cena'], rows: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((d) => [d, '', '', '']) }) },
@@ -162,7 +163,8 @@ export const MODULE_CHOICES: { key: string; emoji: string; label: string; hint: 
 export function modulesFor(title: string): Module[] {
   const t = title.toLowerCase();
   const pick = (k: string) => MODULE_CHOICES.find((m) => m.key === k)!.make();
-  if (/levantar|acostar|dormir/.test(t)) return [pick('sueno'), { ...pick('habitos'), habits: ['Tender la cama', 'Ordenar la pieza', 'Tomar agua'] }];
+  if (/levantar/.test(t)) return [{ ...pick('habitos'), habits: ['5 flexiones', 'Lavarme la cara', 'Tomar mis pastillas', 'Oración de 1 minuto', 'Cambiarme de ropa'] }, { ...pick('reglas'), habits: ['No revisar el teléfono al despertar'] }, pick('sueno')];
+  if (/acostar|dormir/.test(t)) return [pick('sueno'), { ...pick('reglas'), habits: ['Sin pantallas 30 min antes'] }];
   if (/gym|entren/.test(t)) return [pick('entreno')];
   if (/cocin|desayuno|almuerzo|cena/.test(t)) return [pick('comidas')];
   return [];

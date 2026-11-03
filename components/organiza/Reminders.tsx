@@ -5,6 +5,7 @@ import { BellRing, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
+import { playSound } from '@/components/organiza/sounds';
 
 type NativeNotifications = {
   requestPermissions: () => Promise<{ display: string }>;
@@ -31,23 +32,6 @@ async function scheduleNative(items: Item[], alarms: Schedule['alarms']) {
   });
 }
 
-const beep = (times: number) => {
-  try {
-    const ctx = new AudioContext();
-    for (let i = 0; i < times; i++) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = i % 2 ? 660 : 880;
-      gain.gain.value = 0.15;
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.35);
-      osc.stop(ctx.currentTime + i * 0.35 + 0.25);
-    }
-  } catch {
-    /* sin audio */
-  }
-};
-
 /** Con la app abierta, avisa a la hora: solo tareas del horario publicado. El resto lo cubre el aviso al teléfono. */
 export const Reminders: React.FC = () => {
   const { published, publishedItems, itemsOn } = useHorario();
@@ -72,7 +56,7 @@ export const Reminders: React.FC = () => {
         seen.current.add(key);
         const body = i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`;
         if ('Notification' in window && Notification.permission === 'granted') new Notification(`${i.icon} ${i.title}`.trim(), { body });
-        beep(kind === 'alarma' ? 6 : 2);
+        playSound(kind === 'alarma' ? 6 : 2);
         if (kind === 'alarma') setRinging(i);
       }
     };

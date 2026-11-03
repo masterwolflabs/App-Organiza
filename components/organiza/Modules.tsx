@@ -24,7 +24,7 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange }) =>
             <input key={m.id} defaultValue={m.title} aria-label="Nombre del bloque" onBlur={(e) => e.target.value.trim() && patch(m.id, { title: e.target.value.trim() })} className={`${input} font-semibold`} />
             <button type="button" aria-label={`Quitar ${m.title}`} onClick={() => onChange(modules.filter((x) => x.id !== m.id))} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
           </div>
-          {m.type === 'habitos' && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
+          {(m.type === 'habitos' || m.type === 'reglas') && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
           {m.type === 'sueno' && <Sleep item={item} checks={checks} />}
           {m.type === 'tabla' && <Grid m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'base' && <Base m={m} patch={(p) => patch(m.id, p)} />}
@@ -39,11 +39,13 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
   const today = iso(new Date());
   const ref = refOf(item.title);
   const check = checks.checks.find((c) => c.ref === ref && c.day === today);
-  const doneList = check?.value.habits ?? [];
+  // Paso a paso: lo que hiciste hoy. Reglas: las que respetaste hoy.
+  const key = m.type === 'reglas' ? 'rules' : 'habits';
+  const doneList = check?.value[key] ?? [];
   const habits = m.habits ?? [];
   const toggle = (h: string) => {
     const habitsDone = doneList.includes(h) ? doneList.filter((x) => x !== h) : [...doneList, h];
-    checks.mark(item.title, today, check?.done ?? false, { ...check?.value, habits: habitsDone });
+    checks.mark(item.title, today, check?.done ?? false, { ...check?.value, [key]: habitsDone });
   };
   return (
     <>
@@ -57,7 +59,7 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
         ))}
       </ul>
       <form className="mt-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !habits.includes(text.trim())) { patch({ habits: [...habits, text.trim()] }); setText(''); } }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Agregar microhábito" className={`${input} text-zinc-300`} />
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={m.type === 'reglas' ? 'Agregar regla' : 'Agregar paso'} className={`${input} text-zinc-300`} />
       </form>
     </>
   );
