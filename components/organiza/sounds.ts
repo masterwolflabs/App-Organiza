@@ -107,20 +107,22 @@ export function playLoop(k: SoundKind, id?: string, max = 60): () => void {
   };
 }
 
-/** El «clic» de la rueda al pasar cada número, como el temporizador del iPhone. */
+/** El «toc» de la rueda al pasar cada número: suave, grave y cortito, como el selector del iPhone. */
 export function tick() {
   try {
     const c = ctx();
     const t = c.currentTime;
     const osc = c.createOscillator();
     const gain = c.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 1800;
-    gain.gain.setValueAtTime(0.04, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.015);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(320, t);
+    osc.frequency.exponentialRampToValueAtTime(140, t + 0.03);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.09, t + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
     osc.connect(gain).connect(c.destination);
     osc.start(t);
-    osc.stop(t + 0.02);
+    osc.stop(t + 0.04);
   } catch {
     /* sin audio */
   }

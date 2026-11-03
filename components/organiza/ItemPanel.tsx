@@ -209,7 +209,7 @@ const DaysPicker: React.FC<{ days: number[]; onToggle: (d: number) => void }> = 
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 rounded-xl bg-white/[0.05] px-3 py-2.5 text-left text-base font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/[0.08]">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 rounded-xl bg-white/[0.05] px-3 py-2 text-left text-[15px] font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/[0.08]">
         <span className="truncate">{daysText(days)}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
       </button>

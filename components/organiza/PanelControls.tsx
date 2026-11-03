@@ -36,10 +36,10 @@ const Wheel: React.FC<{ count: number; value: number; label: (i: number) => stri
         style={{ maskImage: 'linear-gradient(transparent, #000 30%, #000 70%, transparent)' }}
       >
         {Array.from({ length: count }, (_, i) => (
-          <button key={i} type="button" onClick={() => ref.current?.scrollTo({ top: i * ROW, behavior: 'smooth' })} className={`block h-9 w-full snap-center font-display text-2xl tabular-nums transition-colors ${i === value ? 'font-semibold text-white' : 'text-zinc-500'}`}>{label(i)}</button>
+          <button key={i} type="button" onClick={() => ref.current?.scrollTo({ top: i * ROW, behavior: 'smooth' })} className={`block h-9 w-full snap-center text-xl font-light tabular-nums transition-colors ${i === value ? 'text-white' : 'text-zinc-500'}`}>{label(i)}</button>
         ))}
       </div>
-      {suffix && <span className="pointer-events-none -ml-1 text-sm font-semibold text-zinc-400">{suffix}</span>}
+      {suffix && <span className="pointer-events-none -ml-1 text-xs font-medium text-zinc-400">{suffix}</span>}
     </div>
   );
 };
@@ -53,16 +53,16 @@ const WheelPop: React.FC<{ display: React.ReactNode; onOpen?: () => void; onDone
   };
   return (
     <div className="relative">
-      <button type="button" onClick={() => { onOpen?.(); setOpen(true); }} className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-left font-display text-xl font-semibold tabular-nums text-white ring-1 ring-white/10 transition hover:bg-white/[0.08]">{display}</button>
+      <button type="button" onClick={() => { onOpen?.(); setOpen(true); }} className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-left text-[15px] font-semibold tabular-nums text-white ring-1 ring-white/10 transition hover:bg-white/[0.08]">{display}</button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
-          <div className="absolute left-0 top-full z-20 mt-1.5 rounded-2xl bg-[#1b1e24] p-3 shadow-2xl ring-1 ring-white/10">
+          <div className="absolute left-0 top-full z-20 mt-1.5 rounded-2xl bg-white/[0.07] p-3 shadow-2xl shadow-black/40 ring-1 ring-white/15 backdrop-blur-2xl backdrop-saturate-150">
             <div className="relative flex items-center justify-center gap-1">
-              <span aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 h-9 -translate-y-1/2 rounded-lg bg-white/[0.08]" />
+              <span aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 h-9 -translate-y-1/2 rounded-lg bg-white/[0.07] ring-1 ring-white/[0.06]" />
               {children}
             </div>
-            <button type="button" onClick={close} className="mt-2 w-full rounded-lg bg-sky-600 py-1.5 text-sm font-semibold text-[#fff] hover:bg-sky-500">Listo</button>
+            <button type="button" onClick={close} className="mt-2 w-full rounded-lg bg-white/[0.1] py-1.5 text-sm font-medium text-white ring-1 ring-white/10 hover:bg-white/[0.16]">Listo</button>
           </div>
         </>
       )}
@@ -78,7 +78,7 @@ export const TimeWheel: React.FC<{ value: string; onChange: (v: string) => void 
   return (
     <WheelPop display={value} onOpen={() => { setH(Number(value.slice(0, 2)) || 0); setM(Number(value.slice(3, 5)) || 0); }} onDone={() => shown !== value && onChange(shown)}>
       <Wheel count={24} value={h} label={pad2} onChange={setH} />
-      <span className="font-display text-2xl font-semibold text-white">:</span>
+      <span className="text-xl font-light text-white">:</span>
       <Wheel count={60} value={m} label={pad2} onChange={setM} />
     </WheelPop>
   );
