@@ -110,13 +110,14 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
             <button type="button" onClick={() => setRunning((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-semibold text-[#fff] hover:bg-white/15">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {running ? 'Pausar' : 'Seguir'}</button>
             <button type="button" onClick={onDone} className={`rounded-xl px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400 ${allDone ? 'animate-pulse bg-emerald-400' : 'bg-emerald-500'}`}>Terminé</button>
           </div>
+          {videos.length > 0 && (
+            <div className="relative mx-auto mt-5 max-w-md">
+              <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} />
+            </div>
+          )}
         </div>
 
-        {videos.length > 0 && (
-          <div className="fixed bottom-4 right-4 z-10">
-            <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} />
-          </div>
-        )}
+
       </div>
     </BodyPortal>
   );

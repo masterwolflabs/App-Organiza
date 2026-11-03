@@ -150,7 +150,7 @@ export async function playlistIds(list: string): Promise<string[]> {
   });
 }
 
-type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; loadedAt?: number; readyAt?: number };
+type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; loadedAt?: number; readyAt?: number; preload?: boolean; failed?: boolean };
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
 export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number } }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek }) => {
@@ -180,13 +180,13 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const nextIndex = (i: number) => (i + 1 < list.current.length ? i + 1 : loopAll ? 0 : -1);
 
   /** Carga la canción `index` en el canal `slot`, al volumen dado. */
-  const load = async (slot: number, index: number, volume: number, startAt?: number) => {
+  const load = async (slot: number, index: number, volume: number, startAt?: number, preload = false) => {
     const v = list.current[index];
     const parsed = v && parseYouTube(v.url);
     const box = boxes[slot].current;
     if (!v || !parsed || !box) return false;
     slots.current[slot].player?.destroy();
-    slots.current[slot] = { player: null, index, ready: false, loadedAt: Date.now() };
+    slots.current[slot] = { player: null, index, ready: false, loadedAt: Date.now(), preload };
     const host = document.createElement('div');
     box.innerHTML = '';
     box.appendChild(host);
@@ -198,9 +198,10 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       vars.listType = 'playlist';
       vars.list = parsed.list;
     }
+    // Reproductor chico y oculto: solo se escucha, y YouTube baja la calidad del video sola.
     slots.current[slot].player = new YT.Player(host, {
-      width: '100%',
-      height: '100%',
+      width: 200,
+      height: 112,
       videoId: parsed.video,
       playerVars: vars,
       events: {
@@ -209,7 +210,16 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           if (startAt !== undefined && parsed.video) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
           if (mutedRef.current) e.target.mute?.();
-          if (playingRef.current) e.target.playVideo();
+          if (preload) {
+            // Precarga: suena en silencio un momento para llenar el búfer y queda lista en su inicio.
+            e.target.setVolume(0);
+            e.target.playVideo();
+            setTimeout(() => {
+              if (!slots.current[slot].preload) return;
+              e.target.pauseVideo();
+              e.target.seekTo(begin, true);
+            }, 2500);
+          } else if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
           slots.current[slot].readyAt = Date.now();
           if (slot === activeRef.current) setTitle(e.target.getVideoData?.().title ?? '');
@@ -232,6 +242,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         },
         // Video que no se puede reproducir fuera de YouTube: se salta, aunque pase en pleno crossfade.
         onError: () => {
+          slots.current[slot].failed = true;
           if (slot !== activeRef.current) return;
           setSkipped((n) => n + 1);
           setBlockedSong(index);
@@ -261,7 +272,18 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const other = 1 - activeRef.current;
     const fade = hard ? 0 : crossfade;
     fading.current = true;
-    load(other, n, fade ? 0 : 100).then((ok) => {
+    // Si ya estaba precargada, entra al tiro (sin cortes); si no, se carga ahora.
+    const ready = slots.current[other];
+    const reuse = ready.index === n && ready.preload && ready.ready && !ready.failed && ready.player;
+    const start: Promise<boolean> = reuse
+      ? Promise.resolve().then(() => {
+          ready.preload = false;
+          ready.player!.setVolume(fade ? 0 : 100);
+          if (playingRef.current) ready.player!.playVideo();
+          return true;
+        })
+      : load(other, n, fade ? 0 : 100);
+    start.then((ok) => {
       if (!ok) {
         fading.current = false;
         slots.current[activeRef.current].index = n;
@@ -341,7 +363,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   useEffect(() => {
     playingRef.current = !paused;
     setPlaying(!paused);
-    slots.current.forEach((x) => (paused ? x.player?.pauseVideo() : x.player?.playVideo()));
+    slots.current.forEach((x) => !x.preload && (paused ? x.player?.pauseVideo() : x.player?.playVideo()));
   }, [paused]);
 
   // Arranca con la primera canción.
@@ -374,7 +396,11 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       const end = v.to ?? cur.player.getDuration?.() ?? 0;
       if (!end) return;
       const lead = v.loop ? 0.3 : Math.max(0.3, crossfade);
-      if (now >= end - lead) advance();
+      if (now >= end - lead) return advance();
+      // 20 s antes del cambio se precarga la siguiente en el otro canal.
+      const n = nextIndex(cur.index);
+      const other = slots.current[1 - activeRef.current];
+      if (!v.loop && n >= 0 && now >= end - lead - 20 && other.index !== n) load(1 - activeRef.current, n, 0, undefined, true);
     }, 250);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,41 +410,46 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const p = !playing;
     playingRef.current = p;
     setPlaying(p);
-    slots.current.forEach((s) => (p ? s.player?.playVideo() : s.player?.pauseVideo()));
+    slots.current.forEach((s) => !s.preload && (p ? s.player?.playVideo() : s.player?.pauseVideo()));
   };
 
   if (!videos.length) return null;
   const v = videos[at];
   return (
-    <div className="w-72 overflow-hidden rounded-2xl bg-black/50 ring-1 ring-white/15 backdrop-blur-xl">
-      <div className="relative aspect-video w-full bg-black">
-        {blocked && !finished && (
-          <button type="button" onClick={() => { slots.current[activeRef.current].player?.playVideo(); setBlocked(false); }} className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/70 text-sm font-semibold text-[#fff]">
-            <Play className="h-6 w-6" /> Toca para que siga la música
-            <span className="text-[11px] font-normal text-zinc-300">Tu navegador la pausó</span>
-          </button>
+    <div className="w-full overflow-hidden rounded-2xl bg-black/40 text-left ring-1 ring-white/15 backdrop-blur-xl">
+      {/* Los dos reproductores quedan ocultos: solo se escucha. */}
+      <div aria-hidden className="pointer-events-none absolute h-[112px] w-[200px] overflow-hidden opacity-0">
+        {[0, 1].map((i) => <div key={i} ref={boxes[i]} className="absolute inset-0" />)}
+      </div>
+      <div className="flex items-center gap-3 p-3">
+        {parseYouTube(v?.url ?? '')?.video ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`https://i.ytimg.com/vi/${parseYouTube(v?.url ?? '')?.video}/mqdefault.jpg`} alt="" className={`h-12 w-12 shrink-0 rounded-lg object-cover ${playing && !finished ? '' : 'opacity-50'}`} />
+        ) : (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-lg">🎵</span>
         )}
-        {[0, 1].map((i) => (
-          <div key={i} ref={boxes[i]} className="absolute inset-0 transition-opacity duration-1000" style={{ opacity: i === active ? 1 : 0 }} />
-        ))}
-      </div>
-      <div className="px-3 pt-2">
-        <span className="flex items-center gap-1 text-[11px] text-zinc-400">
-          {finished ? '🎵 Terminó tu lista' : `🎵 ${at + 1} de ${videos.length}`}
-          {!finished && v?.to !== undefined && ` · hasta ${fmtSeconds(v.to)}`}
-          {!finished && v?.loop && <Repeat className="h-3 w-3" />}
-          {skipped > 0 && <span className="text-amber-300">· {skipped} saltada{skipped > 1 ? 's' : ''}</span>}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-[#fff]">{finished ? 'Terminó tu lista' : title || 'Cargando…'}</span>
+          <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+            {!finished && `${at + 1} de ${videos.length}`}
+            {!finished && v?.to !== undefined && ` · hasta ${fmtSeconds(v.to)}`}
+            {!finished && v?.loop && <Repeat className="h-3 w-3" />}
+            {skipped > 0 && <span className="text-amber-300">· {skipped} saltada{skipped > 1 ? 's' : ''}</span>}
+          </span>
         </span>
-        <span className="block truncate text-xs font-semibold text-[#fff]">{title || 'Cargando…'}</span>
+        <span className="flex shrink-0 items-center gap-0.5">
+          <button type="button" aria-label="Canción anterior" data-help="Canción anterior" disabled={at === 0 && !loopAll} onClick={() => { const p = at > 0 ? at - 1 : videos.length - 1; jump(p, videos[p].from ?? 0); }} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10 disabled:opacity-30"><SkipBack className="h-4 w-4" /></button>
+          <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} data-help={playing ? 'Pausar música (el reloj sigue)' : 'Seguir música'} onClick={toggle} className="rounded-full bg-white/[0.14] p-2 text-[#fff] hover:bg-white/25">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
+          <button type="button" aria-label="Canción siguiente" data-help="Canción siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
+          <button type="button" aria-label={muted ? 'Activar sonido' : 'Silenciar'} data-help={muted ? 'Activar sonido' : 'Silenciar'} onClick={() => { const m = !muted; mutedRef.current = m; setMuted(m); slots.current.forEach((x) => (m ? x.player?.mute?.() : x.player?.unMute?.())); }} className={`rounded-lg p-1.5 hover:bg-white/10 ${muted ? 'text-rose-300' : 'text-zinc-200'}`}>{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
+          <button type="button" aria-label="Elegir canción" data-help="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
+        </span>
       </div>
-      <div className="flex items-center justify-center gap-1 px-2 pb-2 pt-1">
-        <button type="button" aria-label="Canción anterior" data-help="Canción anterior" disabled={at === 0 && !loopAll} onClick={() => { const p = at > 0 ? at - 1 : videos.length - 1; jump(p, videos[p].from ?? 0); }} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10 disabled:opacity-30"><SkipBack className="h-4 w-4" /></button>
-        <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} data-help={playing ? 'Pausar música (el reloj sigue)' : 'Seguir música'} onClick={toggle} className="rounded-full bg-white/[0.12] p-2 text-[#fff] hover:bg-white/20">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
-        <button type="button" aria-label="Canción siguiente" data-help="Canción siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
-        <span className="mx-1 h-4 w-px bg-white/15" />
-        <button type="button" aria-label={muted ? 'Activar sonido' : 'Silenciar'} data-help={muted ? 'Activar sonido' : 'Silenciar'} onClick={() => { const m = !muted; mutedRef.current = m; setMuted(m); slots.current.forEach((x) => (m ? x.player?.mute?.() : x.player?.unMute?.())); }} className={`rounded-lg p-1.5 hover:bg-white/10 ${muted ? 'text-rose-300' : 'text-zinc-200'}`}>{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
-        <button type="button" aria-label="Elegir canción" data-help="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
-      </div>
+      {blocked && !finished && (
+        <button type="button" onClick={() => { slots.current[activeRef.current].player?.playVideo(); setBlocked(false); }} className="flex w-full items-center justify-center gap-1.5 border-t border-white/10 py-2 text-xs font-semibold text-amber-200 hover:bg-white/5">
+          <Play className="h-3.5 w-3.5" /> Tu navegador pausó la música · toca para seguir
+        </button>
+      )}
       {blockedSong !== null && videos[blockedSong] && (
         <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
           ⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube.{' '}
