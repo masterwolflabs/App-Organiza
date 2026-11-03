@@ -73,7 +73,7 @@ function loadYT(): Promise<YTNamespace> {
 type Slot = { player: YTPlayer | null; index: number; ready: boolean };
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
-export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean }> = ({ videos, crossfade = 0, loopAll = false }) => {
+export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number } }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek }) => {
   const boxes = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
   const slots = useRef<Slot[]>([{ player: null, index: -1, ready: false }, { player: null, index: -1, ready: false }]);
   const [active, setActive] = useState(0);
@@ -86,11 +86,13 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const [finished, setFinished] = useState(false);
   const list = useRef(videos);
   list.current = videos;
+  // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
+  const lengths = useRef<Record<number, number>>({});
 
   const nextIndex = (i: number) => (i + 1 < list.current.length ? i + 1 : loopAll ? 0 : -1);
 
   /** Carga la canción `index` en el canal `slot`, al volumen dado. */
-  const load = async (slot: number, index: number, volume: number) => {
+  const load = async (slot: number, index: number, volume: number, startAt?: number) => {
     const v = list.current[index];
     const parsed = v && parseYouTube(v.url);
     const box = boxes[slot].current;
@@ -102,7 +104,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     box.appendChild(host);
     const YT = await loadYT();
     const vars: Record<string, unknown> = { autoplay: 1, playsinline: 1, rel: 0 };
-    if (parsed.video && v.from) vars.start = Math.floor(v.from);
+    const begin = startAt ?? v.from ?? 0;
+    if (parsed.video && begin) vars.start = Math.floor(begin);
     if (!parsed.video) {
       vars.listType = 'playlist';
       vars.list = parsed.list;
@@ -114,6 +117,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       playerVars: vars,
       events: {
         onReady: (e: { target: YTPlayer }) => {
+          lengths.current[index] = e.target.getDuration?.() || lengths.current[index];
+          if (startAt !== undefined && parsed.video) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
           if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
@@ -176,6 +181,61 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       step();
     });
   };
+
+  /** Cuánto suena la canción `i` en el focus (sin contar el crossfade con la siguiente). */
+  const lengthOf = (i: number) => {
+    const v = list.current[i];
+    const end = v.to ?? lengths.current[i] ?? 180;
+    return Math.max(1, end - (v.from ?? 0));
+  };
+
+  /** Ubica la música en el segundo `t` del focus: qué canción y en qué parte. */
+  const seekGlobal = (t: number) => {
+    const n = list.current.length;
+    if (!n) return;
+    let start = 0;
+    let i = 0;
+    for (let guard = 0; guard < 2000; guard++) {
+      const v = list.current[i];
+      const len = lengthOf(i);
+      const last = i === n - 1 && !loopAll;
+      if (v.loop) return jump(i, (v.from ?? 0) + ((t - start) % len));
+      const span = last ? len : Math.max(1, len - crossfade);
+      if (t < start + span) return jump(i, (v.from ?? 0) + (t - start));
+      start += span;
+      i = i + 1 < n ? i + 1 : loopAll ? 0 : -1;
+      if (i < 0) break;
+    }
+    slots.current.forEach((x) => x.player?.pauseVideo());
+    setFinished(true);
+  };
+  const jump = (index: number, at: number) => {
+    fading.current = false;
+    setFinished(false);
+    const other = 1 - activeRef.current;
+    slots.current[other].player?.destroy();
+    slots.current[other] = { player: null, index: -1, ready: false };
+    if (boxes[other].current) boxes[other].current.innerHTML = '';
+    const cur = slots.current[activeRef.current];
+    setAt(index);
+    if (cur.index === index && cur.player && cur.ready) {
+      cur.player.seekTo(at, true);
+      cur.player.setVolume(100);
+    } else load(activeRef.current, index, 100, at);
+  };
+
+  // Adelantar o retroceder el focus mueve la música al mismo momento.
+  useEffect(() => {
+    if (seek) seekGlobal(seek.t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seek?.n]);
+
+  // Pausar el focus pausa la música.
+  useEffect(() => {
+    playingRef.current = !paused;
+    setPlaying(!paused);
+    slots.current.forEach((x) => (paused ? x.player?.pauseVideo() : x.player?.playVideo()));
+  }, [paused]);
 
   // Arranca con la primera canción.
   useEffect(() => {

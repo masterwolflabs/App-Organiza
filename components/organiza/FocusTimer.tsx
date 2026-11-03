@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, Pause, Play, TriangleAlert, X } from 'lucide-react';
+import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { YouTubeList } from '@/components/organiza/YouTubeList';
 import { coverCss, iso, refOf, type Item } from '@/components/organiza/model';
@@ -18,6 +18,13 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   const total = item.minutes * 60;
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(true);
+  // Adelantar / retroceder (para probar): el reloj salta y la música lo sigue.
+  const [seek, setSeek] = useState<{ t: number; n: number }>();
+  const jump = (d: number) => {
+    const t = Math.max(0, elapsed + d);
+    setElapsed(t);
+    setSeek((x) => ({ t, n: (x?.n ?? 0) + 1 }));
+  };
   useEffect(() => {
     if (!running) return;
     const t = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -92,7 +99,14 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
             </div>
           )}
 
-          <div className="mt-8 flex justify-center gap-3">
+          <div className="mt-6 flex items-center justify-center gap-1.5">
+            {[[-60, '−1 min'], [-10, '−10 s'], [10, '+10 s'], [60, '+1 min']].map(([d, label]) => (
+              <button key={label} type="button" onClick={() => jump(d as number)} className="inline-flex items-center gap-1 rounded-lg bg-white/[0.08] px-2.5 py-1.5 text-xs font-semibold tabular-nums text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.14]">
+                {(d as number) < 0 ? <Rewind className="h-3.5 w-3.5" /> : <FastForward className="h-3.5 w-3.5" />} {label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-center gap-3">
             <button type="button" onClick={() => setRunning((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-semibold text-[#fff] hover:bg-white/15">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {running ? 'Pausar' : 'Seguir'}</button>
             <button type="button" onClick={onDone} className={`rounded-xl px-4 py-2 font-semibold text-[#09090b] hover:bg-emerald-400 ${allDone ? 'animate-pulse bg-emerald-400' : 'bg-emerald-500'}`}>Terminé</button>
           </div>
@@ -100,7 +114,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
 
         {videos.length > 0 && (
           <div className="fixed bottom-4 right-4 z-10">
-            <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} />
+            <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} />
           </div>
         )}
       </div>
