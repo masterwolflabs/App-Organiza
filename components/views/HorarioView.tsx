@@ -8,7 +8,6 @@ import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWe
 import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
-import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
@@ -179,9 +178,8 @@ export const HorarioView: React.FC = () => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | 'portada' | null>(null);
+  const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | null>(null);
 
-  const rank = rankOf(xpOf(c.checks, c.days));
   const s = h.active;
   const shown = useMemo(() => h.activeItems.filter((i) => !filter || i.label_id === filter).sort(byTime), [h.activeItems, filter]);
   const open = h.activeItems.find((i) => i.id === openId) ?? h.publishedItems.find((i) => i.id === openId) ?? null;
@@ -204,14 +202,7 @@ export const HorarioView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-[1640px]" data-tour="horario">
-      <header className="relative overflow-hidden rounded-2xl ring-1 ring-white/10">
-        <div className="h-28 bg-white/[0.04] sm:h-40" style={coverCss(s.cover_url)} />
-        <button type="button" onClick={() => setPanel('portada')} data-tour="portada" className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/45 px-2.5 py-1.5 text-xs font-semibold text-[#fff] backdrop-blur hover:bg-black/60">
-          <ImagePlus className="h-3.5 w-3.5" /> Portada
-        </button>
-      </header>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <input
           key={s.id}
           defaultValue={s.name}
@@ -244,7 +235,6 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <ModeBar key={s.id} s={s} h={h} modes={modes} />
-      <WeekPlan h={h} />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <div className="flex rounded-xl bg-white/[0.04] p-0.5 ring-1 ring-white/10" data-tour="vistas">
@@ -314,7 +304,6 @@ export const HorarioView: React.FC = () => {
       {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
       {panel === 'nuevo' && <Dialog title="Nuevo horario" onClose={() => setPanel(null)}><TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} /></Dialog>}
       {panel === 'etiquetas' && <LabelsDialog h={h} onClose={() => setPanel(null)} />}
-      {panel === 'portada' && <Dialog title="Portada del horario" onClose={() => setPanel(null)}><CoverPicker value={s.cover_url} rank={rank} title={s.name} onPick={(cover) => { h.patchSchedule(s.id, { cover_url: cover }); setPanel(null); }} /></Dialog>}
     </div>
   );
 };
@@ -374,41 +363,6 @@ const SleepForm: React.FC<{ s: Schedule; onSave: (v: Sleep) => Promise<void> }> 
       <p className={`mt-3 text-sm ${hours < goal ? 'text-amber-300' : 'text-zinc-400'}`}>Son {hours} horas{hours < goal ? `: te faltan ${goal - hours} para tu objetivo` : ''}.</p>
       <button type="button" onClick={() => onSave({ bed, wake, goal })} className="mt-4 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Guardar</button>
     </div>
-  );
-};
-
-/** Qué horario usa cada día. Cambiar uno no toca los demás. */
-const WeekPlan: React.FC<{ h: HorarioApi }> = ({ h }) => {
-  const [busy, setBusy] = useState(false);
-  const live = h.schedules.filter((x) => x.status === 'publicado');
-  return (
-    <section className="mt-4 rounded-2xl bg-white/[0.03] p-3 ring-1 ring-white/10" aria-label="Tu semana">
-      <p className="mb-2 text-xs font-semibold text-zinc-400">Tu semana</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-        {WEEK.map((name, d) => {
-          const on = live.find((x) => daysOf(x).includes(d));
-          return (
-            <label key={name} className="min-w-0 rounded-xl bg-white/[0.04] px-2 py-1.5 ring-1 ring-white/10" style={on?.color ? { boxShadow: `inset 3px 0 0 ${on.color}` } : undefined}>
-              <span className="block text-[11px] font-semibold text-zinc-500">{name}</span>
-              <select
-                aria-label={`Horario del ${name}`}
-                disabled={busy}
-                value={on?.id ?? ''}
-                onChange={async (e) => {
-                  setBusy(true);
-                  await h.assignDay(d, e.target.value || null);
-                  setBusy(false);
-                }}
-                className="w-full truncate bg-transparent text-sm font-medium text-zinc-200 outline-none"
-              >
-                <option value="" className="bg-zinc-900">Libre</option>
-                {h.schedules.map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{scheduleLabel(x)}</option>)}
-              </select>
-            </label>
-          );
-        })}
-      </div>
-    </section>
   );
 };
 
