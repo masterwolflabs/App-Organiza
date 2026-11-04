@@ -92,3 +92,9 @@ claude
 ## Alimentación y Entrenamiento (3 nov 2026, rama `organiza-alimentacion-entrenamiento`)
 
 Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza/Planner.tsx` (grilla semanal, fichas con portada, metas) y `components/organiza/plan.ts` (`usePlan`, `useNutrition`). Tablas `organiza_meals`, `organiza_workouts`, `organiza_nutrition` (`docs/sql/34`, ya aplicada). Una acción se conecta con los módulos `alimentacion` / `entrenamiento` (`PlanLink`), que muestran lo del día de la acción. Pendiente: organizar compras (tarea `organizar-compras`).
+
+## Reacomodar el día (2026-11-04)
+- Tablero: acciones, eventos del calendario (tarjetas con su color, inicio–fin, sello «Calendario») y extras «Solo este día» van en una sola fila por hora.
+- `morningConflict` (dayPlan.ts): si el primer evento llega antes de que termine la rutina de la mañana (por nombre: levantarse, ducha, desayuno…), la rutina se adelanta entera.
+- Botón «Reacomodar este día» (rojo neón `.neon-red`) aplica la propuesta y abre `AdjustBox` (DayAdjust.tsx): Me gusta / Modificar / Deshacer. Modificar = escribir o dictar (SpeechRecognition es-CL) → nube `/api/organiza/adjust-day` (proposito `adjust-day`, créditos de la app) → moves + extras del plan de ese día.
+- Deshacer / Rehacer en `useHorario` (historial en memoria, 100 pasos, cambios juntos se agrupan).
