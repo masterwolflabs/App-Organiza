@@ -720,3 +720,9 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 }
 .ai-mark { animation: ai-mark 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .ai-mark { animation: none; box-shadow: 0 0 0 2px var(--mark); } }
+
+/* Tablero «Enfocar hoy» (Emanuel, 2026-11-04): pasado en gris, lo que viene a media luz; al pasar el mouse vuelve el color. */
+.tone-past, .tone-next { transition: filter .25s, opacity .25s; }
+.tone-past { filter: grayscale(1) brightness(.75); opacity: .6; }
+.tone-next { filter: saturate(.45) brightness(.9); opacity: .85; }
+.tone-past:hover, .tone-next:hover { filter: none; opacity: 1; }

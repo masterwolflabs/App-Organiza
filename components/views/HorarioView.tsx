@@ -80,6 +80,21 @@ export const HorarioView: React.FC = () => {
       /* modo privado */
     }
   };
+  const [focusToday, setFocusTodayState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('organiza-focus-today') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setFocusToday = (v: boolean) => {
+    setFocusTodayState(v);
+    try {
+      localStorage.setItem('organiza-focus-today', v ? '1' : '0');
+    } catch {
+      /* modo privado */
+    }
+  };
   // Acciones que pueden abrir el día: las de la mañana (por nombre) del horario activo.
   const startChoices = [...new Map(h.activeItems.filter((i) => /levant|despert|ducha|desayun|orar|medit/i.test(i.title)).map((i) => [refOf(i.title), i])).values()].sort(byTime).slice(0, 5);
   // Lo que marcó o propuso la IA (chat de Organiza): bordes que titilan y barra con «Aplicar».
@@ -261,7 +276,8 @@ export const HorarioView: React.FC = () => {
             <button type="button" aria-label="Semana anterior" onClick={() => setWeekShift((w) => w - 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
             <span className="min-w-36 text-center text-sm font-semibold text-zinc-200">{weekStart.getDate()} {MONTHS_SHORT[weekStart.getMonth()]} – {addDays(weekStart, 6).getDate()} {MONTHS_SHORT[addDays(weekStart, 6).getMonth()]}</span>
             <button type="button" aria-label="Semana siguiente" onClick={() => setWeekShift((w) => w + 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronRight className="h-4 w-4" /></button>
-            <label className="ml-auto flex items-center gap-1.5 text-xs text-zinc-400" data-help="Desde dónde parte cada día en el Tablero; lo de madrugada va al final">
+            <button type="button" onClick={() => setFocusToday(!focusToday)} aria-pressed={focusToday} data-help="Lo que ya pasó en gris, hoy a todo color y lo que viene a media luz" className={`ml-auto rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ${focusToday ? 'bg-amber-500/15 text-amber-200 ring-amber-400/40' : 'text-zinc-400 ring-white/10 hover:bg-white/[0.06]'}`}>🎯 Enfocar hoy</button>
+            <label className="flex items-center gap-1.5 text-xs text-zinc-400" data-help="Desde dónde parte cada día en el Tablero; lo de madrugada va al final">
               <span className="hidden sm:inline">☀️ Comenzar desde</span>
               <select value={dayStart} onChange={(e) => setDayStart(e.target.value)} className="rounded-lg bg-white/[0.05] px-2 py-1 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 outline-none">
                 <option value="h:00:00">Medianoche</option>
@@ -272,7 +288,7 @@ export const HorarioView: React.FC = () => {
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -570,7 +586,7 @@ const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Pro
   );
 };
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, onOpen, onAdd, onMove }) => {
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
   const usual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -616,6 +632,17 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
         const s0 = dayStart.startsWith('a:') ? (() => { const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2)); return a ? eff(a) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
         const rel = (m: number) => (m - s0 + 1440) % 1440;
         entries.sort((a, b) => rel(a.start) - rel(b.start) || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
+        // «Enfocar hoy» (Emanuel, 2026-11-04): lo que pasó en gris, hoy a todo color, lo que viene a media luz.
+        const now = new Date();
+        const when = date ? Math.sign(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) : 0;
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const tone = (e: Entry) => {
+          if (!focusToday || !date) return '';
+          if (when < 0) return 'tone-past';
+          if (when > 0) return 'tone-next';
+          const madrugada = s0 > 0 && e.start < s0;
+          return !madrugada && e.end <= nowMin ? 'tone-past' : '';
+        };
         const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
@@ -672,10 +699,12 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                 <React.Fragment key={e.key}>
                   {night && <p className="flex items-center gap-2 px-2 pt-1 text-xs font-semibold text-indigo-300/80"><Moon className="h-3.5 w-3.5" /> Madrugada</p>}
                   {free > 0 && !night && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
+                  <div className={tone(e)}>
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
                     return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
                   })()}
+                  </div>
                 </React.Fragment>
               );
             })}
