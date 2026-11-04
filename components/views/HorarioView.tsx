@@ -388,6 +388,15 @@ const clashes = (i: Item, day: Occurrence[]) => {
   return day.filter((o) => !o.ev.all_day && minutesOf(o.start) < b && (sameDay(o.start, o.end) ? minutesOf(o.end) : 1440) > a);
 };
 
+/** Un evento del calendario dentro del tablero (borde punteado con su color). */
+const evChip = (o: Occurrence) => (
+  <p key={o.key} data-help="Está en tu calendario ese día" className="flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-xs text-zinc-200" style={{ borderColor: `${colorOf(o.ev)}88`, background: `${colorOf(o.ev)}14` }}>
+    <CalendarClock className="h-3.5 w-3.5 shrink-0" style={{ color: colorOf(o.ev) }} />
+    <span className="tabular-nums text-zinc-400">{o.ev.all_day ? 'Todo el día' : fmtTime(o.start)}</span>
+    <span className="min-w-0 flex-1 truncate font-semibold">{o.ev.title}</span>
+  </p>
+);
+
 const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
   const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
   const today = weekdayOf(new Date());
@@ -399,6 +408,8 @@ const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: I
         const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
         const plan = date ? planOf?.(date) ?? null : null;
         const dayItems = items.filter((i) => i.weekday === d);
+        // Los eventos del calendario van entre las acciones, según su hora (los de todo el día, arriba).
+        const timed = dayOcc.filter((o) => !o.ev.all_day);
         const hasClash = dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
@@ -413,17 +424,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: I
           {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
           <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
           <div className="relative mt-1 space-y-2">
-            {dayOcc.length > 0 && (
-              <div className="space-y-1">
-                {dayOcc.map((o) => (
-                  <p key={o.key} data-help="Está en tu calendario ese día" className="flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-xs text-zinc-200" style={{ borderColor: `${colorOf(o.ev)}88`, background: `${colorOf(o.ev)}14` }}>
-                    <CalendarClock className="h-3.5 w-3.5 shrink-0" style={{ color: colorOf(o.ev) }} />
-                    <span className="tabular-nums text-zinc-400">{o.ev.all_day ? 'Todo el día' : fmtTime(o.start)}</span>
-                    <span className="min-w-0 flex-1 truncate font-semibold">{o.ev.title}</span>
-                  </p>
-                ))}
-              </div>
-            )}
+            {dayOcc.filter((o) => o.ev.all_day).map(evChip)}
             {hasClash && date && onApply && proposal?.d !== d && (
               <button type="button" onClick={() => setProposal({ d, ...proposeDay(dayItems, dayOcc, plan) })} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs font-semibold text-rose-200 ring-1 ring-rose-400/30 hover:bg-rose-500/25"><Sparkles className="h-3.5 w-3.5" /> Reacomodar este día</button>
             )}
@@ -442,11 +443,13 @@ const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: I
               const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
               return (
                 <React.Fragment key={i.id}>
+                  {timed.filter((o) => minutesOf(o.start) <= toMinutes(i.time) && (n === 0 || minutesOf(o.start) > toMinutes(day[n - 1].time))).map(evChip)}
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
                   <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
+            {timed.filter((o) => !dayItems.length || minutesOf(o.start) > toMinutes(dayItems[dayItems.length - 1].time)).map(evChip)}
             <button type="button" onClick={() => onAdd(d)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>
