@@ -102,3 +102,9 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 ## La IA ayuda con el horario (2026-11-04)
 - Nube `src/lib/ai/tools/organiza.ts` (solo app `organiza`, `EngineTool.apps`): `get_horario` (lee), `marcar_en_horario` y `proponer_cambios_horario` (no escriben: dejan `ctx.actions` → `metadata.actions` del mensaje).
 - Organiza `components/organiza/aiMarks.ts`: el chat guarda las marcas (localStorage `organiza-ai-marks`) y muestra «🎯 Ver en el Horario»; el Tablero dibuja `.ai-mark` (borde que titila) y `AIMarksBar` con «Aplicar» (usa `h.patchItem`, se puede deshacer).
+
+## Horario simple + Conceptos (2026-11-04)
+- **Regla de Emanuel:** lo que no se entiende sale de la vista y se anota en **Configuración → Conceptos** (`components/views/ConceptosView.tsx`, lista `CONCEPTOS`). Si algún día vuelve, se rehace desde ahí.
+- Cabecera del Horario: nombre + sello **● Activo / Borrador**, selector solo si hay más de un horario, **Nuevo horario** (copiar este, importar, plantillas). Debajo: Sueño y colores.
+- Borrador → franja ámbar con **Publicar**. Activo → sin «Publicar cambios»: `useHorario` re-sincroniza el Calendario solo, 2 s después del último cambio. «Pasar a borrador» abajo, junto a Borrar.
+- Guardados en Conceptos: Tu semana, Portada del horario, Modalidad, Fases, Publicar cambios (los datos `mode`/`phase` siguen en la tabla).

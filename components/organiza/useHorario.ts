@@ -300,6 +300,30 @@ export function useHorario() {
     return true;
   }, [db, items, labels, space, userId]);
 
+  /**
+   * Un horario activo no se «vuelve a publicar» (Emanuel, 2026-11-04): cada cambio queda al tiro.
+   * Cuando cambian sus tareas, el Calendario se pone al día solo, 2 s después del último cambio.
+   */
+  const synced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const live = schedules.filter((s) => s.status === 'publicado');
+    const key = JSON.stringify([live.map((s) => [s.id, daysOf(s)]), items.filter((i) => live.some((s) => s.id === i.schedule_id)).map((i) => [i.id, i.weekday, i.time, i.minutes, i.title, i.icon, i.description, labels.find((l) => l.id === i.label_id)?.color ?? ''])]);
+    if (synced.current === null) {
+      // Al abrir: si quedó algo sin pasar al Calendario (de antes de este cambio), se pasa ahora.
+      synced.current = live.some((s) => s.published_at && new Date(s.updated_at).getTime() > new Date(s.published_at).getTime() + 2000) ? '' : key;
+    }
+    if (key === synced.current) return;
+    const t = setTimeout(async () => {
+      synced.current = key;
+      if (await syncEvents(schedules)) {
+        const at = new Date().toISOString();
+        for (const s of live) await db.update('organiza_schedules', { id: s.id }, { published_at: at, updated_at: at });
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [ready, items, labels, schedules, syncEvents, db]);
+
   /** Guarda quién usa cada día y deja el calendario igual a eso. Un horario sin días vuelve a borrador. */
   const applyWeek = useCallback(async (next: Schedule[]) => {
     const at = new Date().toISOString();
@@ -310,6 +334,7 @@ export function useHorario() {
     }
     const ok = await syncEvents(settled);
     await load();
+    synced.current = null;
     return ok;
   }, [db, load, schedules, syncEvents]);
 

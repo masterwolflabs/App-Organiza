@@ -183,7 +183,6 @@ export const HorarioView: React.FC = () => {
   const s = h.active;
   const shown = useMemo(() => h.activeItems.filter((i) => !filter || i.label_id === filter).sort(byTime), [h.activeItems, filter]);
   const open = h.activeItems.find((i) => i.id === openId) ?? h.publishedItems.find((i) => i.id === openId) ?? null;
-  const dirty = s?.status === 'publicado' && !!s.published_at && new Date(s.updated_at).getTime() > new Date(s.published_at).getTime() + 2000;
 
   if (!h.ready) return <p className="text-sm text-zinc-500">Leyendo tu horario…</p>;
   if (!s)
@@ -194,7 +193,6 @@ export const HorarioView: React.FC = () => {
       </>
     );
 
-  const modes = [...new Set(h.schedules.map((x) => x.mode || 'Base'))];
   const add = async (weekday: number) => {
     const made = await h.addItem(s.id, weekday);
     if (made) setOpenId(made.id);
@@ -211,30 +209,32 @@ export const HorarioView: React.FC = () => {
           className="w-full min-w-0 rounded-lg bg-transparent font-display sm:w-auto sm:flex-1 text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
         />
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}>
-          {s.status === 'publicado' ? (dirty ? 'Publicado · con cambios' : 'Publicado') : 'Vista previa'}
+          {s.status === 'publicado' ? '● Activo' : 'Borrador'}
         </span>
-        <div className="relative">
-          <select aria-label="Elegir horario" value={s.id} onChange={(e) => h.choose(e.target.value)} className="appearance-none rounded-xl bg-white/[0.05] py-2 pl-3 pr-8 text-sm text-zinc-200 ring-1 ring-white/10">
-            {modes.map((m) => (
-              <optgroup key={m} label={m} className="bg-zinc-900">
-                {h.schedules.filter((x) => (x.mode || 'Base') === m).map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{scheduleLabel(x)}</option>)}
-              </optgroup>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-zinc-500" />
-        </div>
+        {h.schedules.length > 1 && (
+          <div className="relative">
+            <select aria-label="Elegir horario" value={s.id} onChange={(e) => h.choose(e.target.value)} className="appearance-none rounded-xl bg-white/[0.05] py-2 pl-3 pr-8 text-sm text-zinc-200 ring-1 ring-white/10">
+              {h.schedules.map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{x.name}{x.status === 'publicado' ? ' ●' : ''}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+          </div>
+        )}
         <button type="button" onClick={() => setPanel('nuevo')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
           <Plus className="h-4 w-4" /> Nuevo horario
         </button>
-        <button type="button" onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
-          <FileUp className="h-4 w-4" /> Importar
-        </button>
-        <button type="button" data-tour="publicar" onClick={() => setPanel('publicar')} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">
-          <Send className="h-4 w-4" /> {s.status === 'publicado' ? 'Publicar cambios' : 'Publicar horario'}
-        </button>
       </div>
 
-      <ModeBar key={s.id} s={s} h={h} modes={modes} />
+      <ModeBar key={s.id} s={s} h={h} />
+
+      {/* Borrador: no rige tu semana hasta publicarlo. Activo: cada cambio queda al tiro (Emanuel, 2026-11-04). */}
+      {s.status !== 'publicado' ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-amber-500/10 px-4 py-3 ring-1 ring-amber-400/30">
+          <p className="min-w-0 flex-1 text-sm text-amber-100">Este horario es un <b>borrador</b>: todavía no sale en Hoy ni en el Calendario, ni te avisa.</p>
+          <button type="button" data-tour="publicar" onClick={() => setPanel('publicar')} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">
+            <Send className="h-4 w-4" /> Publicar
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <div className="flex rounded-xl bg-white/[0.04] p-0.5 ring-1 ring-white/10" data-tour="vistas">
@@ -298,11 +298,31 @@ export const HorarioView: React.FC = () => {
       >
         <Trash2 className="h-3.5 w-3.5" /> Borrar este horario
       </button>
+      {s.status === 'publicado' && (
+        <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="ml-5 mt-8 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-white">
+          Pasar a borrador
+        </button>
+      )}
 
       {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} onOpen={setOpenId} />}
       {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => h.publish(s.id, a, days)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
       {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
-      {panel === 'nuevo' && <Dialog title="Nuevo horario" onClose={() => setPanel(null)}><TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} /></Dialog>}
+      {panel === 'nuevo' && (
+        <Dialog title="Nuevo horario" onClose={() => setPanel(null)}>
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={async () => { setPanel(null); await h.duplicate(s.id, { status: 'borrador' }); }} className="flex items-start gap-3 rounded-2xl bg-white/[0.04] p-4 text-left ring-1 ring-white/10 hover:bg-white/[0.08]">
+              <Copy className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
+              <span><b className="block font-semibold text-white">Copiar «{s.name}»</b><span className="text-sm text-zinc-400">Parte de este y cámbialo (ej: tu horario de viaje).</span></span>
+            </button>
+            <button type="button" onClick={() => { setPanel(null); setImporting(true); }} className="flex items-start gap-3 rounded-2xl bg-white/[0.04] p-4 text-left ring-1 ring-white/10 hover:bg-white/[0.08]">
+              <FileUp className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
+              <span><b className="block font-semibold text-white">Importar</b><span className="text-sm text-zinc-400">Desde una foto, un PDF o un texto.</span></span>
+            </button>
+          </div>
+          <p className="mb-2 text-xs font-semibold text-zinc-400">O parte de una plantilla</p>
+          <TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} />
+        </Dialog>
+      )}
       {panel === 'etiquetas' && <LabelsDialog h={h} onClose={() => setPanel(null)} />}
     </div>
   );
@@ -312,30 +332,11 @@ export const HorarioView: React.FC = () => {
 
 type HorarioApi = ReturnType<typeof useHorario>;
 
-/** La modalidad agrupa horarios; cada fase es una versión de ella con sus propios bloques. */
-const ModeBar: React.FC<{ s: Schedule; h: HorarioApi; modes: string[] }> = ({ s, h, modes }) => {
-  const mode = s.mode || 'Base';
-  const phases = h.schedules.filter((x) => (x.mode || 'Base') === mode);
-  const field = 'rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-zinc-200 outline-none ring-1 ring-white/10 focus:ring-sky-500/60';
-  const live = phases.find((x) => x.status === 'publicado' && x.id !== s.id);
+/** Sueño y color del horario. (Modalidad y fases quedaron guardadas en Conceptos, 2026-11-04.) */
+const ModeBar: React.FC<{ s: Schedule; h: HorarioApi }> = ({ s, h }) => {
   const [sleeping, setSleeping] = useState(false);
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-400">
-      <label className="flex items-center gap-2">
-        Modalidad
-        <input list="organiza-modes" defaultValue={mode} onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== mode && h.patchSchedule(s.id, { mode: e.target.value.trim() })} className={`${field} w-32`} />
-        <datalist id="organiza-modes">{modes.map((m) => <option key={m} value={m} />)}</datalist>
-      </label>
-      <label className="flex items-center gap-2">
-        Fase
-        <input defaultValue={s.phase} placeholder="Sin fase" onBlur={(e) => e.target.value.trim() !== s.phase && h.patchSchedule(s.id, { phase: e.target.value.trim() })} className={`${field} w-32`} />
-      </label>
-      {phases.length > 1 && phases.map((x) => (
-        <button key={x.id} type="button" onClick={() => h.choose(x.id)} aria-pressed={x.id === s.id} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${x.id === s.id ? 'bg-white/10 text-white ring-white/25' : 'ring-white/10 hover:text-white'}`}>{x.phase || x.name}{x.status === 'publicado' ? ' ●' : ''}</button>
-      ))}
-      {live && <button type="button" onClick={() => h.switchPhase(live.id, s.id)} className="rounded-full bg-sky-600 px-2.5 py-1 font-semibold text-[#fff] hover:bg-sky-500">Usar esta fase</button>}
-      <button type="button" onClick={() => h.duplicate(s.id, { name: s.name, phase: `Fase ${phases.length + 1}` })} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Plus className="mr-1 inline h-3 w-3" />Nueva fase</button>
-      <button type="button" onClick={() => h.duplicate(s.id)} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Copy className="mr-1 inline h-3 w-3" />Duplicar</button>
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-400">
       <button type="button" onClick={() => setSleeping(true)} className="rounded-full px-2.5 py-1 font-semibold ring-1 ring-white/10 hover:text-white"><Moon className="mr-1 inline h-3 w-3" />Sueño</button>
       {sleeping && <Dialog title="Tu sueño" onClose={() => setSleeping(false)}><SleepForm s={s} onSave={async (v) => { await h.setSleep(s.id, v); setSleeping(false); }} /></Dialog>}
       <div className="flex items-center gap-1" role="group" aria-label="Color del horario">
