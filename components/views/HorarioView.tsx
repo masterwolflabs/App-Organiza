@@ -5,7 +5,7 @@ import { ItemIcon, iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
@@ -49,7 +49,12 @@ export const HorarioView: React.FC = () => {
     const now = new Date();
     const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const d0 = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()) : t0;
-    if (+d0 < +t0) return { n: streakOf(ref, days, c.checks, d0, true), ghost: false };
+    if (+d0 < +t0) {
+      // Un día que ya pasó sin cumplir: ✕ (la racha vuelve a partir).
+      const n = streakOf(ref, days, c.checks, d0, true);
+      const k = c.checks.find((x) => x.ref === ref && x.day === iso(d0));
+      return { n, ghost: false, missed: !k?.done && !k?.value?.state };
+    }
     const base = streakOf(ref, days, c.checks);
     if (+d0 === +t0) return { n: base, ghost: false };
     let n = base + (days.includes(weekdayOf(now)) && !c.checks.some((x) => x.ref === ref && x.day === iso(now)) ? 1 : 0);
@@ -224,7 +229,7 @@ export const HorarioView: React.FC = () => {
           onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && h.patchSchedule(s.id, { name: e.target.value.trim() })}
           className="w-full min-w-0 rounded-lg bg-transparent font-display sm:w-auto sm:flex-1 text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
         />
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}>
+        <span className={`inline-flex items-center rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}>
           {s.status === 'publicado' ? '● Activo' : 'Borrador'}
         </span>
         {h.schedules.length > 1 && (
@@ -281,13 +286,13 @@ export const HorarioView: React.FC = () => {
         {aiMarks && (
           <AIMarksBar marks={aiMarks} present={h.activeItems.filter((i) => aiMarks.ids.includes(i.id)).length} onApply={applyAI} />
         )}
-        {view === 'tablero' && (
-          <div className="mb-3 flex items-center gap-2">
+        {(
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <button type="button" aria-label="Semana anterior" onClick={() => setWeekShift((w) => w - 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
             <span className="min-w-36 text-center text-sm font-semibold text-zinc-200">{weekStart.getDate()} {MONTHS_SHORT[weekStart.getMonth()]} – {addDays(weekStart, 6).getDate()} {MONTHS_SHORT[addDays(weekStart, 6).getMonth()]}</span>
             <button type="button" aria-label="Semana siguiente" onClick={() => setWeekShift((w) => w + 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronRight className="h-4 w-4" /></button>
             <button type="button" onClick={() => setFocusToday(!focusToday)} aria-pressed={focusToday} data-help="Lo que ya pasó en gris, hoy a todo color y lo que viene a media luz" className={`ml-auto rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ${focusToday ? 'bg-amber-500/15 text-amber-200 ring-amber-400/40' : 'text-zinc-400 ring-white/10 hover:bg-white/[0.06]'}`}>🎯 Enfocar hoy</button>
-            <label className="flex items-center gap-1.5 text-xs text-zinc-400" data-help="Desde dónde parte cada día en el Tablero; lo de madrugada va al final">
+            <label className="flex items-center gap-1.5 text-xs text-zinc-400" data-help="Desde dónde parte cada día; lo de madrugada va al final">
               <span className="hidden sm:inline">☀️ Comenzar desde</span>
               <select value={dayStart} onChange={(e) => setDayStart(e.target.value)} className="rounded-lg bg-white/[0.05] px-2 py-1 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 outline-none">
                 <option value="h:00:00">Medianoche</option>
@@ -301,26 +306,22 @@ export const HorarioView: React.FC = () => {
           </div>
         )}
         {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} parts={parts} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
-        {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
-        {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
-        {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
-        {view === 'lista' && <ListView items={shown} labels={h.labels} onOpen={setOpenId} />}
+        {view === 'semana' && <WeekGrid items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
+        {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
+        {view === 'galeria' && <Gallery items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} streak={streakFor} onOpen={setOpenId} />}
+        {view === 'lista' && <ListView items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} streak={streakFor} onOpen={setOpenId} />}
       </div>
 
-      <button
-        type="button"
-        onClick={async () => {
-          if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id);
-        }}
-        className="mt-8 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-rose-300"
-      >
-        <Trash2 className="h-3.5 w-3.5" /> Borrar este horario
-      </button>
-      {s.status === 'publicado' && (
-        <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="ml-5 mt-8 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-white">
-          Pasar a borrador
+      <div className="mt-8 flex flex-wrap gap-2">
+        {s.status === 'publicado' && (
+          <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
+            <PauseCircle className="h-4 w-4" /> Pasar a borrador
+          </button>
+        )}
+        <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-rose-500/15 hover:text-rose-300 hover:ring-rose-400/30">
+          <Trash2 className="h-4 w-4" /> Borrar este horario
         </button>
-      )}
+      </div>
 
       {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} onOpen={setOpenId} />}
       {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => h.publish(s.id, a, days)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
@@ -431,7 +432,18 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-type Streak = { n: number; ghost: boolean };
+type Streak = { n: number; ghost: boolean; missed?: boolean };
+
+/** Racha (Emanuel, 2026-11-04): el fueguito y el número. ✕ si ese día no se cumplió; en gris lo que viene. */
+const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
+  if (streak.missed) return <span data-help="Este día no se cumplió: la racha vuelve a partir" className="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-300">✕</span>;
+  const lit = !streak.ghost && streak.n > 0;
+  return (
+    <span data-help={streak.ghost ? 'La racha que alcanzas si cumples hasta este día' : 'Días seguidos cumplidos'} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${lit ? 'bg-amber-500/15 text-amber-300' : 'bg-white/[0.06] text-zinc-400'}`}>
+      <span aria-hidden className={lit ? '' : 'grayscale opacity-60'}>🔥</span>{streak.n}
+    </span>
+  );
+};
 
 const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; late?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, late, ownTime, mark, move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
@@ -454,7 +466,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           {(status || streak) && (
             <span className="flex flex-wrap items-center gap-1.5">
               {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
-              {streak && <span data-help={streak.ghost ? 'La racha que alcanzas si cumples hasta este día' : 'Días seguidos cumplidos'}><Pill color={streak.ghost || !streak.n ? '#71717a' : '#f59e0b'}>🔥 Racha {streak.n}</Pill></span>}
+              {streak && <StreakChip streak={streak} />}
             </span>
           )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
@@ -783,12 +795,52 @@ const useTimeDrag = (onMove: (id: string, time: string) => void, onOpen: (id: st
   return { drag, start };
 };
 
-const WeekGrid: React.FC<ViewProps & { onMove: (id: string, time: string) => void; schedules?: Schedule[] }> = ({ items, labels, onOpen, onMove, schedules }) => {
+/* ── Lo mismo en todas las vistas (Emanuel, 2026-11-04): semana, Comenzar desde, partes y Enfocar hoy ── */
+
+type DayCtx = { weekStart: Date; dayStart: string; focusToday: boolean; parts: Parts };
+/** Minuto en que parte el día según «Comenzar desde» (una hora, o la hora de una acción ese día). */
+const startOfDay = (dayStart: string, dayItems: Item[]) => {
+  if (!dayStart.startsWith('a:')) return toMinutes(dayStart.slice(2) || '00:00');
+  const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2));
+  return a ? toMinutes(a.time) : 0;
+};
+const dayDiff = (date: Date) => {
+  const n = new Date();
+  return Math.sign(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() - new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime());
+};
+/** Clase de «Enfocar hoy»: lo que pasó en gris, hoy a todo color (lo terminado en gris), lo que viene a media luz. */
+const toneOf = (ctx: DayCtx, date: Date, s0: number, start: number, end: number) => {
+  if (!ctx.focusToday) return '';
+  const w = dayDiff(date);
+  if (w < 0) return 'tone-past';
+  if (w > 0) return 'tone-next';
+  const now = new Date();
+  return !(s0 > 0 && start < s0) && end <= now.getHours() * 60 + now.getMinutes() ? 'tone-past' : '';
+};
+/** Los días de la semana con sus acciones en el orden de «Comenzar desde». */
+const daysOfWeek = (items: Item[], ctx: DayCtx) =>
+  WEEK.map((name, d) => {
+    const date = addDays(ctx.weekStart, d);
+    const list = items.filter((i) => i.weekday === d);
+    const s0 = startOfDay(ctx.dayStart, list);
+    const rel = (m: number) => (m - s0 + 1440) % 1440;
+    return { name, d, date, s0, list: [...list].sort((a, b) => rel(toMinutes(a.time)) - rel(toMinutes(b.time))) };
+  });
+const PartTag: React.FC<{ k: PartKey }> = ({ k }) => <span className={`text-xs font-semibold ${PART_INFO[k].cls}`}>{PART_INFO[k].emoji} {PART_INFO[k].name}</span>;
+const DayTitle: React.FC<{ name: string; date: Date }> = ({ name, date }) => (
+  <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${sameDay(date, new Date()) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}<span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span></span>
+);
+
+const WeekGrid: React.FC<ViewProps & { ctx: DayCtx; onMove: (id: string, time: string) => void; schedules?: Schedule[] }> = ({ items, labels, ctx, onOpen, onMove, schedules }) => {
   const { drag, start } = useTimeDrag(onMove, onOpen);
-  const mins = items.map((i) => toMinutes(i.time));
-  const from = Math.max(0, Math.floor((mins.length ? Math.min(...mins) : 360) / 60));
-  const to = Math.min(24, Math.ceil(Math.max(mins.length ? Math.max(...items.map((i) => toMinutes(i.time) + i.minutes)) : 1320, from * 60 + 240) / 60));
-  const y = (m: number) => ((m - from * 60) / 60) * HOUR;
+  // Una sola regla de horas para toda la semana: parte en la hora de «Comenzar desde» (lo de antes va al final).
+  const base = Math.floor(startOfDay(ctx.dayStart, items) / 60) * 60;
+  const rel = (m: number) => (m - base + 1440) % 1440;
+  const rels = items.map((i) => rel(toMinutes(i.time)));
+  const from = Math.floor((rels.length ? Math.min(...rels) : 360) / 60);
+  const to = Math.min(24, Math.ceil(Math.max(rels.length ? Math.max(...items.map((i) => rel(toMinutes(i.time)) + i.minutes)) : 1320, from * 60 + 240) / 60));
+  const y = (m: number) => ((rel(m) - from * 60) / 60) * HOUR;
+  const lines = (['madrugada', 'manana', 'tarde', 'noche'] as const).map((k) => ({ k, top: y(partRange(k, ctx.parts)[0]) })).filter((l) => l.top >= 0 && l.top < (to - from) * HOUR);
   return (
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <div className="grid min-w-[880px] grid-cols-[3rem_repeat(7,1fr)] gap-x-1.5">
@@ -797,62 +849,100 @@ const WeekGrid: React.FC<ViewProps & { onMove: (id: string, time: string) => voi
           const s = schedules?.find((x) => x.status === 'publicado' && daysOf(x).includes(d));
           return (
             <div key={n} className="pb-2 text-center">
-              <p className="text-sm font-semibold text-zinc-300">{n}</p>
-              {schedules && <p className="truncate text-[11px] font-semibold" style={{ color: s?.color ?? '#a1a1aa' }}>{s ? scheduleLabel(s) : 'Libre'}</p>}
+              <DayTitle name={n} date={addDays(ctx.weekStart, d)} />
+              {schedules && <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: s?.color ?? '#a1a1aa' }}>{s ? scheduleLabel(s) : 'Libre'}</p>}
             </div>
           );
         })}
         <div className="relative" style={{ height: (to - from) * HOUR }}>
-          {Array.from({ length: to - from }, (_, i) => <span key={i} className="absolute right-1 text-[11px] tabular-nums text-zinc-500" style={{ top: i * HOUR }}>{from + i}:00</span>)}
+          {Array.from({ length: to - from }, (_, i) => <span key={i} className="absolute right-1 text-[11px] tabular-nums text-zinc-500" style={{ top: i * HOUR }}>{(base / 60 + from + i) % 24}:00</span>)}
         </div>
-        {WEEK.map((n, d) => (
-          <div key={n} className="relative rounded-lg bg-white/[0.025]" style={{ height: (to - from) * HOUR }}>
-            {items.filter((i) => i.weekday === d).map((i) => {
-              const color = schedules?.find((x) => x.id === i.schedule_id)?.color ?? labelOf(labels, i.label_id)?.color ?? '#94a3b8';
-              return (
-                <button key={i.id} type="button" aria-label={`${i.title}, ${i.time}`} onPointerDown={(e) => start(e, i)} className="absolute inset-x-0.5 cursor-grab touch-none overflow-hidden rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white active:cursor-grabbing" style={{ top: y(toMinutes(i.time)) + (drag?.id === i.id ? drag.dy : 0), height: Math.max(20, (i.minutes / 60) * HOUR - 2), background: `${color}40`, borderLeft: `3px solid ${color}` }}>
-                  <span className="block truncate"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        {WEEK.map((n, d) => {
+          const date = addDays(ctx.weekStart, d);
+          return (
+            <div key={n} className={`relative rounded-lg bg-white/[0.025] ${ctx.focusToday && dayDiff(date) !== 0 ? (dayDiff(date) < 0 ? 'tone-past' : 'tone-next') : ''}`} style={{ height: (to - from) * HOUR }}>
+              {lines.map((l) => (
+                <div key={l.k} className={`pointer-events-none absolute inset-x-0 border-t border-dashed border-current opacity-40 ${PART_INFO[l.k].cls}`} style={{ top: l.top }}>
+                  {d === 0 && <span className="absolute left-1 top-0.5 text-[10px] font-semibold">{PART_INFO[l.k].emoji} {PART_INFO[l.k].name}</span>}
+                </div>
+              ))}
+              {items.filter((i) => i.weekday === d).map((i) => {
+                const color = schedules?.find((x) => x.id === i.schedule_id)?.color ?? labelOf(labels, i.label_id)?.color ?? '#94a3b8';
+                const m = toMinutes(i.time);
+                return (
+                  <button key={i.id} type="button" aria-label={`${i.title}, ${i.time}`} onPointerDown={(e) => start(e, i)} className={`absolute inset-x-0.5 cursor-grab touch-none overflow-hidden rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white active:cursor-grabbing ${dayDiff(date) === 0 ? toneOf(ctx, date, base, m, m + i.minutes) : ''}`} style={{ top: y(m) + (drag?.id === i.id ? drag.dy : 0), height: Math.max(20, (i.minutes / 60) * HOUR - 2), background: `${color}40`, borderLeft: `3px solid ${color}` }}>
+                    <span className="block truncate"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-const Gallery: React.FC<ViewProps> = ({ items, labels, onOpen }) => (
-  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    {items.map((i) => (
-      <button key={i.id} type="button" onClick={() => onOpen(i.id)} className="overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08]">
-        <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>
-        <div className="p-3">
-          <p className="truncate font-semibold text-white">{i.title || 'Sin título'}</p>
-          <p className="mt-1 text-sm text-zinc-400">{WEEK[i.weekday]} · {i.time}{labelOf(labels, i.label_id) ? ` · ${labelOf(labels, i.label_id)!.name}` : ''}</p>
+/** Galería: cada día con sus portadas, en el orden del día y con sus partes. */
+const Gallery: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, streak, onOpen }) => (
+  <div className="space-y-6">
+    {daysOfWeek(items, ctx).filter((g) => g.list.length).map((g) => (
+      <section key={g.d}>
+        <h2 className="mb-2"><DayTitle name={g.name} date={g.date} /></h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {g.list.map((i) => {
+            const m = toMinutes(i.time);
+            const l = labelOf(labels, i.label_id);
+            return (
+              <button key={i.id} type="button" onClick={() => onOpen(i.id)} className={`overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
+                <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>
+                <div className="space-y-1.5 p-3">
+                  <p className="truncate font-semibold text-white">{i.title || 'Sin título'}</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm tabular-nums text-zinc-400">{i.time}</span>
+                    <PartTag k={partOf(m, ctx.parts)} />
+                    {streak && <StreakChip streak={streak(i, g.date)} />}
+                    {l && <Pill color={l.color}>{l.name}</Pill>}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
-      </button>
+      </section>
     ))}
   </div>
 );
 
-const ListView: React.FC<ViewProps> = ({ items, labels, onOpen }) => (
-  <ul className="rounded-2xl bg-white/[0.025] ring-1 ring-white/5">
-    {[...items].sort((a, b) => a.weekday - b.weekday || byTime(a, b)).map((i) => {
-      const l = labelOf(labels, i.label_id);
-      return (
-        <li key={i.id} className="border-b border-white/5 last:border-0">
-          <button type="button" onClick={() => onOpen(i.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04]">
-            <span className="w-24 shrink-0 text-sm text-zinc-400">{WEEK[i.weekday]}</span>
-            <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-400">{i.time}</span>
-            <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
-            {l && <span className="hidden sm:inline"><Pill color={l.color}>{l.name}</Pill></span>}
-            {i.alarm !== 'no' && <Bell className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
-          </button>
-        </li>
-      );
-    })}
-  </ul>
+/** Lista: un bloque por día, separado por partes del día. */
+const ListView: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, streak, onOpen }) => (
+  <div className="space-y-4">
+    {daysOfWeek(items, ctx).filter((g) => g.list.length).map((g) => (
+      <section key={g.d} className="rounded-2xl bg-white/[0.025] ring-1 ring-white/5">
+        <h2 className="px-4 pb-1 pt-3"><DayTitle name={g.name} date={g.date} /></h2>
+        <ul>
+          {g.list.map((i, n) => {
+            const m = toMinutes(i.time);
+            const part = partOf(m, ctx.parts);
+            const head = n === 0 || partOf(toMinutes(g.list[n - 1].time), ctx.parts) !== part;
+            const l = labelOf(labels, i.label_id);
+            return (
+              <li key={i.id} className="border-b border-white/5 last:border-0">
+                {head && <p className="px-4 pb-0.5 pt-2"><PartTag k={part} /></p>}
+                <button type="button" onClick={() => onOpen(i.id)} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
+                  <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-400">{i.time}</span>
+                  <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
+                  {streak && <StreakChip streak={streak(i, g.date)} />}
+                  {l && <span className="hidden sm:inline"><Pill color={l.color}>{l.name}</Pill></span>}
+                  {i.alarm !== 'no' && <Bell className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ))}
+  </div>
 );
 
 /* ── Ventanas ───────────────────────────────────────────────────────── */
