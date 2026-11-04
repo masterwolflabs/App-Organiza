@@ -10,7 +10,8 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
-import { freeGaps, morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
+import { morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Extra, type Moves } from '@/components/organiza/dayPlan';
+import { AdjustBox, adjustDayAI, type Line } from '@/components/organiza/DayAdjust';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
@@ -205,7 +206,7 @@ export const HorarioView: React.FC = () => {
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, moves) => h.setPlan(iso(date), { moves })} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -401,11 +402,12 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
           {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
-          {!move?.off && move?.time && <Pill color="#38bdf8">↪ Este día a las {move.time}</Pill>}
+          {!move?.off && move?.time && move.time !== item.time && <Pill color="#38bdf8">↪ Solo este día</Pill>}
           {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
         </div>
         <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
-          <span>{item.time}</span>
+          {/* Si ese día se reacomodó, la hora que vale es la nueva (la de siempre queda tachada). */}
+          {!move?.off && move?.time && move.time !== item.time ? <span><span className="font-semibold text-sky-200">{move.time}</span> <span className="text-xs text-zinc-500 line-through">{item.time}</span></span> : <span>{item.time}</span>}
           <span className="ml-auto flex items-center gap-1.5">
             {item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
             {item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
@@ -459,8 +461,20 @@ const evChip = (o: Occurrence) => {
   );
 };
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
-  const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
+/** Una actividad agregada solo para ese día (al reacomodar, ej. «Elegir la ropa»). */
+const ExtraCard: React.FC<{ x: Extra }> = ({ x }) => (
+  <div data-help="Agregada solo para este día" className="relative z-10 rounded-xl border border-dashed border-emerald-400/50 bg-emerald-500/[0.07] p-3 text-left backdrop-blur-sm">
+    <p className="flex items-center gap-2 font-semibold text-white"><span aria-hidden>{emojiFor(x.title)}</span><span className="min-w-0 flex-1 truncate">{x.title}</span></p>
+    <div className="mt-2 flex items-center gap-2 text-sm tabular-nums text-zinc-300">
+      <span>{x.time} – {toTime(toMinutes(x.time) + x.minutes)}</span>
+      <span className="ml-auto"><Pill color="#34d399">✨ Solo este día</Pill></span>
+    </div>
+  </div>
+);
+
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, onOpen, onAdd, onMove }) => {
+  // Después de reacomodar: «¿Te gustó el cambio?» con lo que se movió (y lo que dijo la IA).
+  const [review, setReview] = useState<{ d: number; lines: Line[]; summary?: string } | null>(null);
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
   return (
@@ -476,6 +490,13 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
         const timed = dayOcc.filter((o) => !o.ev.all_day);
         // La rutina de la mañana después de un evento temprano (ej. carrera 7:00, levantarse 9:00) también es choque.
         const morning = morningConflict(dayItems, dayOcc, plan);
+        // Todo el día en una sola fila por hora: acciones, eventos del calendario y lo agregado solo ese día.
+        type Entry = { key: string; start: number; end: number } & ({ kind: 'item'; i: Item } | { kind: 'ev'; o: Occurrence } | { kind: 'extra'; x: Extra });
+        const entries: Entry[] = [
+          ...dayItems.map((i): Entry => ({ kind: 'item', i, key: i.id, start: eff(i), end: plan?.moves?.[i.id]?.off ? eff(i) : eff(i) + i.minutes })),
+          ...timed.map((o): Entry => ({ kind: 'ev', o, key: o.key, start: minutesOf(o.start), end: sameDay(o.start, o.end) ? minutesOf(o.end) : 1440 })),
+          ...(plan?.extras ?? []).map((x): Entry => ({ kind: 'extra', x, key: x.id, start: toMinutes(x.time), end: toMinutes(x.time) + x.minutes })),
+        ].sort((a, b) => a.start - b.start || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
         const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
@@ -491,31 +512,52 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
           <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
           <div className="relative mt-1 space-y-2">
             {dayOcc.filter((o) => o.ev.all_day).map(evChip)}
-            {hasClash && date && onApply && proposal?.d !== d && (
-              <button type="button" onClick={() => setProposal({ d, ...proposeDay(dayItems, dayOcc, plan) })} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs font-semibold text-rose-200 ring-1 ring-rose-400/30 hover:bg-rose-500/25"><Sparkles className="h-3.5 w-3.5" /> Reacomodar este día</button>
+            {hasClash && date && onApply && review?.d !== d && (
+              <button
+                type="button"
+                onClick={() => {
+                  const p = proposeDay(dayItems, dayOcc, plan);
+                  onApply(date, { moves: p.moves });
+                  setReview({ d, lines: p.lines });
+                }}
+                className="neon-red flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-2 py-2 text-xs font-bold text-[#fff] hover:bg-rose-500"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#fff]" /> Reacomodar este día
+              </button>
             )}
-            {proposal?.d === d && date && (
-              <div className="space-y-1.5 rounded-xl bg-[#17191f] p-2.5 text-xs ring-1 ring-sky-400/30">
-                <p className="font-semibold text-white">Propuesta para el {name.toLowerCase()} {date.getDate()}</p>
-                {proposal.lines.length ? proposal.lines.map((l, k) => <p key={k} className={l.tone === 'lock' ? 'text-rose-200' : l.tone === 'off' ? 'text-zinc-400' : 'text-sky-200'}>{l.tone === 'lock' ? '🔒' : l.tone === 'off' ? '⏸️' : '↪'} {l.text}</p>) : <p className="text-zinc-400">No hay nada que se pueda mover solo.</p>}
-                <p className="text-[11px] text-zinc-500">Solo cambia ese día: tu horario queda igual.</p>
-                <div className="flex gap-1.5 pt-1">
-                  <button type="button" onClick={() => { onApply?.(date, proposal.moves); setProposal(null); }} className="flex-1 rounded-lg bg-sky-600 py-1 font-semibold text-[#fff] hover:bg-sky-500">Aplicar</button>
-                  <button type="button" onClick={() => setProposal(null)} className="flex-1 rounded-lg bg-white/[0.06] py-1 font-semibold text-zinc-300 hover:bg-white/[0.1]">Cancelar</button>
-                </div>
-              </div>
+            {!hasClash && date && onApply && review?.d !== d && (Object.keys(plan?.moves ?? {}).length > 0 || (plan?.extras?.length ?? 0) > 0) && (
+              <button type="button" onClick={() => setReview({ d, lines: [] })} className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-sky-300 ring-1 ring-sky-400/20 hover:bg-sky-500/10"><Sparkles className="h-3.5 w-3.5" /> Día reacomodado · ajustar</button>
             )}
-            {dayItems.map((i, n, day) => {
-              const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
+            {review?.d === d && date && (
+              <AdjustBox
+                title={`Reacomodé el ${name.toLowerCase()} ${date.getDate()}`}
+                lines={review.lines}
+                summary={review.summary}
+                onLike={() => setReview(null)}
+                onUndo={() => {
+                  onUndo?.();
+                  setReview(null);
+                }}
+                onSend={async (text) => {
+                  const r = await adjustDayAI({ dayLabel: `${name} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`, items: dayItems, events: dayOcc, plan, request: text });
+                  onApply?.(date, { moves: r.moves, extras: r.extras });
+                  setReview({ d, lines: r.lines, summary: r.summary });
+                }}
+              />
+            )}
+            {entries.map((e, n) => {
+              const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => x.end)) : null;
+              const free = prevEnd !== null && e.start - prevEnd >= 15 ? e.start - prevEnd : 0;
               return (
-                <React.Fragment key={i.id}>
-                  {timed.filter((o) => minutesOf(o.start) <= eff(i) && (n === 0 || minutesOf(o.start) > eff(day[n - 1]))).map(evChip)}
-                  {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />
+                <React.Fragment key={e.key}>
+                  {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
+                  {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
+                    const i = e.i;
+                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
+                  })()}
                 </React.Fragment>
               );
             })}
-            {timed.filter((o) => !dayItems.length || minutesOf(o.start) > eff(dayItems[dayItems.length - 1])).map(evChip)}
             <button type="button" onClick={() => onAdd(d)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>

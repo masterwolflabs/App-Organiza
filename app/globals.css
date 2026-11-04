@@ -704,3 +704,11 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 @keyframes mf-tt-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .mf-tt-in { animation: mf-tt-in 0.35s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .mf-tt-flash, .mf-tt-in { animation: none; } }
+
+/* «Reacomodar este día»: rojo sólido que late como un neón (Emanuel, 2026-11-04). */
+@keyframes neon-red {
+  0%, 100% { box-shadow: 0 0 4px #f43f5e99, 0 0 10px #f43f5e55; }
+  50% { box-shadow: 0 0 10px #fb7185, 0 0 26px #f43f5ecc, 0 0 44px #f43f5e66; }
+}
+.neon-red { animation: neon-red 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .neon-red { animation: none; box-shadow: 0 0 10px #f43f5e99; } }
