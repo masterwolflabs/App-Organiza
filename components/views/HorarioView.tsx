@@ -1,7 +1,7 @@
 'use client';
 
 import { MARK_COLORS, setMarks, useAIMarks, type AIChange, type AIMarks } from '@/components/organiza/aiMarks';
-import { ItemIcon } from '@/components/organiza/IconPicker';
+import { ItemIcon, iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
@@ -64,6 +64,24 @@ export const HorarioView: React.FC = () => {
     // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
     return k?.done ? 'hecho' : k && (k.value.started || k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
   };
+  // Desde dónde parte el día en el Tablero: 'h:HH:MM' (una hora) o 'a:<acción>' (ej. Levantarse). En este dispositivo.
+  const [dayStart, setDayStartState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('organiza-day-start') || 'h:00:00';
+    } catch {
+      return 'h:00:00';
+    }
+  });
+  const setDayStart = (v: string) => {
+    setDayStartState(v);
+    try {
+      localStorage.setItem('organiza-day-start', v);
+    } catch {
+      /* modo privado */
+    }
+  };
+  // Acciones que pueden abrir el día: las de la mañana (por nombre) del horario activo.
+  const startChoices = [...new Map(h.activeItems.filter((i) => /levant|despert|ducha|desayun|orar|medit/i.test(i.title)).map((i) => [refOf(i.title), i])).values()].sort(byTime).slice(0, 5);
   // Lo que marcó o propuso la IA (chat de Organiza): bordes que titilan y barra con «Aplicar».
   const aiMarks = useAIMarks();
   const markOf = (id: string) => (aiMarks?.ids.includes(id) ? MARK_COLORS[aiMarks.color] ?? '#facc15' : undefined);
@@ -243,10 +261,18 @@ export const HorarioView: React.FC = () => {
             <button type="button" aria-label="Semana anterior" onClick={() => setWeekShift((w) => w - 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
             <span className="min-w-36 text-center text-sm font-semibold text-zinc-200">{weekStart.getDate()} {MONTHS_SHORT[weekStart.getMonth()]} – {addDays(weekStart, 6).getDate()} {MONTHS_SHORT[addDays(weekStart, 6).getMonth()]}</span>
             <button type="button" aria-label="Semana siguiente" onClick={() => setWeekShift((w) => w + 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronRight className="h-4 w-4" /></button>
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-zinc-400" data-help="Desde dónde parte cada día en el Tablero; lo de madrugada va al final">
+              <span className="hidden sm:inline">☀️ Comenzar desde</span>
+              <select value={dayStart} onChange={(e) => setDayStart(e.target.value)} className="rounded-lg bg-white/[0.05] px-2 py-1 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 outline-none">
+                <option value="h:00:00">Medianoche</option>
+                {startChoices.map((i) => <option key={i.id} value={`a:${refOf(i.title)}`}>{iconText(i.icon) || emojiFor(i.title)} {i.title}</option>)}
+                {['04:00', '05:00', '06:00', '07:00', '08:00'].map((t) => <option key={t} value={`h:${t}`}>Las {t}</option>)}
+              </select>
+            </label>
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -544,7 +570,7 @@ const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Pro
   );
 };
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', onOpen, onAdd, onMove }) => {
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
   const usual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -584,7 +610,12 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
           ...dayItems.map((i): Entry => ({ kind: 'item', i, key: i.id, start: eff(i), end: plan?.moves?.[i.id]?.off ? eff(i) : eff(i) + i.minutes })),
           ...timed.map((o): Entry => ({ kind: 'ev', o, key: o.key, start: minutesOf(o.start), end: sameDay(o.start, o.end) ? minutesOf(o.end) : 1440 })),
           ...(plan?.extras ?? []).map((x): Entry => ({ kind: 'extra', x, key: x.id, start: toMinutes(x.time), end: toMinutes(x.time) + x.minutes })),
-        ].sort((a, b) => a.start - b.start || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
+        ];
+        // «Comenzar desde» (Emanuel, 2026-11-04): el día parte a esa hora (o en esa acción, ej. Levantarse);
+        // lo que cae antes (madrugada) va al final.
+        const s0 = dayStart.startsWith('a:') ? (() => { const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2)); return a ? eff(a) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
+        const rel = (m: number) => (m - s0 + 1440) % 1440;
+        entries.sort((a, b) => rel(a.start) - rel(b.start) || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
         const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
@@ -634,11 +665,13 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
               />
             )}
             {entries.map((e, n) => {
-              const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => x.end)) : null;
-              const free = prevEnd !== null && e.start - prevEnd >= 15 ? e.start - prevEnd : 0;
+              const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => rel(x.start) + (x.end - x.start))) : null;
+              const free = prevEnd !== null && rel(e.start) - prevEnd >= 15 ? rel(e.start) - prevEnd : 0;
+              const night = s0 > 0 && e.start < s0 && (n === 0 || entries[n - 1].start >= s0);
               return (
                 <React.Fragment key={e.key}>
-                  {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
+                  {night && <p className="flex items-center gap-2 px-2 pt-1 text-xs font-semibold text-indigo-300/80"><Moon className="h-3.5 w-3.5" /> Madrugada</p>}
+                  {free > 0 && !night && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
                     return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
