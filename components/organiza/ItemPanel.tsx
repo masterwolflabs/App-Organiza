@@ -40,32 +40,39 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
     } else setNotice('');
     set({ time });
   };
-  // Hora distinta según el día (Emanuel, 2026-11-04): la acción sigue siendo una (misma racha), pero
-  // cada día puede tener su hora y duración. Ej.: de lunes a viernes 09:00, sábado y domingo 10:30.
+  // Variantes de horario (Emanuel, 2026-11-04): la acción sigue siendo una (misma racha), pero algunos
+  // días pueden empezar a otra hora y durar distinto. La hora más común es la «normal» (ruedas de arriba);
+  // los demás días se agrupan como variantes, cada una con sus días, inicio y fin.
   const siblings = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && refOf(i.title) === refOf(item.title)).sort((a, b) => a.weekday - b.weekday);
-  const varies = siblings.some((i) => i.time !== siblings[0]?.time || i.minutes !== siblings[0]?.minutes);
-  const [perDay, setPerDay] = useState(varies);
-  useEffect(() => {
-    setPerDay(varies);
-    setEditing(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id]);
-  const [editing, setEditing] = useState<{ ids: string[]; label: string } | null>(null);
-  const editTarget = editing ? siblings.filter((i) => editing.ids.includes(i.id)) : [];
-  // Cambia la hora solo en esos días; si choca con otra acción ese día, rebota a la siguiente libre.
-  const setDaysTime = async (targets: Item[], wanted: string) => {
+  const keyOf = (i: Item) => `${i.time}|${i.minutes}`;
+  const groups = new Map<string, Item[]>();
+  for (const i of siblings) groups.set(keyOf(i), [...(groups.get(keyOf(i)) ?? []), i]);
+  const mainKey = [...groups.entries()].sort((x, y) => y[1].length - x[1].length)[0]?.[0] ?? keyOf(item);
+  const main = groups.get(mainKey) ?? [item];
+  const variants = [...groups.entries()].filter(([k]) => k !== mainKey).map(([key, list]) => ({ key, list }));
+  const base = main[0] ?? item;
+  // Cambia la hora y duración solo en esos días; si chocan con otra acción ese día, rebota a la siguiente libre.
+  const setDays = async (targets: Item[], wanted: string, minutes: number) => {
     const notes: string[] = [];
     for (const t of targets) {
       const busy = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && i.weekday === t.weekday && refOf(i.title) !== refOf(item.title));
-      const time = freeTime(busy, wanted, t.minutes);
-      if (time !== wanted) notes.push(`${WEEK[t.weekday]} quedó a las ${time} para no chocar con ${[...new Set(overlaps(busy, wanted, t.minutes).map((i) => i.title))].join(', ')}`);
-      await h.patchItem(t.id, { time });
+      const time = freeTime(busy, wanted, minutes);
+      if (time !== wanted) notes.push(`${WEEK[t.weekday]} quedó a las ${time} para no chocar con ${[...new Set(overlaps(busy, wanted, minutes).map((i) => i.title))].join(', ')}`);
+      await h.patchItem(t.id, { time, minutes });
     }
     setNotice(notes.length ? `⏰ ${notes.join(' · ')}.` : '');
   };
-  const setDaysMinutes = (targets: Item[], minutes: number) => Promise.all(targets.map((t) => h.patchItem(t.id, { minutes })));
-  const weekdaysOnly = siblings.filter((i) => i.weekday < 5);
-  const weekend = siblings.filter((i) => i.weekday >= 5);
+  const [draft, setDraft] = useState<{ days: number[]; time: string; minutes: number; from?: string } | null>(null);
+  useEffect(() => setDraft(null), [item.id]);
+  const saveDraft = async () => {
+    if (!draft) return;
+    const chosen = siblings.filter((i) => draft.days.includes(i.weekday));
+    // Los días que salieron de la variante que se edita vuelven a la hora normal.
+    const left = draft.from ? (groups.get(draft.from) ?? []).filter((i) => !draft.days.includes(i.weekday)) : [];
+    if (left.length) await setDays(left, base.time, base.minutes);
+    if (chosen.length) await setDays(chosen, draft.time, draft.minutes);
+    setDraft(null);
+  };
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -153,59 +160,49 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   }
                   await h.repeatOn(item, d, on);
                 }} /></div>
-                {!perDay && <>
-                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={item.time} onChange={setTime} /></div>
-                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={item.minutes} onChange={(minutes) => set({ minutes })} /></div>
-                <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(item.time) + item.minutes)} onChange={(end) => set({ minutes: ((toMinutes(end) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} /></div>
-                </>}
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={base.time} onChange={(t) => (siblings.length > 1 ? setDays(main, t, base.minutes) : setTime(t))} /></div>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={base.minutes} onChange={(minutes) => setDays(main, base.time, minutes)} /></div>
+                <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(base.time) + base.minutes)} onChange={(end) => setDays(main, base.time, ((toMinutes(end) - toMinutes(base.time) + 1440) % 1440) || base.minutes)} /></div>
               </div>
-              {siblings.length > 1 && (
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/10">
-                    <span className="text-sm text-zinc-200">🕐 Misma hora todos los días</span>
-                    <input type="checkbox" checked={!perDay} onChange={async (e) => {
-                      if (e.target.checked) {
-                        // Volver a una sola hora: todos los días toman la del día abierto.
-                        await set({ time: item.time, minutes: item.minutes });
-                        setEditing(null);
-                      }
-                      setPerDay(!e.target.checked);
-                    }} className="h-4 w-4 accent-sky-500" />
-                  </label>
-                  {!perDay && weekdaysOnly.length > 0 && weekend.length > 0 && (
-                    <button type="button" onClick={() => { setPerDay(true); setEditing({ ids: weekend.map((i) => i.id), label: weekend.map((i) => WEEK[i.weekday]).join(' y ') }); }} className="w-full rounded-xl bg-sky-500/10 px-3 py-2 text-left text-sm font-semibold text-sky-200 ring-1 ring-sky-400/25 hover:bg-sky-500/15">✏️ El fin de semana es a otra hora</button>
-                  )}
-                  {perDay && (
-                    <div className="space-y-1.5">
-                      {weekdaysOnly.length > 1 && weekend.length > 0 && (
-                        <div className="flex gap-1.5">
-                          <button type="button" onClick={() => setEditing({ ids: weekdaysOnly.map((i) => i.id), label: 'los días de semana' })} className="flex-1 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">✏️ Toda la semana</button>
-                          <button type="button" onClick={() => setEditing({ ids: weekend.map((i) => i.id), label: 'el fin de semana' })} className="flex-1 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">✏️ Todo el fin de semana</button>
-                        </div>
-                      )}
-                      {siblings.map((sib) => {
-                        const on = editing?.ids.length === 1 && editing.ids[0] === sib.id;
-                        return (
-                          <button key={sib.id} type="button" onClick={() => setEditing(on ? null : { ids: [sib.id], label: WEEK[sib.weekday] })} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ${editing?.ids.includes(sib.id) ? 'bg-sky-500/15 ring-sky-400/40' : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.06]'}`}>
-                            <span className={`w-10 font-semibold ${sib.id === item.id ? 'text-sky-200' : 'text-zinc-300'}`}>{WEEK[sib.weekday].slice(0, 3)}</span>
-                            <span className="flex-1 tabular-nums text-white">{sib.time} – {toTime(toMinutes(sib.time) + sib.minutes)}</span>
-                            <span className="text-xs tabular-nums text-zinc-500">{sib.minutes} min</span>
-                            <span aria-hidden>✏️</span>
-                          </button>
-                        );
+              {variants.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-zinc-400">🔀 Variantes · misma acción y misma racha, otra hora</p>
+                  {variants.map((v) => (
+                    <div key={v.key} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ring-1 ${draft?.from === v.key ? 'bg-sky-500/15 ring-sky-400/40' : 'bg-white/[0.03] ring-white/10'}`}>
+                      <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{v.list.map((i) => WEEK[i.weekday].slice(0, 3)).join(', ')}</span>
+                      <span className="tabular-nums text-white">{v.list[0].time} – {toTime(toMinutes(v.list[0].time) + v.list[0].minutes)}</span>
+                      <button type="button" aria-label="Editar variante" onClick={() => setDraft({ days: v.list.map((i) => i.weekday), time: v.list[0].time, minutes: v.list[0].minutes, from: v.key })} className="rounded-lg p-1 hover:bg-white/10">✏️</button>
+                      <button type="button" aria-label="Quitar variante" data-help="Esos días vuelven a la hora normal" onClick={() => setDays(v.list, base.time, base.minutes)} className="rounded-lg p-1 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {siblings.length > 1 && !draft && (
+                <button type="button" onClick={() => setDraft({ days: siblings.filter((i) => i.weekday >= 5 && keyOf(i) === mainKey).map((i) => i.weekday), time: base.time, minutes: base.minutes })} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 px-3 py-2 text-sm font-semibold text-zinc-300 hover:border-sky-400/50 hover:bg-sky-500/10 hover:text-sky-200">
+                  <Plus className="h-4 w-4" /> Agregar variante <span className="font-normal text-zinc-500">(otra hora algunos días)</span>
+                </button>
+              )}
+              {draft && (
+                <div className="space-y-3 rounded-xl bg-sky-500/[0.06] p-3 ring-1 ring-sky-400/30">
+                  <p className="text-sm font-semibold text-sky-200">{draft.from ? '✏️ Editar variante' : '✏️ Nueva variante'}</p>
+                  <div>
+                    <span className="mb-1 block text-xs font-medium text-zinc-400">¿Qué días?</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {siblings.map((i) => {
+                        const on = draft.days.includes(i.weekday);
+                        return <button key={i.id} type="button" aria-pressed={on} onClick={() => setDraft({ ...draft, days: on ? draft.days.filter((d) => d !== i.weekday) : [...draft.days, i.weekday] })} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${on ? 'bg-sky-600 text-[#fff] ring-sky-500' : 'text-zinc-400 ring-white/15 hover:bg-white/[0.06]'}`}>{WEEK[i.weekday].slice(0, 3)}</button>;
                       })}
                     </div>
-                  )}
-                  {perDay && editing && editTarget.length > 0 && (
-                    <div className="space-y-2 rounded-xl bg-sky-500/[0.06] p-3 ring-1 ring-sky-400/30">
-                      <p className="text-xs font-semibold text-sky-200">Cambiando {editing.label}</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ Empieza</span><TimeWheel value={editTarget[0].time} onChange={(t) => setDaysTime(editTarget, t)} /></div>
-                        <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ Dura</span><DurationWheel value={editTarget[0].minutes} onChange={(m) => setDaysMinutes(editTarget, m)} /></div>
-                      </div>
-                      <button type="button" onClick={() => setEditing(null)} className="w-full rounded-lg bg-sky-600 py-1.5 text-sm font-semibold text-[#fff] hover:bg-sky-500">Listo</button>
-                    </div>
-                  )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ Empieza</span><TimeWheel value={draft.time} onChange={(time) => setDraft({ ...draft, time })} /></div>
+                    <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 Termina</span><TimeWheel value={toTime(toMinutes(draft.time) + draft.minutes)} onChange={(end) => setDraft({ ...draft, minutes: ((toMinutes(end) - toMinutes(draft.time) + 1440) % 1440) || draft.minutes })} /></div>
+                    <div className="col-span-2"><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ Dura</span><DurationWheel value={draft.minutes} onChange={(minutes) => setDraft({ ...draft, minutes })} /></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" disabled={!draft.days.length} onClick={saveDraft} className="flex-1 rounded-lg bg-sky-600 py-1.5 text-sm font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Guardar variante</button>
+                    <button type="button" onClick={() => setDraft(null)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-sm font-semibold text-zinc-300 hover:bg-white/[0.1]">Cancelar</button>
+                  </div>
                 </div>
               )}
               {notice && <p className="rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-200 ring-1 ring-sky-400/25">{notice}</p>}
