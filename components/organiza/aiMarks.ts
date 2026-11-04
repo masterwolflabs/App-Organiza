@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
  * queda guardado (en este dispositivo) para que el Tablero dibuje los bordes que titilan y la barra
  * con la propuesta. Nunca se aplica nada sin que la persona apriete «Aplicar».
  */
-export type AIChange = { id: string; title: string; day: string; patch: { label?: string; icon?: string; time?: string; minutes?: number; flex?: string } };
+export type AIChange = { id: string; title: string; day: string; patch: { label?: string; icon?: string; time?: string; minutes?: number; flex?: string; alarm?: 'no' | 'notificacion' | 'alarma'; alarm_before?: number; focus?: boolean; description?: string } };
 export type AIMarks = { ids: string[]; color: string; reason: string; summary?: string; changes?: AIChange[]; at: number };
 type Action = { type: string; ids?: string[]; color?: string; reason?: string; summary?: string; changes?: AIChange[] };
 

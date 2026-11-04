@@ -124,6 +124,10 @@ export const HorarioView: React.FC = () => {
       if (c.patch.time) patch.time = c.patch.time;
       if (c.patch.minutes) patch.minutes = c.patch.minutes;
       if (c.patch.flex) Object.assign(patch, { flex: c.patch.flex, priority: PRIORITY[c.patch.flex] ?? 2 });
+      if (c.patch.alarm) patch.alarm = c.patch.alarm;
+      if (typeof c.patch.alarm_before === 'number') patch.alarm_before = c.patch.alarm_before;
+      if (typeof c.patch.focus === 'boolean') patch.focus = c.patch.focus;
+      if (typeof c.patch.description === 'string') patch.description = c.patch.description;
       if (Object.keys(patch).length) {
         await h.patchItem(c.id, patch);
         n++;
@@ -561,7 +565,7 @@ const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Pro
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
   const changes = marks.changes ?? [];
-  const describe = (c: AIChange) => [c.patch.label && `categoría ${c.patch.label}`, c.patch.icon && `ícono ${c.patch.icon}`, c.patch.time && `a las ${c.patch.time}`, c.patch.minutes && `${c.patch.minutes} min`, c.patch.flex && ({ obligatorio: 'no negociable', flexible: 'modificable', secundario: 'flexible' } as Record<string, string>)[c.patch.flex]].filter(Boolean).join(', ');
+  const describe = (c: AIChange) => [c.patch.label && `categoría ${c.patch.label}`, c.patch.icon && `ícono ${c.patch.icon}`, c.patch.time && `a las ${c.patch.time}`, c.patch.minutes && `${c.patch.minutes} min`, c.patch.flex && ({ obligatorio: 'no negociable', flexible: 'modificable', secundario: 'flexible' } as Record<string, string>)[c.patch.flex], c.patch.alarm && ({ no: 'sin aviso', notificacion: '🔔 notificación', alarma: '⏰ alarma' } as Record<string, string>)[c.patch.alarm], typeof c.patch.alarm_before === 'number' && (c.patch.alarm_before ? `${c.patch.alarm_before} min antes` : 'a la hora'), typeof c.patch.focus === 'boolean' && (c.patch.focus ? 'con focus' : 'sin focus'), c.patch.description !== undefined && 'descripción nueva'].filter(Boolean).join(', ');
   return (
     <div className="mb-3 space-y-2 rounded-xl px-3 py-2.5 text-sm ring-1" style={{ background: `${color}14`, ['--tw-ring-color' as string]: `${color}55` }}>
       <div className="flex flex-wrap items-center gap-2">
