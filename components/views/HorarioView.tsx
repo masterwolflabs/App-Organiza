@@ -1,5 +1,6 @@
 'use client';
 
+import { MARK_COLORS, setMarks, useAIMarks, type AIChange, type AIMarks } from '@/components/organiza/aiMarks';
 import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
@@ -62,6 +63,41 @@ export const HorarioView: React.FC = () => {
     const k = c.checks.find((x) => x.ref === refOf(i.title) && x.day === iso(now));
     // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
     return k?.done ? 'hecho' : k && (k.value.started || k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
+  };
+  // Lo que marcó o propuso la IA (chat de Organiza): bordes que titilan y barra con «Aplicar».
+  const aiMarks = useAIMarks();
+  const markOf = (id: string) => (aiMarks?.ids.includes(id) ? MARK_COLORS[aiMarks.color] ?? '#facc15' : undefined);
+  const applyAI = async () => {
+    const PRIORITY: Record<string, number> = { obligatorio: 1, flexible: 2, secundario: 3 };
+    let n = 0;
+    // Una categoría nueva se crea una sola vez aunque la pidan varias acciones.
+    const made = new Map<string, string>();
+    for (const c of aiMarks?.changes ?? []) {
+      if (!h.activeItems.some((i) => i.id === c.id)) continue;
+      const patch: Partial<Item> = {};
+      if (c.patch.label) {
+        const key = c.patch.label.toLowerCase();
+        let id = made.get(key) ?? h.labels.find((x) => x.name.toLowerCase() === key)?.id;
+        if (!id) {
+          const l = await h.ensureLabel(c.patch.label, LABEL_COLORS[(h.labels.length + made.size) % LABEL_COLORS.length]);
+          if (l) id = l.id;
+        }
+        if (id) {
+          made.set(key, id);
+          patch.label_id = id;
+        }
+      }
+      if (c.patch.icon) patch.icon = c.patch.icon;
+      if (c.patch.time) patch.time = c.patch.time;
+      if (c.patch.minutes) patch.minutes = c.patch.minutes;
+      if (c.patch.flex) Object.assign(patch, { flex: c.patch.flex, priority: PRIORITY[c.patch.flex] ?? 2 });
+      if (Object.keys(patch).length) {
+        await h.patchItem(c.id, patch);
+        n++;
+      }
+    }
+    setMarks(null);
+    setUndone(`✨ Apliqué ${n} ${n === 1 ? 'cambio' : 'cambios'} de la IA (↶ para deshacer)`);
   };
   // Deshacer / Rehacer: botones ↶ ↷ y Cmd+Z / Cmd+Shift+Z (fuera de los campos de texto, que tienen el suyo).
   const [undone, setUndone] = useState<string | null>(null);
@@ -199,6 +235,9 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <div className="mt-5">
+        {aiMarks && (
+          <AIMarksBar marks={aiMarks} present={h.activeItems.filter((i) => aiMarks.ids.includes(i.id)).length} onApply={applyAI} />
+        )}
         {view === 'tablero' && (
           <div className="mb-3 flex items-center gap-2">
             <button type="button" aria-label="Semana anterior" onClick={() => setWeekShift((w) => w - 1)} className="rounded-lg p-1.5 text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
@@ -207,7 +246,7 @@ export const HorarioView: React.FC = () => {
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -375,7 +414,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 
 type Streak = { n: number; ghost: boolean };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; ownTime?: boolean; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, ownTime, move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, ownTime, mark, move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -383,7 +422,8 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
-      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'}`}
+      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
+      style={mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : undefined}
     >
       {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
       <div className="space-y-2 p-3">
@@ -473,7 +513,38 @@ const ExtraCard: React.FC<{ x: Extra }> = ({ x }) => (
   </div>
 );
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, onOpen, onAdd, onMove }) => {
+/** Barra de la IA: qué marcó, por qué y (si propuso cambios) la lista con «Aplicar». */
+const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Promise<void> }> = ({ marks, present, onApply }) => {
+  const color = MARK_COLORS[marks.color] ?? '#facc15';
+  const [busy, setBusy] = useState(false);
+  const [all, setAll] = useState(false);
+  const changes = marks.changes ?? [];
+  const describe = (c: AIChange) => [c.patch.label && `categoría ${c.patch.label}`, c.patch.icon && `ícono ${c.patch.icon}`, c.patch.time && `a las ${c.patch.time}`, c.patch.minutes && `${c.patch.minutes} min`, c.patch.flex && ({ obligatorio: 'no negociable', flexible: 'modificable', secundario: 'flexible' } as Record<string, string>)[c.patch.flex]].filter(Boolean).join(', ');
+  return (
+    <div className="mb-3 space-y-2 rounded-xl px-3 py-2.5 text-sm ring-1" style={{ background: `${color}14`, ['--tw-ring-color' as string]: `${color}55` }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="h-2.5 w-2.5 animate-pulse rounded-full" style={{ background: color }} />
+        <span className="min-w-0 flex-1 font-semibold text-white">✨ La IA marcó {present} {present === 1 ? 'acción' : 'acciones'}{marks.reason ? `: ${marks.reason}` : ''}</span>
+        <button type="button" onClick={() => setMarks(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/10">Quitar marcas</button>
+      </div>
+      {changes.length > 0 && (
+        <div className="space-y-1.5">
+          {marks.summary && <p className="text-zinc-300">{marks.summary}</p>}
+          <ul className="space-y-0.5 text-xs text-zinc-300">
+            {(all ? changes : changes.slice(0, 6)).map((c, k) => <li key={k}>↪ <b className="text-white">{c.title}</b> ({c.day}): {describe(c)}</li>)}
+          </ul>
+          {changes.length > 6 && <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-semibold text-sky-300">{all ? 'Ver menos' : `Ver los ${changes.length}`}</button>}
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await onApply(); } finally { setBusy(false); } }} className="rounded-lg px-3 py-1.5 text-xs font-bold text-[#09090b] disabled:opacity-60" style={{ background: color }}>{busy ? 'Aplicando…' : `Aplicar ${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'}`}</button>
+            <button type="button" onClick={() => setMarks(null)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/[0.1]">Descartar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, onOpen, onAdd, onMove }) => {
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
   const usual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -570,7 +641,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                   {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
-                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
+                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
                   })()}
                 </React.Fragment>
               );

@@ -8,6 +8,7 @@
  *  - Si la nube aún no tiene llaves de IA, lo avisa.
  */
 
+import { goToHorario, MARK_COLORS, marksFromActions, setMarks } from '@/components/organiza/aiMarks';
 import { FILE_DROP, takeDroppedFile } from '@/utils/fileDrop';
 import { SupportErrorAction } from '@/components/support/SupportErrorAction';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -235,7 +236,10 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
     writePref('mf-ai-sidebar', open ? '1' : '0');
   };
 
-  const applyResult = (res: { conversation: AIConversation }) => {
+  const applyResult = (res: { conversation: AIConversation; assistantMessage?: AIMessage }) => {
+    // Organiza: si la IA marcó o propuso cambios en el Horario, quedan listos para verse allá.
+    const marks = marksFromActions(res.assistantMessage?.metadata?.actions);
+    if (marks) setMarks(marks);
     const conv = { ...res.conversation, last_activity_at: new Date().toISOString() };
     setConversation(conv);
     store.upsertLocal(conv);
@@ -711,6 +715,14 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
                     <div className="text-[15px] leading-7 text-zinc-200">
                       <AssistantBody text={m.content} animate={animate} onDone={() => setAnimatingId((id) => (id === m.id ? null : id))} />
                     </div>
+                    {!animate && marksFromActions(m.metadata?.actions) && (() => {
+                      const mk = marksFromActions(m.metadata?.actions)!;
+                      return (
+                        <button type="button" onClick={() => { setMarks({ ...mk, at: Date.now() }); goToHorario(); }} className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition hover:brightness-125" style={{ background: `${MARK_COLORS[mk.color] ?? '#facc15'}1f`, color: MARK_COLORS[mk.color] ?? '#facc15', ['--tw-ring-color' as string]: `${MARK_COLORS[mk.color] ?? '#facc15'}55` }}>
+                          🎯 {mk.changes?.length ? `Ver la propuesta en el Horario (${mk.changes.length})` : `Ver ${mk.ids.length} ${mk.ids.length === 1 ? 'acción marcada' : 'acciones marcadas'} en el Horario`} →
+                        </button>
+                      );
+                    })()}
                     {!animate && (
                       <div className={`mt-2 flex items-center gap-0.5 transition-opacity ${m.id === lastId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 max-md:opacity-100'}`}>
                         <IconBtn title={copiedId === m.id ? 'Copiado' : 'Copiar'} onClick={() => copy(m)}>

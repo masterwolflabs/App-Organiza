@@ -98,3 +98,7 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 - `morningConflict` (dayPlan.ts): si el primer evento llega antes de que termine la rutina de la mañana (por nombre: levantarse, ducha, desayuno…), la rutina se adelanta entera.
 - Botón «Reacomodar este día» (rojo neón `.neon-red`) aplica la propuesta y abre `AdjustBox` (DayAdjust.tsx): Me gusta / Modificar / Deshacer. Modificar = escribir o dictar (SpeechRecognition es-CL) → nube `/api/organiza/adjust-day` (proposito `adjust-day`, créditos de la app) → moves + extras del plan de ese día.
 - Deshacer / Rehacer en `useHorario` (historial en memoria, 100 pasos, cambios juntos se agrupan).
+
+## La IA ayuda con el horario (2026-11-04)
+- Nube `src/lib/ai/tools/organiza.ts` (solo app `organiza`, `EngineTool.apps`): `get_horario` (lee), `marcar_en_horario` y `proponer_cambios_horario` (no escriben: dejan `ctx.actions` → `metadata.actions` del mensaje).
+- Organiza `components/organiza/aiMarks.ts`: el chat guarda las marcas (localStorage `organiza-ai-marks`) y muestra «🎯 Ver en el Horario»; el Tablero dibuja `.ai-mark` (borde que titila) y `AIMarksBar` con «Aplicar» (usa `h.patchItem`, se puede deshacer).
