@@ -102,3 +102,8 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 ## La IA ayuda con el horario (2026-11-04)
 - Nube `src/lib/ai/tools/organiza.ts` (solo app `organiza`, `EngineTool.apps`): `get_horario` (lee), `marcar_en_horario` y `proponer_cambios_horario` (no escriben: dejan `ctx.actions` → `metadata.actions` del mensaje).
 - Organiza `components/organiza/aiMarks.ts`: el chat guarda las marcas (localStorage `organiza-ai-marks`) y muestra «🎯 Ver en el Horario»; el Tablero dibuja `.ai-mark` (borde que titila) y `AIMarksBar` con «Aplicar» (usa `h.patchItem`, se puede deshacer).
+
+## IA potente en vivo (2026-11-04, rama organiza-ia-en-vivo)
+- Botón ✨ IA en Horario y Calendario → `components/organiza/AIPanel.tsx` (panel al lado; manda `screen` con fecha/hora local y horario abierto).
+- Nube `tools/organiza.ts`: `horario_crear_tareas`, `horario_editar_tareas`, `horario_borrar_tareas`, `dia_reacomodar`, `horarios_gestionar`, `get_calendario`, `calendario_guardar_evento`, `calendario_borrar_evento`. No escriben: dejan `metadata.actions`.
+- `components/organiza/aiExecutor.ts` ejecuta las acciones con `useHorario`/`useCalendar` (en vivo); todo va en `h.batch` = un solo ↶. Borrar pide confirmación.

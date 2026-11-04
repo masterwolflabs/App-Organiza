@@ -65,6 +65,22 @@ export function useHorario() {
     setHistoryTick((t) => t + 1);
     return step.label;
   }, []);
+  /** Todo lo que pase dentro de `fn` queda como UN paso (ej. lo que hizo la IA en una respuesta). */
+  const batch = useCallback(async (label: string, fn: () => Promise<void>) => {
+    const from = past.current.length;
+    if (from) past.current[from - 1].at = 0; // lo de antes no se mezcla con este paso
+    try {
+      await fn();
+    } finally {
+      const steps = past.current.slice(from);
+      if (steps.length > 1 || (steps.length === 1 && steps[0].label !== label)) {
+        past.current = [...past.current.slice(0, from), { label, at: 0, key: `batch:${Date.now()}`, undo: [...steps].reverse().flatMap((x) => x.undo), redo: steps.flatMap((x) => x.redo) }];
+        setHistoryTick((t) => t + 1);
+      }
+    }
+  }, []);
+  /** Un cambio hecho fuera del horario (ej. un evento del calendario) que igual se puede deshacer aquí. */
+  const recordExternal = useCallback((label: string, undoFn: () => Promise<unknown>, redoFn: () => Promise<unknown>) => record(label, `x:${Date.now()}:${Math.random()}`, undoFn, redoFn), [record]);
   const undo = useCallback(() => replay(past, future, 'undo'), [replay]);
   const redo = useCallback(() => replay(future, past, 'redo'), [replay]);
   const pick = <T extends object>(o: T, keys: string[]) => Object.fromEntries(keys.map((k) => [k, (o as Record<string, unknown>)[k] ?? null])) as Partial<T>;
@@ -367,7 +383,7 @@ export function useHorario() {
     [items, schedules]
   );
 
-  return { ready, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, undoLabel: past.current[past.current.length - 1]?.label, redoLabel: future.current[future.current.length - 1]?.label, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, orderLabels, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
+  return { ready, batch, recordExternal, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, undoLabel: past.current[past.current.length - 1]?.label, redoLabel: future.current[future.current.length - 1]?.label, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, orderLabels, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */
