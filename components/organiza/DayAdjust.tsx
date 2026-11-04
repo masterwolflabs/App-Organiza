@@ -70,7 +70,7 @@ export async function adjustDayAI(args: { dayLabel: string; items: Item[]; event
 }
 
 /** Dictado con el micrófono del navegador (es-CL). `null` si el navegador no lo tiene. */
-function useDictation(onText: (t: string) => void) {
+export function useDictation(onText: (t: string) => void) {
   const rec = useRef<{ start: () => void; stop: () => void } | null>(null);
   const [on, setOn] = useState(false);
   const [ok, setOk] = useState(false);

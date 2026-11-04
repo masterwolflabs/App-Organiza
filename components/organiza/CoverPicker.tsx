@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, Lock, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Loader2, Lock, Mic, PenLine, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { useDictation } from '@/components/organiza/DayAdjust';
 import { supabase } from '@/lib/supabaseClient';
 import { authFetch } from '@/lib/authFetch';
 import { cloudAI } from '@/lib/aiClient';
@@ -151,6 +152,10 @@ const AICover: React.FC<{ title: string; onPick: (c: string) => void }> = ({ tit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<string | null>(null);
+  // «Modificar» (Emanuel, 2026-11-04): pedir un cambio a la portada recién creada, escrito o hablado.
+  const [editing, setEditing] = useState(false);
+  const [change, setChange] = useState('');
+  const mic = useDictation((t) => setChange((x) => (x.trim() ? `${x.trim()} ${t}` : t)));
 
   const load = useCallback(async () => {
     try {
@@ -165,15 +170,19 @@ const AICover: React.FC<{ title: string; onPick: (c: string) => void }> = ({ tit
   }, [load]);
 
   const left = quota ? Math.max(0, quota.limit - quota.used) : null;
-  const create = async () => {
+  const create = async (edit?: { from: string; change: string }) => {
     setBusy(true);
     setError('');
-    setResult(null);
+    if (!edit) setResult(null);
     try {
-      const res = await authFetch(cloudAI('/api/organiza/cover'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: APP.slug, title: what, style, withAvatar: withAvatar === true }) });
+      const res = await authFetch(cloudAI('/api/organiza/cover'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: APP.slug, title: what, style, withAvatar: withAvatar === true, ...(edit ? { editFrom: edit.from, change: edit.change } : {}) }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo crear la portada.');
       setResult(data.url);
+      if (edit) {
+        setEditing(false);
+        setChange('');
+      }
       setQuota((q) => (q ? { ...q, used: data.used ?? q.used + 1 } : q));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo crear la portada.');
@@ -220,7 +229,7 @@ const AICover: React.FC<{ title: string; onPick: (c: string) => void }> = ({ tit
             <span className="mb-1 block text-xs font-medium text-zinc-400">¿Qué se ve en la portada?</span>
             <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Ej.: levantándome temprano con el sol" className="w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
           </label>
-          <button type="button" disabled={busy || left === 0} onClick={create} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-fuchsia-500 py-2.5 text-sm font-semibold text-[#fff] disabled:opacity-50">
+          <button type="button" disabled={busy || left === 0} onClick={() => create()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-fuchsia-500 py-2.5 text-sm font-semibold text-[#fff] disabled:opacity-50">
             {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Creando tu portada… (unos 30 segundos)</> : <><Sparkles className="h-4 w-4" /> Crear portada</>}
           </button>
         </>
@@ -230,11 +239,25 @@ const AICover: React.FC<{ title: string; onPick: (c: string) => void }> = ({ tit
       {result && (
         <div className="space-y-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={result} alt="Portada creada" className="aspect-[3/2] w-full rounded-xl object-cover ring-1 ring-white/10" />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => onPick(result)} className="flex-1 rounded-xl bg-sky-600 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500">Usar esta</button>
-            <button type="button" disabled={busy || left === 0} onClick={create} className="flex-1 rounded-xl bg-white/[0.06] py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 disabled:opacity-50">Crear otra</button>
+          <div className="relative">
+            <img src={result} alt="Portada creada" className={`aspect-[3/2] w-full rounded-xl object-cover ring-1 ring-white/10 transition ${busy ? 'opacity-50 blur-[2px]' : ''}`} />
+            {busy && <span className="absolute inset-0 flex items-center justify-center gap-2 text-sm font-semibold text-[#fff]"><Loader2 className="h-5 w-5 animate-spin" /> Aplicando tu cambio…</span>}
           </div>
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => onPick(result)} className="flex-1 rounded-xl bg-sky-600 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Usar esta</button>
+            <button type="button" disabled={busy || left === 0} onClick={() => setEditing((v) => !v)} aria-pressed={editing} className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold ring-1 disabled:opacity-50 ${editing ? 'bg-fuchsia-600 text-[#fff] ring-fuchsia-500' : 'bg-fuchsia-500/15 text-fuchsia-200 ring-fuchsia-400/30 hover:bg-fuchsia-500/25'}`}><PenLine className="h-4 w-4" /> Modificar</button>
+            <button type="button" disabled={busy || left === 0} onClick={() => create()} className="flex-1 rounded-xl bg-white/[0.06] py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 disabled:opacity-50">Crear otra</button>
+          </div>
+          {editing && (
+            <div className="space-y-2 rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-fuchsia-400/25">
+              <textarea autoFocus value={change} onChange={(e) => setChange(e.target.value)} rows={2} placeholder="¿Qué le cambio? Ej.: que sea de noche, agrega mi perro, que tenga lentes" className="w-full resize-none rounded-lg bg-white/[0.05] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-fuchsia-400/50" />
+              <div className="flex gap-2">
+                {mic.ok && <button type="button" onClick={mic.toggle} aria-pressed={mic.on} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${mic.on ? 'animate-pulse bg-rose-600 text-[#fff]' : 'bg-white/[0.08] text-zinc-200 hover:bg-white/[0.14]'}`}><Mic className="h-4 w-4" /> {mic.on ? 'Escuchando…' : 'Hablar'}</button>}
+                <button type="button" disabled={busy || !change.trim()} onClick={() => create({ from: result, change: change.trim() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-fuchsia-500 py-1.5 text-sm font-semibold text-[#fff] disabled:opacity-50"><Sparkles className="h-4 w-4" /> Aplicar cambio</button>
+              </div>
+              <p className="text-[11px] text-zinc-500">Cuenta como 1 portada del mes.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
