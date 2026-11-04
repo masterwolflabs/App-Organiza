@@ -79,6 +79,22 @@ export const HorarioView: React.FC = () => {
       /* modo privado */
     }
   };
+  const [parts, setPartsState] = useState<Parts>(() => {
+    try {
+      return { ...PARTS_DEFAULT, ...JSON.parse(localStorage.getItem('organiza-day-parts') || '{}') };
+    } catch {
+      return PARTS_DEFAULT;
+    }
+  });
+  const [editParts, setEditParts] = useState(false);
+  const setParts = (v: Parts) => {
+    setPartsState(v);
+    try {
+      localStorage.setItem('organiza-day-parts', JSON.stringify(v));
+    } catch {
+      /* modo privado */
+    }
+  };
   const [focusToday, setFocusTodayState] = useState<boolean>(() => {
     try {
       return localStorage.getItem('organiza-focus-today') !== '0';
@@ -279,10 +295,12 @@ export const HorarioView: React.FC = () => {
                 {['04:00', '05:00', '06:00', '07:00', '08:00'].map((t) => <option key={t} value={`h:${t}`}>Las {t}</option>)}
               </select>
             </label>
+            <button type="button" onClick={() => setEditParts(true)} data-help="A qué hora parte la mañana, la tarde y la noche" className="rounded-lg px-2.5 py-1 text-xs font-semibold text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white">🌗 Partes del día</button>
+            {editParts && <Dialog title="Partes del día" onClose={() => setEditParts(false)}><PartsForm value={parts} onSave={(v) => { setParts(v); setEditParts(false); }} /></Dialog>}
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} parts={parts} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
         {view === 'galeria' && <Gallery items={shown} labels={h.labels} onOpen={setOpenId} />}
@@ -415,7 +433,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 
 type Streak = { n: number; ghost: boolean };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, ownTime, mark, move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; late?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, late, ownTime, mark, move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -442,6 +460,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
           {ownTime && <span data-help="Esta acción tiene otra hora este día (misma racha)"><Pill color="#a1a1aa">🕐 Hora propia de este día</Pill></span>}
           {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
+          {late && <span data-help="Esta parte del día ya pasó y no la marcaste"><Pill color="#fb7185">⌛ {late}</Pill></span>}
           {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
           {!move?.off && move?.time && move.time !== item.time && <Pill color="#38bdf8">↪ Solo este día</Pill>}
@@ -545,7 +564,47 @@ const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Pro
   );
 };
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, onOpen, onAdd, onMove }) => {
+/**
+ * Partes del día (Emanuel, 2026-11-04, como en su Notion): Madrugada, Mañana, Tarde y Noche, cada una
+ * desde la hora que elija. Hoy, lo que ya pasó se pliega; lo que no hiciste en esa parte, se pasó.
+ */
+export type Parts = { manana: string; tarde: string; noche: string };
+const PARTS_DEFAULT: Parts = { manana: '06:00', tarde: '12:00', noche: '19:00' };
+const PART_INFO = {
+  madrugada: { name: 'Madrugada', emoji: '🌙', cls: 'text-indigo-300' },
+  manana: { name: 'Mañana', emoji: '☀️', cls: 'text-amber-300' },
+  tarde: { name: 'Tarde', emoji: '🌤️', cls: 'text-orange-300' },
+  noche: { name: 'Noche', emoji: '🌆', cls: 'text-violet-300' },
+} as const;
+type PartKey = keyof typeof PART_INFO;
+const partOf = (m: number, p: Parts): PartKey => (m < toMinutes(p.manana) ? 'madrugada' : m < toMinutes(p.tarde) ? 'manana' : m < toMinutes(p.noche) ? 'tarde' : 'noche');
+const partRange = (k: PartKey, p: Parts): [number, number] =>
+  k === 'madrugada' ? [0, toMinutes(p.manana)] : k === 'manana' ? [toMinutes(p.manana), toMinutes(p.tarde)] : k === 'tarde' ? [toMinutes(p.tarde), toMinutes(p.noche)] : [toMinutes(p.noche), 1440];
+
+const PartsForm: React.FC<{ value: Parts; onSave: (p: Parts) => void }> = ({ value, onSave }) => {
+  const [v, setV] = useState(value);
+  const ok = toMinutes(v.manana) < toMinutes(v.tarde) && toMinutes(v.tarde) < toMinutes(v.noche);
+  const field = 'mt-1 w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10';
+  return (
+    <div>
+      <p className="text-sm text-zinc-400">¿A qué hora parte cada parte de tu día? Antes de la mañana es madrugada.</p>
+      <div className="mt-3 grid grid-cols-3 gap-3 text-xs text-zinc-400">
+        {(['manana', 'tarde', 'noche'] as const).map((k) => (
+          <label key={k}>{PART_INFO[k].emoji} {PART_INFO[k].name}<input type="time" value={v[k]} onChange={(e) => e.target.value && setV({ ...v, [k]: e.target.value })} className={field} /></label>
+        ))}
+      </div>
+      {!ok && <p className="mt-2 text-sm text-amber-300">Tienen que ir en orden: mañana, tarde y noche.</p>}
+      <div className="mt-4 flex justify-between">
+        <button type="button" onClick={() => setV(PARTS_DEFAULT)} className="text-sm font-semibold text-zinc-400 hover:text-white">Volver a 6 · 12 · 19</button>
+        <button type="button" disabled={!ok} onClick={() => onSave(v)} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Guardar</button>
+      </div>
+    </div>
+  );
+};
+
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, onOpen, onAdd, onMove }) => {
+  // Partes plegadas o abiertas a mano (por día). Sin tocar: hoy se pliega lo que ya pasó.
+  const [fold, setFold] = useState<Record<string, boolean>>({});
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
   const usual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -651,19 +710,38 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
               />
             )}
             {entries.map((e, n) => {
+              const part = partOf(e.start, parts);
+              const head = n === 0 || partOf(entries[n - 1].start, parts) !== part;
+              const [, partEnd] = partRange(part, parts);
+              // Hoy: una parte ya pasó cuando terminó (la madrugada del final es la de esta noche, esa no).
+              const passed = when === 0 && !!date && partEnd <= nowMin && !(part === 'madrugada' && s0 > 0);
+              const fk = `${d}:${part}`;
+              const folded = fold[fk] ?? passed;
+              const mine = entries.filter((x) => partOf(x.start, parts) === part);
+              const acts = mine.filter((x): x is Extract<Entry, { kind: 'item' }> => x.kind === 'item' && !plan?.moves?.[x.i.id]?.off);
+              const done = status ? acts.filter((x) => status(x.i) === 'hecho').length : 0;
+              const info = PART_INFO[part];
               const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => rel(x.start) + (x.end - x.start))) : null;
               const free = prevEnd !== null && rel(e.start) - prevEnd >= 15 ? rel(e.start) - prevEnd : 0;
-              const night = s0 > 0 && e.start < s0 && (n === 0 || entries[n - 1].start >= s0);
+              const st = e.kind === 'item' ? status?.(e.i) : null;
+              const late = passed && e.kind === 'item' && (st === 'pendiente' || st === 'curso') ? `Se pasó la ${info.name.toLowerCase()}` : undefined;
               return (
                 <React.Fragment key={e.key}>
-                  {night && <p className="flex items-center gap-2 px-2 pt-1 text-xs font-semibold text-indigo-300/80"><Moon className="h-3.5 w-3.5" /> Madrugada</p>}
-                  {free > 0 && !night && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
-                  <div className={tone(e)}>
+                  {head && (
+                    <button type="button" onClick={() => setFold((f) => ({ ...f, [fk]: !folded }))} aria-expanded={!folded} className={`flex w-full items-center gap-2 rounded-lg px-2 pb-0.5 pt-2 text-left text-xs font-semibold hover:bg-white/[0.03] ${info.cls}`}>
+                      <span aria-hidden>{info.emoji}</span> {info.name}
+                      {folded && acts.length > 0 && <span className="font-normal text-zinc-400">· {status ? `${done} de ${acts.length} hechas` : `${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`}{status && acts.length - done > 0 && passed ? <span className="text-rose-300"> · {acts.length - done} se pasaron</span> : null}</span>}
+                      <span className="ml-auto h-px flex-1 bg-current opacity-20" />
+                      <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${folded ? '-rotate-90' : ''}`} />
+                    </button>
+                  )}
+                  {!folded && free > 0 && !head && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
+                  {!folded && <div className={tone(e)}>
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
-                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
+                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} late={late} onOpen={onOpen} draggable />;
                   })()}
-                  </div>
+                  </div>}
                 </React.Fragment>
               );
             })}
