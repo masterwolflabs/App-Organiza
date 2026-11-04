@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -61,6 +61,30 @@ export const HorarioView: React.FC = () => {
     // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
     return k?.done ? 'hecho' : k && (k.value.started || k.value.habits?.length || k.value.rules?.length) ? 'curso' : k ? 'no' : 'pendiente';
   };
+  // Deshacer / Rehacer: botones ↶ ↷ y Cmd+Z / Cmd+Shift+Z (fuera de los campos de texto, que tienen el suyo).
+  const [undone, setUndone] = useState<string | null>(null);
+  const step = async (kind: 'undo' | 'redo') => {
+    const label = await (kind === 'undo' ? h.undo() : h.redo());
+    if (label) setUndone(`${kind === 'undo' ? 'Deshecho' : 'Rehecho'}: ${label}`);
+  };
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
+      const t = e.target as HTMLElement;
+      if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      stepRef.current(e.key.toLowerCase() === 'y' || e.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    if (!undone) return;
+    const t = setTimeout(() => setUndone(null), 2500);
+    return () => clearTimeout(t);
+  }, [undone]);
   const confirm = useConfirm();
   const [view, setViewState] = useState<ViewId>(() => {
     try {
@@ -155,6 +179,11 @@ export const HorarioView: React.FC = () => {
             </button>
           ))}
         </div>
+        <div className="flex rounded-xl bg-white/[0.04] p-0.5 ring-1 ring-white/10">
+          <button type="button" onClick={() => step('undo')} disabled={!h.canUndo} aria-label="Deshacer" data-help={h.undoLabel ? `Deshacer: ${h.undoLabel} (⌘Z)` : 'Nada que deshacer'} className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"><Undo2 className="h-4 w-4" /></button>
+          <button type="button" onClick={() => step('redo')} disabled={!h.canRedo} aria-label="Rehacer" data-help={h.redoLabel ? `Rehacer: ${h.redoLabel} (⌘⇧Z)` : 'Nada que rehacer'} className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"><Redo2 className="h-4 w-4" /></button>
+        </div>
+        {undone && <span role="status" className="rounded-lg bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-200 ring-1 ring-sky-400/30">{undone}</span>}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {h.labels.map((l) => (
             <button key={l.id} type="button" onClick={() => setFilter(filter === l.id ? null : l.id)} aria-pressed={filter === l.id} className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${filter && filter !== l.id ? 'opacity-40' : ''}`} style={{ background: `${l.color}26`, color: l.color }}>

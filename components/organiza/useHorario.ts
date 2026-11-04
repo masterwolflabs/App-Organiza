@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDb } from '@/components/organiza/db';
 import { useSpace } from '@/components/organiza/space';
 import { dayItems, scheduleFor, type DayPlan, freeTime } from '@/components/organiza/dayPlan';
@@ -30,6 +30,56 @@ export function useHorario() {
   const [plans, setPlans] = useState<DayPlan[]>([]);
   const [activeId, setActive] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  /* ── Deshacer / Rehacer (Emanuel, 2026-11-03) ──────────────────────────
+     Cada cambio guarda cómo volver atrás y cómo repetirlo. Los cambios que llegan casi juntos
+     (ej. el panel que actualiza todos los días de una acción, o escribir un nombre) cuentan como uno. */
+  type Step = { label: string; at: number; key: string; undo: (() => Promise<unknown>)[]; redo: (() => Promise<unknown>)[] };
+  const past = useRef<Step[]>([]);
+  const future = useRef<Step[]>([]);
+  const replaying = useRef(false);
+  const [, setHistoryTick] = useState(0);
+  const record = useCallback((label: string, key: string, undo: () => Promise<unknown>, redo: () => Promise<unknown>) => {
+    if (replaying.current) return;
+    const now = Date.now();
+    const last = past.current[past.current.length - 1];
+    if (last && (now - last.at < 600 || (last.key === key && now - last.at < 1500))) {
+      last.undo.unshift(undo);
+      last.redo.push(redo);
+      last.at = now;
+    } else past.current = [...past.current.slice(-99), { label, at: now, key, undo: [undo], redo: [redo] }];
+    future.current = [];
+    setHistoryTick((t) => t + 1);
+  }, []);
+  const replay = useCallback(async (from: typeof past, to: typeof past, kind: 'undo' | 'redo') => {
+    const step = from.current.pop();
+    if (!step) return null;
+    replaying.current = true;
+    try {
+      for (const f of step[kind]) await f();
+    } finally {
+      replaying.current = false;
+    }
+    step.at = 0; // lo que venga después es otro paso
+    to.current.push(step);
+    setHistoryTick((t) => t + 1);
+    return step.label;
+  }, []);
+  const undo = useCallback(() => replay(past, future, 'undo'), [replay]);
+  const redo = useCallback(() => replay(future, past, 'redo'), [replay]);
+  const pick = <T extends object>(o: T, keys: string[]) => Object.fromEntries(keys.map((k) => [k, (o as Record<string, unknown>)[k] ?? null])) as Partial<T>;
+  const rawItem = useCallback(async (id: string, p: Partial<Item>) => {
+    setItems((l) => l.map((i) => (i.id === id ? { ...i, ...p } : i)));
+    await db.update('organiza_items', { id }, p);
+  }, [db]);
+  const putItem = useCallback(async (it: Item) => {
+    setItems((l) => [...l.filter((x) => x.id !== it.id), it]);
+    await db.insert('organiza_items', it);
+  }, [db]);
+  const dropItem = useCallback(async (id: string) => {
+    setItems((l) => l.filter((i) => i.id !== id));
+    await db.remove('organiza_items', { id });
+  }, [db]);
 
   const load = useCallback(async () => {
     const [s, l, p] = await Promise.all([db.select<Schedule>('organiza_schedules', { space }), db.select<Label>('organiza_labels', { space }), db.select<DayPlan>('organiza_day_plans', { space })]);
@@ -69,16 +119,26 @@ export function useHorario() {
   }, [db]);
 
   const patchSchedule = useCallback(async (id: string, p: Partial<Schedule>) => {
+    const was = schedules.find((x) => x.id === id);
+    if (was) {
+      const prev = pick(was, Object.keys(p));
+      const raw = (v: Partial<Schedule>) => async () => {
+        setSchedules((l) => l.map((s) => (s.id === id ? { ...s, ...v } : s)));
+        await db.update('organiza_schedules', { id }, v);
+      };
+      record('Cambio del horario', `s:${id}:${Object.keys(p).join()}`, raw(prev), raw(p));
+    }
     setSchedules((l) => l.map((s) => (s.id === id ? { ...s, ...p } : s)));
     await db.update('organiza_schedules', { id }, p);
-  }, [db]);
+  }, [db, record, schedules]);
 
   const patchItem = useCallback(async (id: string, p: Partial<Item>) => {
     const it = items.find((i) => i.id === id);
+    if (it) record(`Cambio en «${it.title}»`, `i:${id}:${Object.keys(p).join()}`, () => rawItem(id, pick(it, Object.keys(p))), () => rawItem(id, p));
     setItems((l) => l.map((i) => (i.id === id ? { ...i, ...p } : i)));
     await db.update('organiza_items', { id }, p);
     if (it) touch(it.schedule_id);
-  }, [db, items, touch]);
+  }, [db, items, rawItem, record, touch]);
 
   const addItem = useCallback(async (scheduleId: string, weekday: number, p: Partial<Item> = {}) => {
     const sameDay = items.filter((i) => i.schedule_id === scheduleId && i.weekday === weekday);
@@ -87,18 +147,22 @@ export function useHorario() {
     // Nace en la primera hora libre desde las 9:00 (no encima de otra acción).
     const time = freeTime(sameDay, '09:00', p.minutes ?? 30);
     const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time, minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p });
-    if (made) setItems((l) => [...l, made]);
+    if (made) {
+      setItems((l) => [...l, made]);
+      record(`Nueva «${made.title}»`, `n:${made.id}`, () => dropItem(made.id), () => putItem(made));
+    }
     touch(scheduleId);
     return made ?? null;
-  }, [db, items, touch]);
+  }, [db, dropItem, items, putItem, record, touch]);
 
   const removeItem = useCallback(async (id: string) => {
     const it = items.find((i) => i.id === id);
+    if (it) record(`Borrar «${it.title}»`, `d:${id}`, () => putItem(it), () => dropItem(id));
     setItems((l) => l.filter((i) => i.id !== id));
     await db.remove('organiza_items', { id });
     await db.remove('calendar_events', { source: 'horario', source_ref: id });
     if (it) touch(it.schedule_id);
-  }, [db, items, touch]);
+  }, [db, dropItem, items, putItem, record, touch]);
 
   const ensureLabel = useCallback(async (name: string, color: string, icon = '') => {
     const found = labels.find((l) => l.name === name);
@@ -109,9 +173,17 @@ export function useHorario() {
   }, [db, labels, space]);
 
   const patchLabel = useCallback(async (id: string, p: Partial<Label>) => {
+    const was = labels.find((x) => x.id === id);
+    if (was) {
+      const raw = (v: Partial<Label>) => async () => {
+        setLabels((l) => l.map((x) => (x.id === id ? { ...x, ...v } : x)));
+        await db.update('organiza_labels', { id }, v);
+      };
+      record(`Categoría «${was.name}»`, `l:${id}:${Object.keys(p).join()}`, raw(pick(was, Object.keys(p))), raw(p));
+    }
     setLabels((l) => l.map((x) => (x.id === id ? { ...x, ...p } : x)));
     await db.update('organiza_labels', { id }, p);
-  }, [db]);
+  }, [db, labels, record]);
 
   /** Nuevo orden de las categorías (la primera es la que más se cuida). */
   const orderLabels = useCallback(async (ids: string[]) => {
@@ -182,9 +254,13 @@ export function useHorario() {
   const setPlan = useCallback(async (day: string, p: Partial<DayPlan>) => {
     const base = plans.find((x) => x.day === day) ?? { day, schedule_id: null, moves: {}, extras: [] };
     const next = { ...base, ...p };
-    setPlans((l) => [...l.filter((x) => x.day !== day), next]);
-    await db.upsert('organiza_day_plans', { day: next.day, schedule_id: next.schedule_id, moves: next.moves, extras: next.extras, space, updated_at: new Date().toISOString() }, 'owner_id,space,day');
-  }, [db, plans, space]);
+    const put = (v: DayPlan) => async () => {
+      setPlans((l) => [...l.filter((x) => x.day !== day), v]);
+      await db.upsert('organiza_day_plans', { day: v.day, schedule_id: v.schedule_id, moves: v.moves, extras: v.extras, space, updated_at: new Date().toISOString() }, 'owner_id,space,day');
+    };
+    record(`Reacomodar el ${day.slice(8)}/${day.slice(5, 7)}`, `p:${day}`, put(base), put(next));
+    await put(next)();
+  }, [db, plans, record, space]);
   const planOf = useCallback((date: Date) => plans.find((x) => x.day === iso(date)) ?? null, [plans]);
   const itemsOn = useCallback((date: Date) => {
     const s = scheduleFor(date, schedules, planOf(date));
@@ -291,7 +367,7 @@ export function useHorario() {
     [items, schedules]
   );
 
-  return { ready, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, orderLabels, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
+  return { ready, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, undoLabel: past.current[past.current.length - 1]?.label, redoLabel: future.current[future.current.length - 1]?.label, schedules, active, activeItems, labels, published, publishedItems, choose, patchSchedule, patchItem, addItem, removeItem, ensureLabel, patchLabel, removeLabel, orderLabels, createFrom, createImported, duplicate, repeatOn, setSleep, setPlan, planOf, itemsOn, publish, assignDay, switchPhase, unpublish, removeSchedule, reload: load };
 }
 
 /** Lo que se cumplió: el registro de cada tarea, el cierre del día y la XP salen de aquí. */
