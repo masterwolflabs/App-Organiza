@@ -1,5 +1,7 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronRight, Feather, Lock, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm';
@@ -263,7 +265,7 @@ export const Categories: React.FC<{ h: ReturnType<typeof useHorario>; value: str
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ring-white/10 transition ${editing ? 'cursor-grab' : ''} ${drag === l.id ? 'opacity-40' : ''}`}
                 style={{ background: on ? `${l.color}33` : `${l.color}12`, boxShadow: on ? `inset 0 0 0 1.5px ${l.color}` : undefined }}
               >
-                <span aria-hidden>{l.icon || '•'}</span>
+                <span aria-hidden>{l.icon ? <ItemIcon value={l.icon} /> : '•'}</span>
                 <span className={on ? 'text-white' : 'text-zinc-300'}>{l.name}</span>
               </button>
               {editing && (

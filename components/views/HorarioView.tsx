@@ -1,7 +1,7 @@
 'use client';
 
 import { MARK_COLORS, setMarks, useAIMarks, type AIChange, type AIMarks } from '@/components/organiza/aiMarks';
-import { ItemIcon, iconText } from '@/components/organiza/IconPicker';
+import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
@@ -199,9 +199,11 @@ export const HorarioView: React.FC = () => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | null>(null);
+  const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | 'nueva-etiqueta' | null>(null);
 
   const s = h.active;
+  const labelUse = (id: string) => h.activeItems.filter((i) => i.label_id === id).length;
+  const topLabels = [...h.labels].sort((a, b) => labelUse(b.id) - labelUse(a.id)).filter((l, k) => k < 2 || l.id === filter);
   const shown = useMemo(() => h.activeItems.filter((i) => !filter || i.label_id === filter).sort(byTime), [h.activeItems, filter]);
   const open = h.activeItems.find((i) => i.id === openId) ?? h.publishedItems.find((i) => i.id === openId) ?? null;
 
@@ -271,13 +273,17 @@ export const HorarioView: React.FC = () => {
         </div>
         {undone && <span role="status" className="rounded-lg bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-200 ring-1 ring-sky-400/30">{undone}</span>}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {h.labels.map((l) => (
-            <button key={l.id} type="button" onClick={() => setFilter(filter === l.id ? null : l.id)} aria-pressed={filter === l.id} className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${filter && filter !== l.id ? 'opacity-40' : ''}`} style={{ background: `${l.color}26`, color: l.color }}>
-              {l.name}
+          {/* Categorías (Emanuel, 2026-11-04): a la vista solo las 2 que más usas (y la que estés filtrando). */}
+          {topLabels.map((l) => (
+            <button key={l.id} type="button" onClick={() => setFilter(filter === l.id ? null : l.id)} aria-pressed={filter === l.id} data-help={filter === l.id ? 'Ver todo' : `Ver solo ${l.name}`} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${filter && filter !== l.id ? 'opacity-40' : ''} ${filter === l.id ? 'ring-1 ring-current' : ''}`} style={{ background: `${l.color}26`, color: l.color }}>
+              {l.icon && <ItemIcon value={l.icon} />}{l.name}
             </button>
           ))}
+          <button type="button" onClick={() => setPanel('nueva-etiqueta')} className="inline-flex items-center gap-1 rounded-full border border-dashed border-white/20 px-2.5 py-1 text-xs font-semibold text-sky-300 hover:bg-white/[0.05]">
+            <Plus className="h-3 w-3" /> Nueva
+          </button>
           <button type="button" onClick={() => setPanel('etiquetas')} data-tour="etiquetas" className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-zinc-400 hover:text-white">
-            <Tags className="h-3.5 w-3.5" /> Categorías
+            <Tags className="h-3.5 w-3.5" /> Categorías{h.labels.length > topLabels.length ? ` (${h.labels.length})` : ''}
           </button>
         </div>
       </div>
@@ -342,7 +348,7 @@ export const HorarioView: React.FC = () => {
           <TemplateGrid onPick={async (id) => { await h.createFrom(id); setPanel(null); }} />
         </Dialog>
       )}
-      {panel === 'etiquetas' && <LabelsDialog h={h} onClose={() => setPanel(null)} />}
+      {(panel === 'etiquetas' || panel === 'nueva-etiqueta') && <LabelsDialog h={h} adding={panel === 'nueva-etiqueta'} uses={labelUse} filter={filter} onFilter={(id) => { setFilter(id); setPanel(null); }} onClose={() => setPanel(null)} />}
     </div>
   );
 };
@@ -1026,28 +1032,44 @@ const PublishDialog: React.FC<{ schedule: Schedule; items: Item[]; onClose: () =
   );
 };
 
-const LabelsDialog: React.FC<{ h: ReturnType<typeof useHorario>; onClose: () => void }> = ({ h, onClose }) => {
+/** Todas tus categorías: emoji, nombre, color, cuántas tareas tiene y «Ver solo esta». */
+const LabelsDialog: React.FC<{ h: ReturnType<typeof useHorario>; adding?: boolean; uses: (id: string) => number; filter: string | null; onFilter: (id: string | null) => void; onClose: () => void }> = ({ h, adding, uses, filter, onFilter, onClose }) => {
+  const confirm = useConfirm();
   const [name, setName] = useState('');
+  const [icon, setIcon] = useState('✨');
+  const labels = [...h.labels].sort((a, b) => uses(b.id) - uses(a.id));
+  const form = (
+    <form className="flex items-center gap-2" onSubmit={async (e) => { e.preventDefault(); if (name.trim()) { await h.ensureLabel(name.trim(), LABEL_COLORS[h.labels.length % LABEL_COLORS.length], icon); setName(''); setIcon('✨'); if (adding) onClose(); } }}>
+      <IconPicker value={icon} title={name || 'Categoría'} onChange={setIcon} />
+      <input autoFocus={adding} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nueva categoría" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none ring-1 ring-white/10" />
+      <button type="submit" disabled={!name.trim()} className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Agregar</button>
+    </form>
+  );
+  if (adding) return <Dialog title="Nueva categoría" onClose={onClose}>{form}</Dialog>;
   return (
     <Dialog title="Categorías" onClose={onClose}>
       <ul className="space-y-3">
-        {h.labels.map((l) => (
-          <li key={l.id} className="space-y-2 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/10">
+        {labels.map((l) => (
+          <li key={l.id} className="space-y-2.5 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/10">
             <div className="flex items-center gap-2">
-              <input defaultValue={l.name} aria-label="Nombre de la categoría" onBlur={(e) => e.target.value.trim() && h.patchLabel(l.id, { name: e.target.value.trim() })} className="min-w-0 flex-1 rounded-md bg-transparent px-1 text-sm font-semibold text-white outline-none focus:bg-white/[0.06]" />
-              <button type="button" aria-label={`Borrar ${l.name}`} onClick={() => h.removeLabel(l.id)} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
+              <IconPicker value={l.icon || '✨'} title={l.name} onChange={(v) => h.patchLabel(l.id, { icon: v })} />
+              <div className="min-w-0 flex-1">
+                <input defaultValue={l.name} aria-label="Nombre de la categoría" onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== l.name && h.patchLabel(l.id, { name: e.target.value.trim() })} className="w-full rounded-md bg-transparent px-1 text-sm font-semibold text-white outline-none focus:bg-white/[0.06]" />
+                <p className="px-1 text-xs text-zinc-500">{uses(l.id)} {uses(l.id) === 1 ? 'tarea' : 'tareas'}</p>
+              </div>
+              <button type="button" onClick={() => onFilter(filter === l.id ? null : l.id)} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 ${filter === l.id ? 'bg-sky-500/15 text-sky-200 ring-sky-400/40' : 'text-zinc-300 ring-white/10 hover:bg-white/[0.06]'}`}>{filter === l.id ? 'Ver todo' : 'Ver solo esta'}</button>
+              <button type="button" aria-label={`Borrar ${l.name}`} onClick={async () => { if (await confirm({ title: `¿Borrar la categoría «${l.name}»?`, message: 'Las tareas que la tenían quedan sin categoría.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeLabel(l.id); }} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {LABEL_COLORS.map((c) => <button key={c} type="button" aria-label={`Color ${c}`} onClick={() => h.patchLabel(l.id, { color: c })} className={`h-6 w-6 rounded-full ${l.color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-[#14161b]' : ''}`} style={{ background: c }} />)}
-              <input type="color" aria-label="Elegir cualquier color" value={l.color} onChange={(e) => h.patchLabel(l.id, { color: e.target.value })} className="h-6 w-8 cursor-pointer bg-transparent" />
+              <label data-help="Cualquier color" className="relative h-6 w-6 cursor-pointer overflow-hidden rounded-full ring-1 ring-white/20" style={{ background: 'conic-gradient(#f43f5e,#f59e0b,#22c55e,#38bdf8,#a78bfa,#f43f5e)' }}>
+                <input type="color" aria-label="Elegir cualquier color" value={l.color} onChange={(e) => h.patchLabel(l.id, { color: e.target.value })} className="absolute inset-0 cursor-pointer opacity-0" />
+              </label>
             </div>
           </li>
         ))}
       </ul>
-      <form className="mt-3 flex gap-2" onSubmit={async (e) => { e.preventDefault(); if (name.trim()) { await h.ensureLabel(name.trim(), LABEL_COLORS[h.labels.length % LABEL_COLORS.length]); setName(''); } }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nueva categoría" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10" />
-        <button type="submit" className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-[#fff]">Agregar</button>
-      </form>
+      <div className="mt-3">{form}</div>
     </Dialog>
   );
 };

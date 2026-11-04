@@ -112,3 +112,4 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 - **Todas las vistas** (2026-11-04): la barra (semana ‹ ›, Enfocar hoy, Comenzar desde, Partes del día) sale en Tablero, Semana, Mi semana, Galería y Lista (`DayCtx`, `toneOf`, `daysOfWeek`). Galería y Lista van por día y por partes; Semana parte en la hora de «Comenzar desde» y marca las partes con líneas.
 - **Racha** = `StreakChip`: 🔥 + número; ✕ rosado si ese día pasado no se cumplió; el fueguito en gris en los días que vienen (siempre, aunque Enfocar hoy esté apagado).
 - Cabecera: «● Activo» del alto de «Nuevo horario»; abajo «Pasar a borrador» y «Borrar este horario» como botones.
+- **Categorías** (2026-11-04): en la barra solo las 2 con más tareas (+ la que estés filtrando), «+ Nueva» y «Categorías (N)». La ventana muestra todas ordenadas por uso, con emoji (`IconPicker`), color, cuántas tareas y «Ver solo esta».
