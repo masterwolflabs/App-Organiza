@@ -104,6 +104,22 @@ export const HorarioView: React.FC = () => {
     }
   });
   const [editParts, setEditParts] = useState(false);
+  const [show, setShowState] = useState<Fields>(() => {
+    try {
+      return { ...FIELDS_ALL, ...JSON.parse(localStorage.getItem('organiza-card-fields') || '{}') };
+    } catch {
+      return FIELDS_ALL;
+    }
+  });
+  const [showMenu, setShowMenu] = useState(false);
+  const setShow = (v: Fields) => {
+    setShowState(v);
+    try {
+      localStorage.setItem('organiza-card-fields', JSON.stringify(v));
+    } catch {
+      /* modo privado */
+    }
+  };
   const setParts = (v: Parts) => {
     setPartsState(v);
     try {
@@ -318,16 +334,33 @@ export const HorarioView: React.FC = () => {
                 {['04:00', '05:00', '06:00', '07:00', '08:00'].map((t) => <option key={t} value={`h:${t}`}>Las {t}</option>)}
               </select>
             </label>
+            <div className="relative">
+              <button type="button" onClick={() => setShowMenu((v) => !v)} aria-expanded={showMenu} data-help="Elige qué se ve en cada tarjeta" className={`rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 hover:bg-white/[0.06] hover:text-white ${Object.values(show).every(Boolean) ? 'text-zinc-400 ring-white/10' : 'bg-sky-500/15 text-sky-200 ring-sky-400/40'}`}>👁️ Mostrar</button>
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 z-50 mt-1 w-56 space-y-0.5 rounded-xl bg-[#17191f] p-2 shadow-xl ring-1 ring-white/10">
+                    {FIELD_NAMES.map(([k, name]) => (
+                      <label key={k} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/[0.06]">
+                        {name}
+                        <input type="checkbox" checked={show[k]} onChange={() => setShow({ ...show, [k]: !show[k] })} className="accent-sky-500" />
+                      </label>
+                    ))}
+                    <button type="button" onClick={() => setShow(FIELDS_ALL)} className="mt-1 w-full rounded-lg px-2 py-1.5 text-left text-xs font-semibold text-sky-300 hover:bg-white/[0.06]">Ver todo</button>
+                  </div>
+                </>
+              )}
+            </div>
             <button type="button" onClick={() => setEditParts(true)} data-help="A qué hora parte la mañana, la tarde y la noche" className="rounded-lg px-2.5 py-1 text-xs font-semibold text-zinc-400 ring-1 ring-white/10 hover:bg-white/[0.06] hover:text-white">🌗 Partes del día</button>
             {editParts && <Dialog title="Partes del día" onClose={() => setEditParts(false)}><PartsForm value={parts} onSave={(v) => { setParts(v); setEditParts(false); }} /></Dialog>}
             {weekShift !== 0 && <button type="button" onClick={() => setWeekShift(0)} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-sky-300 ring-1 ring-white/10 hover:bg-white/[0.06]">Esta semana</button>}
           </div>
         )}
-        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} parts={parts} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
+        {view === 'tablero' && <Board items={shown} labels={h.labels} streak={streakFor} status={weekShift === 0 ? todayStatus : undefined} weekStart={weekStart} occ={occ} planOf={h.planOf} onApply={(date, p) => h.setPlan(iso(date), p)} onUndo={() => step('undo')} markOf={markOf} dayStart={dayStart} focusToday={focusToday} parts={parts} show={show} onLabel={(id) => setFilter(filter === id ? null : id)} onOpen={setOpenId} onAdd={add} onMove={(id, weekday) => h.patchItem(id, { weekday })} />}
         {view === 'semana' && <WeekGrid items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} />}
         {view === 'mi-semana' && <WeekGrid items={[...h.publishedItems].filter((i) => !filter || i.label_id === filter).sort(byTime)} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} onOpen={setOpenId} onMove={(id, time) => h.patchItem(id, { time })} schedules={h.schedules} />}
-        {view === 'galeria' && <Gallery items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} streak={streakFor} onOpen={setOpenId} />}
-        {view === 'lista' && <ListView items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} streak={streakFor} onOpen={setOpenId} />}
+        {view === 'galeria' && <Gallery items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} show={show} streak={streakFor} onOpen={setOpenId} />}
+        {view === 'lista' && <ListView items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} show={show} streak={streakFor} onOpen={setOpenId} />}
       </div>
 
       <div className="mt-8 flex flex-wrap gap-2">
@@ -445,12 +478,48 @@ const Pill: React.FC<{ color: string; children: React.ReactNode }> = ({ color, c
 );
 
 type Status = 'hecho' | 'curso' | 'no' | 'pendiente' | null;
-const STATUS = { hecho: { label: '✅ Hecho hoy', color: '#22c55e' }, curso: { label: '⏳ En eso hoy', color: '#f59e0b' }, no: { label: '✖️ No lo hice hoy', color: '#f43f5e' }, pendiente: { label: 'Pendiente hoy', color: '#94a3b8' } };
 const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.ReactNode; help: string }> = ({ color, icon: I, children, help }) => (
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
 type Streak = { n: number; ghost: boolean; missed?: boolean };
+
+/** Qué se ve en cada tarjeta (menú «Mostrar», Emanuel 2026-11-04). En este dispositivo. */
+type Fields = { portada: boolean; estado: boolean; racha: boolean; extras: boolean; etiqueta: boolean; hora: boolean; duracion: boolean };
+const FIELDS_ALL: Fields = { portada: true, estado: true, racha: true, extras: true, etiqueta: true, hora: true, duracion: true };
+const FIELD_NAMES: [keyof Fields, string][] = [['portada', '🖼️ Portada'], ['estado', '🟢 Estado'], ['racha', '🔥 Racha'], ['extras', '⚡ Focus y alarma'], ['etiqueta', '🏷️ Categoría'], ['hora', '🕘 Hora'], ['duracion', '⏱️ Hasta y duración']];
+
+/**
+ * Estado en vivo de una tarea de hoy (Emanuel, 2026-11-04): Pendiente → Por activarse (30 min antes) →
+ * ¡Ejecutar ya! (a su hora) → En ejecución (si la empezaste) → Atrasada (pasó su hora) → Incumplida
+ * (pasó su parte del día). Hecho y No lo hice mandan sobre todo.
+ */
+type Live = { label: string; color: string; pulse?: boolean; help: string };
+const liveStatus = (status: Status, start: number, end: number, now: number, partPassed: boolean): Live | null => {
+  if (!status) return null;
+  if (status === 'hecho') return { label: '✅ Hecho', color: '#22c55e', help: 'Lo marcaste hecho hoy' };
+  if (status === 'no') return { label: '✖️ No lo hice', color: '#f43f5e', help: 'Marcaste que no lo hiciste' };
+  if (partPassed) return { label: '✖️ Incumplida', color: '#f43f5e', help: 'Pasó su parte del día sin hacerla' };
+  if (now < start - 30) return { label: 'Pendiente', color: '#94a3b8', help: 'Todavía falta' };
+  if (now < start) return { label: '⏰ Por activarse', color: '#38bdf8', help: 'Empieza en menos de media hora' };
+  if (now < end) return status === 'curso' ? { label: '▶️ En ejecución', color: '#f59e0b', help: 'La estás haciendo' } : { label: '🚀 ¡Ejecutar ya!', color: '#10b981', pulse: true, help: 'Es su hora: ¡ahora!' };
+  return { label: '⏳ Atrasada', color: '#fb923c', help: 'Ya pasó su hora y no la marcaste: todavía estás a tiempo en esta parte del día' };
+};
+
+/** Categoría con forma de etiqueta (distinta de los globitos de Focus y Alarma). Tocarla filtra. */
+const TagChip: React.FC<{ label: Label; onClick?: () => void }> = ({ label, onClick }) => (
+  <span
+    role={onClick ? 'button' : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+    data-help={onClick ? `Ver solo ${label.name}` : undefined}
+    className="relative inline-flex items-center gap-1 py-0.5 pl-3.5 pr-2 text-xs font-semibold"
+    style={{ background: `${label.color}2e`, color: label.color, clipPath: 'polygon(9px 0, 100% 0, 100% 100%, 9px 100%, 0 50%)', borderRadius: '0 6px 6px 0' }}
+  >
+    <span aria-hidden className="absolute left-[7px] top-1/2 h-1 w-1 -translate-y-1/2 rounded-full" style={{ background: label.color }} />
+    {label.icon && <ItemIcon value={label.icon} />}{label.name}
+  </span>
+);
 
 /** Racha (Emanuel, 2026-11-04): el fueguito y el número. ✕ si ese día no se cumplió; en gris lo que viene. */
 const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
@@ -463,8 +532,12 @@ const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
   );
 };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; late?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, late, ownTime, mark, move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; live?: Live | null; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; show?: Fields; onLabel?: (id: string) => void; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, live, clash = [], warn, ownTime, mark, move, show = FIELDS_ALL, onLabel, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
+  const moved = !move?.off && move?.time && move.time !== item.time;
+  const startT = moved ? move!.time! : item.time;
+  const endT = toTime((toMinutes(startT) + item.minutes) % 1440);
+  const extras = show.extras && (item.focus || item.alarm !== 'no');
   return (
     <button
       type="button"
@@ -474,37 +547,41 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
       style={mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : undefined}
     >
-      {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
+      {show.portada && item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
       <div className="space-y-2 p-3">
         <p className="flex items-center gap-2 font-semibold text-white">
           <ItemIcon value={item.icon || emojiFor(item.title)} />
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
-        <div className="flex flex-col items-start gap-1.5">
-          {(status || streak) && (
-            <span className="flex flex-wrap items-center gap-1.5">
-              {status && !(late && status === 'pendiente') && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
-              {streak && <StreakChip streak={streak} />}
-            </span>
-          )}
-          {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
-          {ownTime && <span data-help="Esta acción tiene otra hora este día (misma racha)"><Pill color="#a1a1aa">🕐 Hora propia de este día</Pill></span>}
-          {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
-          {late && <span data-help="Esta parte del día ya pasó y no la marcaste"><Pill color="#fb7185">⌛ {late}</Pill></span>}
-          {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
-          {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
-          {!move?.off && move?.time && move.time !== item.time && <Pill color="#38bdf8">↪ Solo este día</Pill>}
-          {label && <Pill color={label.color}>{label.icon} {label.name}</Pill>}
-        </div>
-        <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
-          {/* Si ese día se reacomodó, la hora que vale es la nueva (la de siempre queda tachada). */}
-          {!move?.off && move?.time && move.time !== item.time ? <span><span className="font-semibold text-sky-200">{move.time}</span> <span className="text-xs text-zinc-500 line-through">{item.time}</span></span> : <span>{item.time}</span>}
-          <span className="ml-auto flex items-center gap-1.5">
-            {item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
-            {item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
-            {item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
-          </span>
-        </div>
+        {/* Estado, racha, focus y alarma en una sola fila. */}
+        {((show.estado && live) || (show.racha && streak) || extras) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {show.estado && live && <span data-help={live.help} className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${live.pulse ? 'animate-pulse' : ''}`} style={{ background: `${live.color}26`, color: live.color }}>{live.label}</span>}
+            {show.racha && streak && <StreakChip streak={streak} />}
+            {show.extras && item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
+            {show.extras && item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
+            {show.extras && item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
+          </div>
+        )}
+        {(clash.length > 0 || ownTime || warn || crossed.length > 0 || move?.off || moved) && (
+          <div className="flex flex-col items-start gap-1.5">
+            {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+            {ownTime && <span data-help="Esta acción tiene otra hora este día (misma racha)"><Pill color="#a1a1aa">🕐 Hora propia de este día</Pill></span>}
+            {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
+            {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
+            {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
+            {moved && <Pill color="#38bdf8">↪ Solo este día</Pill>}
+          </div>
+        )}
+        {show.etiqueta && label && <div><TagChip label={label} onClick={onLabel ? () => onLabel(label.id) : undefined} /></div>}
+        {(show.hora || show.duracion) && (
+          <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm tabular-nums text-zinc-400">
+            {/* Si ese día se reacomodó, la hora que vale es la nueva (la de siempre queda tachada). */}
+            {show.hora && <span className={`font-bold ${moved ? 'text-sky-200' : 'text-white'}`}>{startT}</span>}
+            {show.hora && moved && <span className="text-xs text-zinc-500 line-through">{item.time}</span>}
+            {show.duracion && <span>{show.hora ? '– ' : 'Hasta '}{endT} · {item.minutes} min</span>}
+          </div>
+        )}
       </div>
     </button>
   );
@@ -632,7 +709,7 @@ const PartsForm: React.FC<{ value: Parts; onSave: (p: Parts) => void }> = ({ val
   );
 };
 
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; show?: Fields; onLabel?: (id: string) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, show = FIELDS_ALL, onLabel, onOpen, onAdd, onMove }) => {
   // Partes plegadas o abiertas a mano (por día). Sin tocar: hoy se pliega lo que ya pasó.
   const [fold, setFold] = useState<Record<string, boolean>>({});
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
@@ -753,8 +830,8 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
               const info = PART_INFO[part];
               const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => rel(x.start) + (x.end - x.start))) : null;
               const free = prevEnd !== null && rel(e.start) - prevEnd >= 15 ? rel(e.start) - prevEnd : 0;
-              const st = e.kind === 'item' ? status?.(e.i) : null;
-              const late = passed && e.kind === 'item' && (st === 'pendiente' || st === 'curso') ? `Se pasó la ${info.name.toLowerCase()}` : undefined;
+              const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
+              const live = e.kind === 'item' ? liveStatus(st, rel(e.start), rel(e.end), rel(nowMin), passed) : null;
               return (
                 <React.Fragment key={e.key}>
                   {head && (
@@ -766,10 +843,11 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                     </button>
                   )}
                   {!folded && free > 0 && !head && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
-                  {!folded && <div className={tone(e)}>
+                  {/* Atrasada todavía se puede hacer: no va en gris. */}
+                  {!folded && <div className={live?.label === '⏳ Atrasada' ? '' : tone(e)}>
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
-                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} late={late} onOpen={onOpen} draggable />;
+                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onOpen={onOpen} draggable />;
                   })()}
                   </div>}
                 </React.Fragment>
@@ -902,7 +980,7 @@ const WeekGrid: React.FC<ViewProps & { ctx: DayCtx; onMove: (id: string, time: s
 };
 
 /** Galería: cada día con sus portadas, en el orden del día y con sus partes. */
-const Gallery: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, streak, onOpen }) => (
+const Gallery: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, show, streak, onOpen }) => (
   <div className="space-y-6">
     {daysOfWeek(items, ctx).filter((g) => g.list.length).map((g) => (
       <section key={g.d}>
@@ -913,14 +991,17 @@ const Gallery: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Dat
             const l = labelOf(labels, i.label_id);
             return (
               <button key={i.id} type="button" onClick={() => onOpen(i.id)} className={`overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
-                <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>
+                {show.portada && <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>}
                 <div className="space-y-1.5 p-3">
                   <p className="truncate font-semibold text-white">{i.title || 'Sin título'}</p>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm tabular-nums text-zinc-400">{i.time}</span>
+                    {show.hora && <span className="text-sm font-bold tabular-nums text-white">{i.time}</span>}
+                    {show.duracion && <span className="text-sm tabular-nums text-zinc-400">– {toTime((m + i.minutes) % 1440)} · {i.minutes} min</span>}
                     <PartTag k={partOf(m, ctx.parts)} />
-                    {streak && <StreakChip streak={streak(i, g.date)} />}
-                    {l && <Pill color={l.color}>{l.name}</Pill>}
+                    {show.racha && streak && <StreakChip streak={streak(i, g.date)} />}
+                    {show.extras && i.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
+                    {show.extras && i.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
+                    {show.etiqueta && l && <TagChip label={l} />}
                   </div>
                 </div>
               </button>
@@ -933,7 +1014,7 @@ const Gallery: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Dat
 );
 
 /** Lista: un bloque por día, separado por partes del día. */
-const ListView: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, streak, onOpen }) => (
+const ListView: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: Item, date?: Date) => Streak }> = ({ items, labels, ctx, show, streak, onOpen }) => (
   <div className="space-y-4">
     {daysOfWeek(items, ctx).filter((g) => g.list.length).map((g) => (
       <section key={g.d} className="rounded-2xl bg-white/[0.025] ring-1 ring-white/5">
@@ -948,10 +1029,12 @@ const ListView: React.FC<ViewProps & { ctx: DayCtx; streak?: (i: Item, date?: Da
               <li key={i.id} className="border-b border-white/5 last:border-0">
                 {head && <p className="px-4 pb-0.5 pt-2"><PartTag k={part} /></p>}
                 <button type="button" onClick={() => onOpen(i.id)} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
-                  <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-400">{i.time}</span>
+                  {show.hora && <span className="w-12 shrink-0 text-sm font-bold tabular-nums text-white">{i.time}</span>}
                   <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
-                  {streak && <StreakChip streak={streak(i, g.date)} />}
-                  {l && <span className="hidden sm:inline"><Pill color={l.color}>{l.name}</Pill></span>}
+                  {show.duracion && <span className="hidden shrink-0 text-xs tabular-nums text-zinc-400 sm:inline">hasta {toTime((m + i.minutes) % 1440)} · {i.minutes} min</span>}
+                  {show.racha && streak && <StreakChip streak={streak(i, g.date)} />}
+                  {show.extras && i.focus && <Zap className="h-3.5 w-3.5 shrink-0 text-violet-300" />}
+                  {show.etiqueta && l && <span className="hidden sm:inline"><TagChip label={l} /></span>}
                   {i.alarm !== 'no' && <Bell className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
                 </button>
               </li>
