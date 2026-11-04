@@ -168,3 +168,14 @@ export const AdjustBox: React.FC<{ title: string; lines: Line[]; summary?: strin
     </div>
   );
 };
+
+/** Botón 🎤 para dictar dentro de un campo (se agrega a lo escrito). No aparece si el navegador no dicta. */
+export const MicButton: React.FC<{ onText: (t: string) => void; className?: string }> = ({ onText, className = '' }) => {
+  const mic = useDictation(onText);
+  if (!mic.ok) return null;
+  return (
+    <button type="button" onClick={mic.toggle} aria-pressed={mic.on} aria-label={mic.on ? 'Dejar de escuchar' : 'Dictar con la voz'} data-help={mic.on ? 'Escuchando… toca para terminar' : 'Dícelo con tu voz'} className={`rounded-md p-1.5 ${mic.on ? 'animate-pulse bg-rose-600 text-[#fff]' : 'text-zinc-400 hover:bg-white/10 hover:text-white'} ${className}`}>
+      <Mic className="h-4 w-4" />
+    </button>
+  );
+};

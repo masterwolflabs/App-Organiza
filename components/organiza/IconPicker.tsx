@@ -8,6 +8,7 @@ import { cloudAI } from '@/lib/aiClient';
 import { supabase } from '@/lib/supabaseClient';
 import { useSpace } from '@/components/organiza/space';
 import { compressImageForNote } from '@/utils/image';
+import { MicButton } from '@/components/organiza/DayAdjust';
 
 /**
  * Ícono de una acción (Emanuel, 2026-11-04): TODOS los emojis (en Mac/iPhone se ven como los de
@@ -142,7 +143,10 @@ const AITab: React.FC<{ title: string; onPick: (url: string) => void }> = ({ tit
     <div className="space-y-2">
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-zinc-400">¿Qué ícono quieres?</span>
-        <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Ej.: logo de Claude, una pesa dorada" className="w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
+        <div className="relative">
+          <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Ej.: logo de Claude, una pesa dorada" className="w-full rounded-lg bg-white/[0.05] py-1.5 pl-2.5 pr-10 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
+          <MicButton onText={(t) => setWhat((x) => (x.trim() ? `${x.trim()} ${t}` : t))} className="absolute right-1 top-1/2 -translate-y-1/2" />
+        </div>
       </label>
       <button type="button" disabled={busy || !what.trim() || left === 0} onClick={create} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-fuchsia-500 py-2 text-sm font-semibold text-[#fff] disabled:opacity-50">
         {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Creando… (unos 20 segundos)</> : <><Sparkles className="h-4 w-4" /> {result ? 'Crear otro' : 'Crear ícono'}</>}
