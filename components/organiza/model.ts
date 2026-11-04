@@ -122,7 +122,8 @@ export const refOf = (title: string) =>
   `h:${title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, '-')}`;
 
 /** Días seguidos cumplidos, contando solo los días en que la actividad tocaba. */
-export function streakOf(ref: string, weekdays: number[], checks: Check[], today = new Date()) {
+/** `strict`: el día pedido ya pasó, así que si no se marcó, la racha ese día es 0. */
+export function streakOf(ref: string, weekdays: number[], checks: Check[], today = new Date(), strict = false) {
   const byDay = new Map(checks.filter((c) => c.ref === ref).map((c) => [c.day, c]));
   let streak = 0;
   for (let i = 0, seen = 0; i < 400 && seen < 200; i++) {
@@ -130,7 +131,7 @@ export function streakOf(ref: string, weekdays: number[], checks: Check[], today
     if (!weekdays.includes(weekdayOf(d))) continue;
     seen++;
     const c = byDay.get(iso(d));
-    if (!c && i === 0) continue; // hoy todavía se puede marcar
+    if (!c && i === 0 && !strict) continue; // hoy todavía se puede marcar
     if (c?.value?.state) continue; // reprogramar o cancelar no corta la racha
     if (!c?.done) break;
     streak++;

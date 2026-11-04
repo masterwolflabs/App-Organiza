@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -39,10 +39,20 @@ export const HorarioView: React.FC = () => {
   const occ = useMemo(() => expand(cal.events.filter((e) => e.source !== 'horario'), weekStart, weekEnd), [cal.events, weekStart, weekEnd]);
   // Lo que marcaste hoy en «¿Lo hiciste hoy?» se ve en la tarjeta de hoy.
   // Racha de cada acción (la misma cuenta que «¿Lo hiciste hoy?» del panel).
-  const streakFor = (i: Item) => {
+  // En el tablero cada día muestra su racha: los pasados la que tuviste, hoy la de ahora y los que vienen
+  // (en gris) la que alcanzarías si cumples hasta ahí.
+  const streakFor = (i: Item, date?: Date): Streak => {
     const ref = refOf(i.title);
     const days = [...new Set(h.activeItems.filter((x) => x.schedule_id === i.schedule_id && refOf(x.title) === ref).map((x) => x.weekday))];
-    return streakOf(ref, days, c.checks);
+    const now = new Date();
+    const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const d0 = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()) : t0;
+    if (+d0 < +t0) return { n: streakOf(ref, days, c.checks, d0, true), ghost: false };
+    const base = streakOf(ref, days, c.checks);
+    if (+d0 === +t0) return { n: base, ghost: false };
+    let n = base + (days.includes(weekdayOf(now)) && !c.checks.some((x) => x.ref === ref && x.day === iso(now)) ? 1 : 0);
+    for (let x = addDays(t0, 1); +x <= +d0; x = addDays(x, 1)) if (days.includes(weekdayOf(x))) n++;
+    return { n, ghost: true };
   };
   const todayStatus = (i: Item): Status => {
     const now = new Date();
@@ -332,7 +342,9 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
   <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: number; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak = 0, status = null, clash = [], move, onOpen, draggable }) => {
+type Streak = { n: number; ghost: boolean };
+
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -350,10 +362,10 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
         <div className="flex flex-col items-start gap-1.5">
-          {(status || streak > 0) && (
+          {(status || streak) && (
             <span className="flex flex-wrap items-center gap-1.5">
               {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
-              {streak > 0 && <Pill color="#f59e0b">🔥 {streak} {streak === 1 ? 'día' : 'días'}</Pill>}
+              {streak && <span data-help={streak.ghost ? 'La racha que alcanzas si cumples hasta este día' : 'Días seguidos cumplidos'}><Pill color={streak.ghost || !streak.n ? '#71717a' : '#f59e0b'}>🔥 Racha {streak.n}</Pill></span>}
             </span>
           )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
@@ -365,7 +377,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
         <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-400">
           <span>{item.time}</span>
           <span className="ml-auto flex items-center gap-1.5">
-            {item.focus && <Chip color="#a78bfa" icon={Target} help="Tiene modo focus">Focus</Chip>}
+            {item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
             {item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
             {item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
           </span>
@@ -397,7 +409,7 @@ const evChip = (o: Occurrence) => (
   </p>
 );
 
-const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
   const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
   const today = weekdayOf(new Date());
   const scroller = useRef<HTMLDivElement>(null);
@@ -445,7 +457,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item) => number; status?: (i: I
                 <React.Fragment key={i.id}>
                   {timed.filter((o) => minutesOf(o.start) <= toMinutes(i.time) && (n === 0 || minutesOf(o.start) > toMinutes(day[n - 1].time))).map(evChip)}
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
