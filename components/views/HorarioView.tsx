@@ -55,9 +55,21 @@ export const HorarioView: React.FC = () => {
       const k = c.checks.find((x) => x.ref === ref && x.day === iso(d0));
       return { n, ghost: false, missed: !k?.done && !k?.value?.state };
     }
-    const base = streakOf(ref, days, c.checks);
-    if (+d0 === +t0) return { n: base, ghost: false };
-    let n = base + (days.includes(weekdayOf(now)) && !c.checks.some((x) => x.ref === ref && x.day === iso(now)) ? 1 : 0);
+    // O lo hiciste o no (Emanuel, 2026-11-04): si la parte del día de esta tarea ya terminó hoy y no la
+    // marcaste, hoy es ✕ y la racha se corta; lo que viene se proyecta desde 1.
+    const kToday = c.checks.find((x) => x.ref === ref && x.day === iso(now));
+    const todayItem = days.includes(weekdayOf(now)) ? h.activeItems.find((x) => x.schedule_id === i.schedule_id && refOf(x.title) === ref && x.weekday === weekdayOf(now)) : undefined;
+    const missedToday = (() => {
+      if (!todayItem || kToday?.done || kToday?.value?.state) return false;
+      const m = toMinutes(h.planOf(now)?.moves?.[todayItem.id]?.time ?? todayItem.time);
+      const sameDayItems = h.activeItems.filter((x) => x.schedule_id === i.schedule_id && x.weekday === weekdayOf(now));
+      const s0 = dayStart.startsWith('a:') ? (() => { const a = sameDayItems.find((x) => refOf(x.title) === dayStart.slice(2)); return a ? toMinutes(a.time) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
+      if (s0 > 0 && m < s0) return false; // la madrugada del final es la de esta noche
+      return partRange(partOf(m, parts), parts)[1] <= now.getHours() * 60 + now.getMinutes();
+    })();
+    const base = missedToday ? 0 : streakOf(ref, days, c.checks);
+    if (+d0 === +t0) return { n: base, ghost: false, missed: missedToday };
+    let n = base + (!missedToday && todayItem && !kToday ? 1 : 0);
     for (let x = addDays(t0, 1); +x <= +d0; x = addDays(x, 1)) if (days.includes(weekdayOf(x))) n++;
     return { n, ghost: true };
   };
@@ -471,7 +483,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
         <div className="flex flex-col items-start gap-1.5">
           {(status || streak) && (
             <span className="flex flex-wrap items-center gap-1.5">
-              {status && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
+              {status && !(late && status === 'pendiente') && <Pill color={STATUS[status].color}>{STATUS[status].label}</Pill>}
               {streak && <StreakChip streak={streak} />}
             </span>
           )}

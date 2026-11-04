@@ -113,3 +113,4 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 - **Racha** = `StreakChip`: 🔥 + número; ✕ rosado si ese día pasado no se cumplió; el fueguito en gris en los días que vienen (siempre, aunque Enfocar hoy esté apagado).
 - Cabecera: «● Activo» del alto de «Nuevo horario»; abajo «Pasar a borrador» y «Borrar este horario» como botones.
 - **Categorías** (2026-11-04): en la barra solo las 2 con más tareas (+ la que estés filtrando), «+ Nueva» y «Categorías (N)». La ventana muestra todas ordenadas por uso, con emoji (`IconPicker`), color, cuántas tareas y «Ver solo esta».
+- **Racha coherente** (2026-11-04): o lo hiciste o no. Si hoy terminó la parte del día de una tarea (mañana/tarde/noche) y no la marcaste (ni reprogramaste), hoy es ✕, la racha se corta y los días que vienen se proyectan desde 1 (`missedToday` en `streakFor`). Con «⌛ Se pasó…» ya no sale «Pendiente hoy».
