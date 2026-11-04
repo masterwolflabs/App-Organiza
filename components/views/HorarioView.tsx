@@ -375,7 +375,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 
 type Streak = { n: number; ghost: boolean };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; ownTime?: boolean; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, ownTime, move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -399,6 +399,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             </span>
           )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+          {ownTime && <span data-help="Esta acción tiene otra hora este día (misma racha)"><Pill color="#a1a1aa">🕐 Hora propia de este día</Pill></span>}
           {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
           {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
@@ -473,6 +474,22 @@ const ExtraCard: React.FC<{ x: Extra }> = ({ x }) => (
 );
 
 const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, onOpen, onAdd, onMove }) => {
+  // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
+  const usual = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const i of items) {
+      const k = `${i.schedule_id}|${refOf(i.title)}`;
+      const c = m.get(k) ?? new Map<string, number>();
+      c.set(`${i.time}|${i.minutes}`, (c.get(`${i.time}|${i.minutes}`) ?? 0) + 1);
+      m.set(k, c);
+    }
+    return (i: Item) => {
+      const c = m.get(`${i.schedule_id}|${refOf(i.title)}`);
+      if (!c || c.size < 2) return false;
+      const top = [...c.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      return `${i.time}|${i.minutes}` !== top;
+    };
+  }, [items]);
   // Después de reacomodar: «¿Te gustó el cambio?» con lo que se movió (y lo que dijo la IA).
   const [review, setReview] = useState<{ d: number; lines: Line[]; summary?: string } | null>(null);
   const today = weekdayOf(new Date());
@@ -553,7 +570,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                   {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
                   {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                     const i = e.i;
-                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
+                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />;
                   })()}
                 </React.Fragment>
               );

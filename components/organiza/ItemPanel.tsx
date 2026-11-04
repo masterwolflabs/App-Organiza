@@ -1,7 +1,7 @@
 'use client';
 
 import { IconPicker } from '@/components/organiza/IconPicker';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Compass, FileText, Flame, Play, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { FocusSetup } from '@/components/organiza/FocusSetup';
 import { PanelSections } from '@/components/organiza/PanelSections';
@@ -40,6 +40,32 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
     } else setNotice('');
     set({ time });
   };
+  // Hora distinta según el día (Emanuel, 2026-11-04): la acción sigue siendo una (misma racha), pero
+  // cada día puede tener su hora y duración. Ej.: de lunes a viernes 09:00, sábado y domingo 10:30.
+  const siblings = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && refOf(i.title) === refOf(item.title)).sort((a, b) => a.weekday - b.weekday);
+  const varies = siblings.some((i) => i.time !== siblings[0]?.time || i.minutes !== siblings[0]?.minutes);
+  const [perDay, setPerDay] = useState(varies);
+  useEffect(() => {
+    setPerDay(varies);
+    setEditing(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+  const [editing, setEditing] = useState<{ ids: string[]; label: string } | null>(null);
+  const editTarget = editing ? siblings.filter((i) => editing.ids.includes(i.id)) : [];
+  // Cambia la hora solo en esos días; si choca con otra acción ese día, rebota a la siguiente libre.
+  const setDaysTime = async (targets: Item[], wanted: string) => {
+    const notes: string[] = [];
+    for (const t of targets) {
+      const busy = h.activeItems.filter((i) => i.schedule_id === item.schedule_id && i.weekday === t.weekday && refOf(i.title) !== refOf(item.title));
+      const time = freeTime(busy, wanted, t.minutes);
+      if (time !== wanted) notes.push(`${WEEK[t.weekday]} quedó a las ${time} para no chocar con ${[...new Set(overlaps(busy, wanted, t.minutes).map((i) => i.title))].join(', ')}`);
+      await h.patchItem(t.id, { time });
+    }
+    setNotice(notes.length ? `⏰ ${notes.join(' · ')}.` : '');
+  };
+  const setDaysMinutes = (targets: Item[], minutes: number) => Promise.all(targets.map((t) => h.patchItem(t.id, { minutes })));
+  const weekdaysOnly = siblings.filter((i) => i.weekday < 5);
+  const weekend = siblings.filter((i) => i.weekday >= 5);
   const bridge = useNotesBridge();
   const noteId = `horario:${item.id}`;
   const note = bridge?.openLinkedNote ? { exists: !!bridge.linkedNote?.('task', noteId), open: () => bridge.openLinkedNote!('task', noteId, item.title, 'Horario', undefined, 'Horario') } : null;
@@ -127,10 +153,61 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                   }
                   await h.repeatOn(item, d, on);
                 }} /></div>
+                {!perDay && <>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ ¿A qué hora empiezas?</span><TimeWheel value={item.time} onChange={setTime} /></div>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ ¿Cuánto dura?</span><DurationWheel value={item.minutes} onChange={(minutes) => set({ minutes })} /></div>
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">🏁 ¿A qué hora termina?</span><TimeWheel value={toTime(toMinutes(item.time) + item.minutes)} onChange={(end) => set({ minutes: ((toMinutes(end) - toMinutes(item.time) + 1440) % 1440) || item.minutes })} /></div>
+                </>}
               </div>
+              {siblings.length > 1 && (
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/10">
+                    <span className="text-sm text-zinc-200">🕐 Misma hora todos los días</span>
+                    <input type="checkbox" checked={!perDay} onChange={async (e) => {
+                      if (e.target.checked) {
+                        // Volver a una sola hora: todos los días toman la del día abierto.
+                        await set({ time: item.time, minutes: item.minutes });
+                        setEditing(null);
+                      }
+                      setPerDay(!e.target.checked);
+                    }} className="h-4 w-4 accent-sky-500" />
+                  </label>
+                  {!perDay && weekdaysOnly.length > 0 && weekend.length > 0 && (
+                    <button type="button" onClick={() => { setPerDay(true); setEditing({ ids: weekend.map((i) => i.id), label: weekend.map((i) => WEEK[i.weekday]).join(' y ') }); }} className="w-full rounded-xl bg-sky-500/10 px-3 py-2 text-left text-sm font-semibold text-sky-200 ring-1 ring-sky-400/25 hover:bg-sky-500/15">✏️ El fin de semana es a otra hora</button>
+                  )}
+                  {perDay && (
+                    <div className="space-y-1.5">
+                      {weekdaysOnly.length > 1 && weekend.length > 0 && (
+                        <div className="flex gap-1.5">
+                          <button type="button" onClick={() => setEditing({ ids: weekdaysOnly.map((i) => i.id), label: 'los días de semana' })} className="flex-1 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">✏️ Toda la semana</button>
+                          <button type="button" onClick={() => setEditing({ ids: weekend.map((i) => i.id), label: 'el fin de semana' })} className="flex-1 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">✏️ Todo el fin de semana</button>
+                        </div>
+                      )}
+                      {siblings.map((sib) => {
+                        const on = editing?.ids.length === 1 && editing.ids[0] === sib.id;
+                        return (
+                          <button key={sib.id} type="button" onClick={() => setEditing(on ? null : { ids: [sib.id], label: WEEK[sib.weekday] })} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ${editing?.ids.includes(sib.id) ? 'bg-sky-500/15 ring-sky-400/40' : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.06]'}`}>
+                            <span className={`w-10 font-semibold ${sib.id === item.id ? 'text-sky-200' : 'text-zinc-300'}`}>{WEEK[sib.weekday].slice(0, 3)}</span>
+                            <span className="flex-1 tabular-nums text-white">{sib.time} – {toTime(toMinutes(sib.time) + sib.minutes)}</span>
+                            <span className="text-xs tabular-nums text-zinc-500">{sib.minutes} min</span>
+                            <span aria-hidden>✏️</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {perDay && editing && editTarget.length > 0 && (
+                    <div className="space-y-2 rounded-xl bg-sky-500/[0.06] p-3 ring-1 ring-sky-400/30">
+                      <p className="text-xs font-semibold text-sky-200">Cambiando {editing.label}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏰ Empieza</span><TimeWheel value={editTarget[0].time} onChange={(t) => setDaysTime(editTarget, t)} /></div>
+                        <div><span className="mb-1 block text-xs font-medium text-zinc-400">⏳ Dura</span><DurationWheel value={editTarget[0].minutes} onChange={(m) => setDaysMinutes(editTarget, m)} /></div>
+                      </div>
+                      <button type="button" onClick={() => setEditing(null)} className="w-full rounded-lg bg-sky-600 py-1.5 text-sm font-semibold text-[#fff] hover:bg-sky-500">Listo</button>
+                    </div>
+                  )}
+                </div>
+              )}
               {notice && <p className="rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-200 ring-1 ring-sky-400/25">{notice}</p>}
 </>) },
               { id: 'importancia', tour: 'hab-importancia', title: '⚖️ Importancia', body: (<>
