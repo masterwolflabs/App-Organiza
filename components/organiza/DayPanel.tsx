@@ -1,5 +1,6 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
 import { Clock, Shuffle, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -64,7 +65,7 @@ export const DayPanel: React.FC = () => {
                   {gap && <li className="px-1 py-0.5 text-xs text-zinc-500">{gap.minutes} min libres</li>}
                   <li className="flex flex-wrap items-center gap-x-2 rounded-lg px-1 py-1.5 hover:bg-white/[0.03] sm:flex-nowrap">
                     <input type="time" value={i.time} aria-label={`Hora de ${i.title} solo por hoy`} onChange={(e) => e.target.value && moveTo(i, e.target.value)} className="w-[6.5rem] shrink-0 rounded bg-transparent text-sm tabular-nums text-zinc-400 outline-none focus:bg-white/[0.06]" />
-                    <span className={`order-first w-full min-w-0 text-sm sm:order-none sm:w-auto sm:flex-1 sm:truncate ${STATE_TONE[s]}`}>{i.icon} {i.title}</span>
+                    <span className={`order-first w-full min-w-0 text-sm sm:order-none sm:w-auto sm:flex-1 sm:truncate ${STATE_TONE[s]}`}><ItemIcon value={i.icon} /> {i.title}</span>
                     <select aria-label={`Estado de ${i.title}`} value={s} onChange={(e) => setState(i, e.target.value as ActivityState)} className="ml-auto shrink-0 rounded bg-transparent text-xs text-zinc-400 outline-none">
                       {STATES.map((x) => <option key={x.id} value={x.id} className="bg-zinc-900">{x.label}</option>)}
                     </select>

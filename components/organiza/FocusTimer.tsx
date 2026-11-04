@@ -1,5 +1,6 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
 import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -71,7 +72,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
         <button type="button" onClick={leave} aria-label="Salir del modo focus" className="absolute right-4 top-4 z-10 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
 
         <div className="relative my-auto w-full max-w-md py-10">
-          <p className="text-lg text-zinc-300">{item.icon} {item.title}</p>
+          <p className="text-lg text-zinc-300"><ItemIcon value={item.icon} /> {item.title}</p>
           <p className={`mt-2 font-display text-7xl font-semibold tabular-nums sm:text-8xl ${left < 0 ? 'text-rose-400' : 'text-[#fff]'}`}>{left < 0 ? '+' : ''}{mmss(left)}</p>
 
           {/* Barra: lo que pasó (adelante) y lo que queda; marcas donde termina cada paso. */}

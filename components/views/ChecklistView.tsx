@@ -1,5 +1,6 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useMemo, useState } from 'react';
 import { Check, Moon, X } from 'lucide-react';
 import { iso, refOf, RANKS, rankOf, XP, xpOf, type Item } from '@/components/organiza/model';
@@ -54,7 +55,7 @@ export const Checklist: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
                 return (
                   <li key={i.id} className="flex items-center gap-3 py-2.5">
                     <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-500">{i.time}</span>
-                    <span className={`min-w-0 flex-1 truncate ${s === true ? 'text-zinc-400 line-through' : 'text-white'}`}>{i.icon} {i.title}</span>
+                    <span className={`min-w-0 flex-1 truncate ${s === true ? 'text-zinc-400 line-through' : 'text-white'}`}><ItemIcon value={i.icon} /> {i.title}</span>
                     <button type="button" aria-label={`Sí hice ${i.title}`} aria-pressed={s === true} onClick={() => s === true ? c.unmark(i.title, day) : c.mark(i.title, day, true)} className={`rounded-lg p-1.5 ring-1 ${s === true ? 'bg-emerald-500/25 text-emerald-200 ring-emerald-400/40' : 'text-zinc-400 ring-white/10 hover:text-white'}`}><Check className="h-4 w-4" /></button>
                     <button type="button" aria-label={`No hice ${i.title}`} aria-pressed={s === false} onClick={() => s === false ? c.unmark(i.title, day) : c.mark(i.title, day, false)} className={`rounded-lg p-1.5 ring-1 ${s === false ? 'bg-rose-500/25 text-rose-200 ring-rose-400/40' : 'text-zinc-400 ring-white/10 hover:text-white'}`}><X className="h-4 w-4" /></button>
                   </li>

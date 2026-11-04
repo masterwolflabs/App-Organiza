@@ -1,5 +1,6 @@
 'use client';
 
+import { IconPicker } from '@/components/organiza/IconPicker';
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Compass, FileText, Flame, Play, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { FocusSetup } from '@/components/organiza/FocusSetup';
@@ -14,7 +15,7 @@ import { Modules } from '@/components/organiza/Modules';
 import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { freeTime, overlaps, toTime } from '@/components/organiza/dayPlan';
 import { coverCss, emojiFor, honesty, iso, MODULE_CHOICES, rankOf, refOf, scheduleLabel, streakOf, toMinutes, WEEK, weekdayOf, xpOf, type AlarmKind, type Flex, type Item, type Module } from '@/components/organiza/model';
-import { AlarmPicker, Categories, DurationWheel, EmojiPicker, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
+import { AlarmPicker, Categories, DurationWheel, Importance, LEVELS, SoundList, TimeWheel } from '@/components/organiza/PanelControls';
 import type { useChecks, useHorario } from '@/components/organiza/useHorario';
 
 const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50';
@@ -82,7 +83,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
           <div className="space-y-6 p-5">
             {cover && <CoverPicker value={item.cover_url} rank={rank} title={item.title} onPick={(v) => { set({ cover_url: v }); setCover(false); }} />}
             <div className="flex items-center gap-2">
-              <EmojiPicker value={item.icon || emojiFor(item.title)} onChange={(icon) => set({ icon })} />
+              <IconPicker value={item.icon || emojiFor(item.title)} title={item.title} onChange={(icon) => set({ icon })} />
               <input defaultValue={item.title} key={`t${item.id}`} aria-label="Título" onBlur={(e) => {
                 const title = e.target.value.trim();
                 if (!title || title === item.title) return;

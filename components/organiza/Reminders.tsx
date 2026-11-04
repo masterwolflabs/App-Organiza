@@ -1,5 +1,6 @@
 'use client';
 
+import { iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useRef, useState } from 'react';
 import { BellRing, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -27,7 +28,7 @@ async function scheduleNative(items: Item[], alarms: Schedule['alarms']) {
     notifications: list.map((i, n) => {
       const at = (toMinutes(i.time) - i.alarm_before + 1440) % 1440;
       const dayShift = toMinutes(i.time) - i.alarm_before < 0 ? 6 : 0;
-      return { id: n + 1, title: `${i.icon} ${i.title}`.trim(), body: i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`, schedule: { on: { weekday: ((i.weekday + dayShift + 1) % 7) + 1, hour: Math.floor(at / 60), minute: at % 60 } }, sound: 'default' };
+      return { id: n + 1, title: `${iconText(i.icon)} ${i.title}`.trim(), body: i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`, schedule: { on: { weekday: ((i.weekday + dayShift + 1) % 7) + 1, hour: Math.floor(at / 60), minute: at % 60 } }, sound: 'default' };
     }),
   });
 }
@@ -55,7 +56,7 @@ export const Reminders: React.FC = () => {
         if (seen.current.has(key)) continue;
         seen.current.add(key);
         const body = i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`;
-        if ('Notification' in window && Notification.permission === 'granted') new Notification(`${i.icon} ${i.title}`.trim(), { body });
+        if ('Notification' in window && Notification.permission === 'granted') new Notification(`${iconText(i.icon)} ${i.title}`.trim(), { body });
         if (kind === 'alarma') setRinging(i);
         else playOnce('notificacion');
       }

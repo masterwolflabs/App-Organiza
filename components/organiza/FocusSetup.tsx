@@ -1,5 +1,6 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, ListMusic, Loader2, Music, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
@@ -90,7 +91,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
       <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center" onClick={close}>
         <div role="dialog" aria-label="Configurar modo focus" onClick={(e) => e.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#14161b] p-5 ring-1 ring-white/10">
           <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-semibold text-white"><Music className="h-4 w-4 text-sky-300" /> Música del focus · {item.icon} {item.title}</h2>
+            <h2 className="flex items-center gap-2 font-semibold text-white"><Music className="h-4 w-4 text-sky-300" /> Música del focus · <ItemIcon value={item.icon} /> {item.title}</h2>
             <button type="button" aria-label="Cerrar" onClick={close} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <p className="mt-1 text-xs text-zinc-400">Pega tus canciones de YouTube en orden. Cada una suena desde y hasta donde digas, y se funden una con otra.</p>

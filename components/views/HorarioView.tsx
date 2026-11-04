@@ -1,5 +1,6 @@
 'use client';
 
+import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
@@ -383,12 +384,11 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
       className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'}`}
-      style={label ? { background: `linear-gradient(0deg, ${label.color}12, ${label.color}12)` } : undefined}
     >
       {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
       <div className="space-y-2 p-3">
         <p className="flex items-center gap-2 font-semibold text-white">
-          <span aria-hidden>{item.icon || emojiFor(item.title)}</span>
+          <ItemIcon value={item.icon || emojiFor(item.title)} />
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
         <div className="flex flex-col items-start gap-1.5">
@@ -624,7 +624,7 @@ const WeekGrid: React.FC<ViewProps & { onMove: (id: string, time: string) => voi
               const color = schedules?.find((x) => x.id === i.schedule_id)?.color ?? labelOf(labels, i.label_id)?.color ?? '#94a3b8';
               return (
                 <button key={i.id} type="button" aria-label={`${i.title}, ${i.time}`} onPointerDown={(e) => start(e, i)} className="absolute inset-x-0.5 cursor-grab touch-none overflow-hidden rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white active:cursor-grabbing" style={{ top: y(toMinutes(i.time)) + (drag?.id === i.id ? drag.dy : 0), height: Math.max(20, (i.minutes / 60) * HOUR - 2), background: `${color}40`, borderLeft: `3px solid ${color}` }}>
-                  <span className="block truncate">{i.icon || emojiFor(i.title)} {i.title}</span>
+                  <span className="block truncate"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
                 </button>
               );
             })}
@@ -639,7 +639,7 @@ const Gallery: React.FC<ViewProps> = ({ items, labels, onOpen }) => (
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
     {items.map((i) => (
       <button key={i.id} type="button" onClick={() => onOpen(i.id)} className="overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08]">
-        <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && (i.icon || emojiFor(i.title))}</div>
+        <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>
         <div className="p-3">
           <p className="truncate font-semibold text-white">{i.title || 'Sin título'}</p>
           <p className="mt-1 text-sm text-zinc-400">{WEEK[i.weekday]} · {i.time}{labelOf(labels, i.label_id) ? ` · ${labelOf(labels, i.label_id)!.name}` : ''}</p>
@@ -658,7 +658,7 @@ const ListView: React.FC<ViewProps> = ({ items, labels, onOpen }) => (
           <button type="button" onClick={() => onOpen(i.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04]">
             <span className="w-24 shrink-0 text-sm text-zinc-400">{WEEK[i.weekday]}</span>
             <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-400">{i.time}</span>
-            <span className="min-w-0 flex-1 truncate text-white">{i.icon || emojiFor(i.title)} {i.title}</span>
+            <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
             {l && <span className="hidden sm:inline"><Pill color={l.color}>{l.name}</Pill></span>}
             {i.alarm !== 'no' && <Bell className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
           </button>
