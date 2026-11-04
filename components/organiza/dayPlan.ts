@@ -116,9 +116,38 @@ export type Moves = DayPlan['moves'];
  * Propuesta para un día con choques: cada evento del calendario cuenta como fijo y se reacomoda con
  * las reglas de siempre (lo no negociable no se mueve, lo modificable busca espacio, lo flexible se suelta).
  */
+/** La rutina de la mañana: lo que tiene que pasar antes de salir (levantarse, ducha, desayuno…). */
+const MORNING = /levant|despert|desayun|ducha|bañar|banar|vestir|aseo|hacer la cama|lavarse/i;
+const minOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+/**
+ * Si el primer evento del día empieza antes de que termine tu rutina de la mañana (ej. una carrera a
+ * las 7:00 y te levantas a las 9:00), hay que levantarse antes: la rutina se corre entera para terminar
+ * justo cuando empieza el evento, con sus mismos espacios entre medio.
+ */
+export function morningConflict(dayItems: Item[], events: Occ[], plan: DayPlan | null = null) {
+  const first = events.filter((e) => !e.ev.all_day).sort((a, b) => +a.start - +b.start)[0];
+  if (!first) return null;
+  const list = dayItems.filter((i) => !plan?.moves?.[i.id]?.off && MORNING.test(i.title)).map((i) => ({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }));
+  if (!list.length) return null;
+  const start = Math.min(...list.map((i) => toMinutes(i.time)));
+  const end = Math.max(...list.map(endOf));
+  const at = minOf(first.start);
+  // Solo si la rutina es de la mañana de verdad (empieza antes de mediodía) y el evento la pisa o la precede.
+  if (start >= 12 * 60 || end <= at) return null;
+  const shift = at - end;
+  return { event: first, items: list, moves: list.map((i) => ({ item: i, to: toTime(Math.max(0, toMinutes(i.time) + shift)) })) };
+}
+
 export function proposeDay(dayItems: Item[], events: Occ[], plan: DayPlan | null) {
   const moves: Moves = { ...plan?.moves };
   const lines: { text: string; tone: 'move' | 'off' | 'lock' }[] = [];
+  // Primero, la mañana: si un evento llega antes de que termines de levantarte, te levantas antes.
+  const morning = morningConflict(dayItems, events, plan);
+  for (const m of morning?.moves ?? []) {
+    moves[m.item.id] = { ...moves[m.item.id], time: m.to };
+    lines.push({ text: `${m.item.title} → ${m.to} (antes de ${morning!.event.ev.title})`, tone: 'move' });
+  }
   let list = dayItems.filter((i) => !moves[i.id]?.off).map((i) => ({ ...i, time: moves[i.id]?.time ?? i.time }));
   for (const o of events.filter((e) => !e.ev.all_day)) {
     const minutes = Math.max(5, Math.round((+o.end - +o.start) / 60000));

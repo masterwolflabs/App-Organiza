@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
-import { addDays, colorOf, expand, fmtTime, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
+import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
 import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
@@ -10,7 +10,7 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
-import { freeGaps, overlaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
+import { freeGaps, morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Moves } from '@/components/organiza/dayPlan';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 
@@ -373,7 +373,7 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 
 type Streak = { n: number; ghost: boolean };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], move, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; status?: Status; clash?: Occurrence[]; warn?: string; move?: { time?: string; off?: boolean }; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, status = null, clash = [], warn, move, onOpen, draggable }) => {
   const label = labelOf(labels, item.label_id);
   return (
     <button
@@ -381,7 +381,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
-      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length ? 'ring-rose-400/60' : 'ring-white/10'}`}
+      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'}`}
       style={label ? { background: `linear-gradient(0deg, ${label.color}12, ${label.color}12)` } : undefined}
     >
       {item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
@@ -398,6 +398,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             </span>
           )}
           {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+          {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
           {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
           {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
           {!move?.off && move?.time && <Pill color="#38bdf8">↪ Este día a las {move.time}</Pill>}
@@ -430,13 +431,33 @@ const clashes = (i: Item, day: Occurrence[]) => {
 };
 
 /** Un evento del calendario dentro del tablero (borde punteado con su color). */
-const evChip = (o: Occurrence) => (
-  <p key={o.key} data-help="Está en tu calendario ese día" className="flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-xs text-zinc-200" style={{ borderColor: `${colorOf(o.ev)}88`, background: `${colorOf(o.ev)}14` }}>
-    <CalendarClock className="h-3.5 w-3.5 shrink-0" style={{ color: colorOf(o.ev) }} />
-    <span className="tabular-nums text-zinc-400">{o.ev.all_day ? 'Todo el día' : fmtTime(o.start)}</span>
-    <span className="min-w-0 flex-1 truncate font-semibold">{o.ev.title}</span>
-  </p>
-);
+/**
+ * Un evento del calendario es una tarjeta más del día (Emanuel, 2026-11-04): mismo tamaño que las
+ * acciones, con el color del evento, su hora de inicio a fin y el sello «Calendario» en vez de racha/focus.
+ */
+const evChip = (o: Occurrence) => {
+  const color = colorOf(o.ev);
+  const kind = KINDS.find((k) => k.id === o.ev.kind);
+  const google = o.ev.source === 'google';
+  return (
+    <div key={o.key} data-help="Está en tu calendario: se respeta al reacomodar" className="relative z-10 overflow-hidden rounded-xl border text-left backdrop-blur-sm" style={{ background: `linear-gradient(135deg, ${color}2e, ${color}10 60%), #17191fe6`, borderColor: `${color}66`, borderLeft: `3px solid ${color}` }}>
+      <div className="space-y-2 p-3">
+        <p className="flex items-center gap-2 font-semibold text-white">
+          <span aria-hidden>{kind?.emoji ?? '📅'}</span>
+          <span className="min-w-0 flex-1 truncate">{o.ev.title}</span>
+        </p>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Pill color={color}>📅 Calendario{google ? ' · Google' : ''}</Pill>
+          {kind && kind.id !== 'evento' && <Pill color={color}>{kind.label}</Pill>}
+        </span>
+        <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-300">
+          <span>{o.ev.all_day ? 'Todo el día' : `${fmtTime(o.start)} – ${fmtTime(o.end)}`}</span>
+          <span className="ml-auto"><Chip color={color} icon={CalendarClock} help="Evento fijo de tu calendario">Evento</Chip></span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, moves: Moves) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onOpen, onAdd, onMove }) => {
   const [proposal, setProposal] = useState<{ d: number; moves: Moves; lines: { text: string; tone: 'move' | 'off' | 'lock' }[] } | null>(null);
@@ -448,10 +469,14 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
         const date = weekStart ? addDays(weekStart, d) : null;
         const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
         const plan = date ? planOf?.(date) ?? null : null;
-        const dayItems = items.filter((i) => i.weekday === d);
+        // Ordenadas por la hora que valen ESE día (si reacomodaste, con la hora nueva).
+        const eff = (i: Item) => toMinutes(plan?.moves?.[i.id]?.time ?? i.time);
+        const dayItems = items.filter((i) => i.weekday === d).sort((a, b) => eff(a) - eff(b));
         // Los eventos del calendario van entre las acciones, según su hora (los de todo el día, arriba).
         const timed = dayOcc.filter((o) => !o.ev.all_day);
-        const hasClash = dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
+        // La rutina de la mañana después de un evento temprano (ej. carrera 7:00, levantarse 9:00) también es choque.
+        const morning = morningConflict(dayItems, dayOcc, plan);
+        const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
         return (
         <section
           key={name}
@@ -484,13 +509,13 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
               const gap = n ? freeGaps(day.slice(0, n + 1)).find((g) => g.to === i.time) : null;
               return (
                 <React.Fragment key={i.id}>
-                  {timed.filter((o) => minutesOf(o.start) <= toMinutes(i.time) && (n === 0 || minutesOf(o.start) > toMinutes(day[n - 1].time))).map(evChip)}
+                  {timed.filter((o) => minutesOf(o.start) <= eff(i) && (n === 0 || minutesOf(o.start) > eff(day[n - 1]))).map(evChip)}
                   {gap && <p className="px-2 text-xs text-zinc-500">{gap.minutes} min libres</p>}
-                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} onOpen={onOpen} draggable />
+                  <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} status={status?.(i)} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} onOpen={onOpen} draggable />
                 </React.Fragment>
               );
             })}
-            {timed.filter((o) => !dayItems.length || minutesOf(o.start) > toMinutes(dayItems[dayItems.length - 1].time)).map(evChip)}
+            {timed.filter((o) => !dayItems.length || minutesOf(o.start) > eff(dayItems[dayItems.length - 1])).map(evChip)}
             <button type="button" onClick={() => onAdd(d)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>
