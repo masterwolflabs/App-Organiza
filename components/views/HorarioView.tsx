@@ -15,6 +15,7 @@ import { morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Extra
 import { AdjustBox, adjustDayAI, type Line } from '@/components/organiza/DayAdjust';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
+import { appNow, useAppNow } from '@/utils/appClock';
 
 type ViewId = 'tablero' | 'semana' | 'mi-semana' | 'galeria' | 'lista';
 const VIEWS: { id: ViewId; label: string; icon: typeof Rows3 }[] = [
@@ -31,11 +32,15 @@ const VIEW_KEY = 'organiza-horario-view';
  * publicar se eligen las alarmas y recién ahí llega al calendario y a los avisos.
  */
 export const HorarioView: React.FC = () => {
+  // Hora de la app (manual para probar o la real): todo lo que se ve depende de ella.
+  const clock = useAppNow();
   const h = useHorario();
   const c = useChecks();
   // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
   const [weekShift, setWeekShift] = useState(0);
-  const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekShift * 7), [weekShift]);
+  const clockDay = iso(clock);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const weekStart = useMemo(() => addDays(startOfWeek(appNow()), weekShift * 7), [weekShift, clockDay]);
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
   const cal = useCalendar(weekStart, weekEnd);
   const occ = useMemo(() => expand(cal.events.filter((e) => e.source !== 'horario'), weekStart, weekEnd), [cal.events, weekStart, weekEnd]);
@@ -46,7 +51,7 @@ export const HorarioView: React.FC = () => {
   const streakFor = (i: Item, date?: Date): Streak => {
     const ref = refOf(i.title);
     const days = [...new Set(h.activeItems.filter((x) => x.schedule_id === i.schedule_id && refOf(x.title) === ref).map((x) => x.weekday))];
-    const now = new Date();
+    const now = appNow();
     const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const d0 = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()) : t0;
     if (+d0 < +t0) {
@@ -74,7 +79,7 @@ export const HorarioView: React.FC = () => {
     return { n, ghost: true };
   };
   const todayStatus = (i: Item): Status => {
-    const now = new Date();
+    const now = appNow();
     if (i.weekday !== weekdayOf(now)) return null;
     const k = c.checks.find((x) => x.ref === refOf(i.title) && x.day === iso(now));
     // Marcar pasos sin cerrar la acción no es «No lo hice»: es que vas en eso.
@@ -754,8 +759,8 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const today = weekdayOf(new Date());
-  const now = new Date();
+  const today = weekdayOf(appNow());
+  const now = appNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   // «Comenzar desde» una hora distinta de las 00:00 (o desde una acción): la madrugada va al final.
   const madrugadaLast = dayStart.startsWith('a:') || toMinutes(dayStart.slice(2) || '00:00') > 0;
@@ -813,7 +818,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
           {days.map(({ name, d, date, dayOcc, dayItems, plan, hasClash }) => (
             <section key={name} {...drop(d)} className="relative overflow-hidden rounded-2xl bg-white/[0.035] p-2 ring-1 ring-white/5">
               {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
-              <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
+              <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, appNow()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
               <div className="relative space-y-2 empty:hidden">
                 {dayOcc.filter((o) => o.ev.all_day).map(evChip)}
                 {hasClash && date && onApply && review?.d !== d && (
@@ -935,11 +940,8 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
  * y las estrellas titilan.
  */
 const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
-  const [min, setMin] = useState(() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); });
-  useEffect(() => {
-    const t = setInterval(() => { const n = new Date(); setMin(n.getHours() * 60 + n.getMinutes()); }, 60_000);
-    return () => clearInterval(t);
-  }, []);
+  const n = useAppNow();
+  const min = n.getHours() * 60 + n.getMinutes();
   const k = partOf(min, parts);
   const cloud = (x: number, y: number, s: number, o: number, fill = '#e2e8f0') => (
     <g transform={`translate(${x} ${y}) scale(${s})`} opacity={o} fill={fill}>
@@ -1060,7 +1062,7 @@ const startOfDay = (dayStart: string, dayItems: Item[]) => {
   return a ? toMinutes(a.time) : 0;
 };
 const dayDiff = (date: Date) => {
-  const n = new Date();
+  const n = appNow();
   return Math.sign(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() - new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime());
 };
 /** Clase de «Enfocar hoy»: lo que pasó en gris, hoy a todo color (lo terminado en gris), lo que viene a media luz. */
@@ -1069,7 +1071,7 @@ const toneOf = (ctx: DayCtx, date: Date, s0: number, start: number, end: number)
   const w = dayDiff(date);
   if (w < 0) return 'tone-past';
   if (w > 0) return 'tone-next';
-  const now = new Date();
+  const now = appNow();
   return !(s0 > 0 && start < s0) && end <= now.getHours() * 60 + now.getMinutes() ? 'tone-past' : '';
 };
 /** Los días de la semana con sus acciones en el orden de «Comenzar desde». */
@@ -1083,7 +1085,7 @@ const daysOfWeek = (items: Item[], ctx: DayCtx) =>
   });
 const PartTag: React.FC<{ k: PartKey }> = ({ k }) => <span className={`text-xs font-semibold ${PART_INFO[k].cls}`}>{PART_INFO[k].emoji} {PART_INFO[k].name}</span>;
 const DayTitle: React.FC<{ name: string; date: Date }> = ({ name, date }) => (
-  <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${sameDay(date, new Date()) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}<span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span></span>
+  <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${sameDay(date, appNow()) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}<span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span></span>
 );
 
 const WeekGrid: React.FC<ViewProps & { ctx: DayCtx; onMove: (id: string, time: string) => void; schedules?: Schedule[] }> = ({ items, labels, ctx, onOpen, onMove, schedules }) => {

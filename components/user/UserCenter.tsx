@@ -7,6 +7,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ACCENTS, AccentId, LightsId } from '@/utils/appearance';
 import { ThemePref } from '@/utils/theme';
+import { loadClock, saveClock, useAppNow, type ClockPref } from '@/utils/appClock';
 import { UiPrefs } from '@/utils/uiPrefs';
 import { EdgeDrawer } from '@/components/ui/EdgeDrawer';
 
@@ -304,6 +305,7 @@ const Configuracion: React.FC<{ settings: SettingsApi; pages: SettingsPage[]; go
             ['system', 'Sistema'],
             ['light', 'Claro'],
             ['dark', 'Oscuro'],
+            ['hora', '🌗 Según la hora'],
           ] as [ThemePref, string][]
         ).map(([id, label]) => (
           <Choice key={id} active={s.theme === id} onClick={() => s.setTheme(id)}>
@@ -312,6 +314,7 @@ const Configuracion: React.FC<{ settings: SettingsApi; pages: SettingsPage[]; go
         ))}
       </div>
     </Card>
+    <ClockCard />
     <Card title="Paleta de colores" description="El color de acento de botones, menús y destacados.">
       <div className="flex flex-wrap gap-2">
         {ACCENTS.map((a) => (
@@ -343,3 +346,36 @@ const Configuracion: React.FC<{ settings: SettingsApi; pages: SettingsPage[]; go
     </Card>
   </>
 );
+
+/**
+ * Hora de la aplicación (Emanuel, 2026-11-05): automática (la del equipo) o manual para probar cómo se ve
+ * todo a otra hora u otro día. La manual es solo para ver: lo que marques se guarda en el día real.
+ */
+const ClockCard: React.FC = () => {
+  const now = useAppNow(15_000);
+  const [c, setC] = useState<ClockPref>({ mode: 'auto' });
+  useEffect(() => setC(loadClock()), [now]);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const set = (p: ClockPref) => {
+    saveClock(p);
+    setC(p);
+  };
+  const field = 'rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/60';
+  return (
+    <Card title="Hora de la aplicación" description="Automática usa la hora de tu equipo. Manual sirve para probar cómo se ve todo a otra hora u otro día (lo que marques se guarda en el día real).">
+      <div className="flex flex-wrap gap-2">
+        <Choice active={c.mode === 'auto'} onClick={() => set({ mode: 'auto' })}>Automática</Choice>
+        <Choice active={c.mode === 'manual'} onClick={() => set({ mode: 'manual', date, time, setAt: Date.now() })}>Manual</Choice>
+      </div>
+      {c.mode === 'manual' && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input type="date" aria-label="Día" value={date} onChange={(e) => e.target.value && set({ mode: 'manual', date: e.target.value, time, setAt: Date.now() })} className={field} />
+          <input type="time" aria-label="Hora" value={time} onChange={(e) => e.target.value && set({ mode: 'manual', date, time: e.target.value, setAt: Date.now() })} className={field} />
+          <span className="text-xs text-zinc-400">El reloj sigue corriendo desde ahí.</span>
+        </div>
+      )}
+    </Card>
+  );
+};

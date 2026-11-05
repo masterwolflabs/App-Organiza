@@ -27,6 +27,8 @@ import { SearchItem } from '@/utils/globalSearch';
 import { useEdgeReveal } from '@/utils/useEdgeReveal';
 import { loadUiPrefs, saveUiPrefs, UiPrefs, DEFAULT_UI_PREFS } from '@/utils/uiPrefs';
 import { loadThemePref, saveThemePref, ThemePref, applyTheme } from '@/utils/theme';
+import { CLOCK_EVENT } from '@/utils/appClock';
+import { ClockBanner } from '@/components/shell/ClockBanner';
 import { AccentId, LightsId, loadAccent, loadLights, saveAppearance } from '@/utils/appearance';
 import { openCloud, touchApp } from '@/utils/cloud';
 import { useMyRole } from '@/utils/mente';
@@ -98,6 +100,21 @@ export function AppShell({ session }: { session: Session }) {
     setUiState(loadUiPrefs());
     touchApp();
   }, []);
+
+  // «Según la hora»: se revisa cada 30 s y al cambiar la hora de la app o tus partes del día.
+  useEffect(() => {
+    if (theme !== 'hora') return;
+    const on = () => applyTheme('hora');
+    on();
+    const t = setInterval(on, 30_000);
+    window.addEventListener(CLOCK_EVENT, on);
+    window.addEventListener('storage', on);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(CLOCK_EVENT, on);
+      window.removeEventListener('storage', on);
+    };
+  }, [theme]);
 
   // "Sistema" sigue los cambios del sistema operativo en vivo.
   useEffect(() => {
@@ -197,6 +214,7 @@ export function AppShell({ session }: { session: Session }) {
     // Chat compartido con la nube, solo con los canales y mensajes de esta app.
     <SpaceProvider userId={user.id} email={user.email ?? null} name={displayName}>
     <ChatProvider session={chatSession} scope={CHAT_SCOPE} inChat={section === 'chat'} onOpenChat={() => navigate('chat')}>
+    <ClockBanner />
     {/* Datos estilo Notion de este usuario en esta app (vistas de tablas + bases de datos), también dentro de las notas. */}
     <ConfirmProvider>
     <TableViewsProvider scope={user.id}>
