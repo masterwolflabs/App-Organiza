@@ -923,31 +923,31 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
   );
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      <svg viewBox="0 0 400 260" className="absolute -right-6 -top-8 h-72 w-[28rem] max-w-full opacity-[0.22] sm:opacity-30">
+      <svg viewBox="0 0 400 260" className="absolute right-0 top-0 h-72 w-[28rem] max-w-full opacity-[0.22] sm:opacity-30">
         <defs>
           <radialGradient id="hz-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde68a" /><stop offset="55%" stopColor="#fbbf24" stopOpacity=".55" /><stop offset="100%" stopColor="#fbbf24" stopOpacity="0" /></radialGradient>
           <radialGradient id="hz-moon" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#c7d2fe" stopOpacity=".7" /><stop offset="100%" stopColor="#818cf8" stopOpacity="0" /></radialGradient>
         </defs>
         {k === 'manana' && (
           <g>
-            <circle cx="290" cy="110" r="110" fill="url(#hz-sun)" />
-            <circle cx="290" cy="110" r="38" fill="#fcd34d" />
+            <circle cx="270" cy="115" r="100" fill="url(#hz-sun)" />
+            <circle cx="270" cy="115" r="36" fill="#fcd34d" />
             {cloud(170, 170, 0.8, 0.5)}
           </g>
         )}
         {k === 'tarde' && (
           <g>
-            <circle cx="300" cy="150" r="110" fill="url(#hz-sun)" />
-            <circle cx="300" cy="150" r="36" fill="#fb923c" />
-            {cloud(240, 175, 1.1, 0.75)}
+            <circle cx="270" cy="140" r="100" fill="url(#hz-sun)" />
+            <circle cx="270" cy="140" r="34" fill="#fb923c" />
+            {cloud(220, 170, 1.1, 0.75)}
             {cloud(120, 90, 0.8, 0.5)}
           </g>
         )}
         {(k === 'noche' || k === 'madrugada') && (
           <g>
-            <circle cx="300" cy="100" r="95" fill="url(#hz-moon)" />
-            <path d="M318 62a44 44 0 1 0 0 76a36 36 0 1 1 0-76z" fill="#e0e7ff" />
-            {[[150, 60], [200, 140], [110, 120], [250, 40], [360, 190], [170, 210]].map(([x, y], n) => <circle key={n} cx={x} cy={y} r={n % 2 ? 1.6 : 2.4} fill="#e0e7ff" />)}
+            <circle cx="280" cy="105" r="95" fill="url(#hz-moon)" />
+            <path d="M298 67a44 44 0 1 0 0 76a36 36 0 1 1 0-76z" fill="#e0e7ff" />
+            {[[150, 60], [200, 140], [110, 120], [250, 40], [350, 200], [170, 210]].map(([x, y], n) => <circle key={n} cx={x} cy={y} r={n % 2 ? 1.6 : 2.4} fill="#e0e7ff" />)}
           </g>
         )}
       </svg>
