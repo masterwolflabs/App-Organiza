@@ -736,6 +736,21 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
   }, [items]);
   // Después de reacomodar: «¿Te gustó el cambio?» con lo que se movió (y lo que dijo la IA).
   const [review, setReview] = useState<{ d: number; lines: Line[]; summary?: string } | null>(null);
+  // Ancho visible del tablero: la barra de cada franja mide eso (los puntos no siguen fuera de la pantalla).
+  const scroller = useRef<HTMLDivElement>(null);
+  const [vw, setVw] = useState(0);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const fit = () => {
+      const cs = getComputedStyle(el);
+      setVw(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const today = weekdayOf(new Date());
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -789,7 +804,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
 
   return (
     <div className="relative" data-tour="tablero">
-      <div className="relative -mx-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+      <div ref={scroller} className="relative -mx-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
         <div className="grid w-max gap-x-3" style={cols}>
           {/* Cabecera de cada día: fecha, eventos de todo el día y reacomodar. */}
           {days.map(({ name, d, date, dayOcc, dayItems, plan, hasClash }) => (
@@ -850,17 +865,20 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                   onClick={() => setFold((f) => ({ ...f, [k]: !folded }))}
                   aria-expanded={!folded}
                   aria-label={show.partes ? undefined : `${info.name}: ${folded ? 'desplegar' : 'plegar'}`}
-                  className={`col-span-full flex items-center gap-2 rounded-md text-left text-sm font-semibold outline-none ${r === 0 ? 'py-2' : show.partes ? 'pb-2 pt-3' : 'pb-1.5 pt-2'} ${info.cls}`}
+                  className={`col-span-full block rounded-md text-left text-sm font-semibold outline-none ${r === 0 ? 'py-2' : show.partes ? 'pb-2 pt-3' : 'pb-1.5 pt-2'} ${info.cls}`}
                   style={{ gridColumn: '1 / -1' }}
                 >
-                  {show.partes && (
-                    <span className="sticky left-0 flex shrink-0 items-center gap-2">
-                      <span aria-hidden>{info.emoji}</span> {info.name}
-                      {folded && acts.length > 0 && <span className="font-normal text-zinc-400">· {todayCol ? (status ? `hoy ${done} de ${acts.length} hechas` : `hoy ${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`) : `${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`}{late > 0 ? <span className="text-rose-300"> · {late} se pasaron</span> : null}</span>}
-                    </span>
-                  )}
-                  <span className="h-0 flex-1 border-t border-dotted border-current opacity-50" />
-                  <ChevronDown className={`sticky right-0 h-4 w-4 shrink-0 opacity-70 transition-transform ${folded ? '-rotate-90' : ''}`} />
+                  {/* La barra ocupa solo lo que se ve: texto, puntos y al final la flecha (sin puntos encima ni después). */}
+                  <span className="sticky left-0 flex items-center gap-2" style={{ width: vw ? `min(${vw}px, 100%)` : '100%' }}>
+                    {show.partes && (
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span aria-hidden>{info.emoji}</span> {info.name}
+                        {folded && acts.length > 0 && <span className="font-normal text-zinc-400">· {todayCol ? (status ? `hoy ${done} de ${acts.length} hechas` : `hoy ${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`) : `${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`}{late > 0 ? <span className="text-rose-300"> · {late} se pasaron</span> : null}</span>}
+                      </span>
+                    )}
+                    <span className="h-0 flex-1 border-t border-dotted border-current opacity-50" />
+                    <ChevronDown className={`h-4 w-4 shrink-0 opacity-70 transition-transform ${folded ? '-rotate-90' : ''}`} />
+                  </span>
                 </button>
                 {!folded && days.map((x) => {
                   const mine = x.entries.filter((e) => partOf(e.start, parts) === k);
@@ -922,8 +940,8 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
     </g>
   );
   return (
-    // Arriba a la derecha y fijo al deslizar (Emanuel, 2026-11-05): el resplandor respira, brilla más y menos.
-    <div aria-hidden className="pointer-events-none sticky top-0 -z-10 h-0">
+    // Arriba a la derecha, en el encabezado; al deslizar se queda arriba en la página (Emanuel, 2026-11-05). El resplandor respira.
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-0">
       <svg viewBox="0 0 400 260" className="absolute -top-6 right-0 h-72 w-[28rem] max-w-full opacity-30 sm:opacity-40">
         <defs>
           <radialGradient id="hz-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde68a" /><stop offset="55%" stopColor="#fbbf24" stopOpacity=".55" /><stop offset="100%" stopColor="#fbbf24" stopOpacity="0" /></radialGradient>
