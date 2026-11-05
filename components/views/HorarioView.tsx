@@ -244,8 +244,8 @@ export const HorarioView: React.FC = () => {
       </>
     );
 
-  const add = async (weekday: number) => {
-    const made = await h.addItem(s.id, weekday);
+  const add = async (weekday: number, time?: string) => {
+    const made = await h.addItem(s.id, weekday, time ? { time } : {});
     if (made) setOpenId(made.id);
   };
 
@@ -714,7 +714,7 @@ const PartsForm: React.FC<{ value: Parts; onSave: (p: Parts) => void }> = ({ val
  * así en cada franja las columnas parten a la misma altura. Plegar una franja la pliega en toda la semana;
  * cada casilla lleva el degradado de esa hora y al fondo hay un sol, nubes o la luna según la hora.
  */
-const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; show?: Fields; onLabel?: (id: string) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, show = FIELDS_ALL, onLabel, onOpen, onAdd, onMove }) => {
+const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; show?: Fields; onLabel?: (id: string) => void; onAdd: (d: number, time?: string) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, show = FIELDS_ALL, onLabel, onOpen, onAdd, onMove }) => {
   // Franjas plegadas o abiertas a mano. Sin tocar: si la semana es esta, se pliega lo que ya pasó hoy.
   const [fold, setFold] = useState<Partial<Record<PartKey, boolean>>>({});
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
@@ -865,7 +865,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                 {!folded && days.map((x) => {
                   const mine = x.entries.filter((e) => partOf(e.start, parts) === k);
                   return (
-                    <div key={x.name} {...drop(x.d)} className="min-h-14 space-y-2 rounded-2xl p-2 ring-1 ring-white/[0.04]" style={{ background: info.grad }}>
+                    <div key={x.name} {...drop(x.d)} className="space-y-2 self-start rounded-2xl p-2 ring-1 ring-white/[0.04]" style={{ background: info.grad }}>
                       {mine.map((e, n) => {
                         const prevEnd = n ? Math.max(...mine.slice(0, n).map((y) => y.end)) : null;
                         const free = prevEnd !== null && e.start - prevEnd >= 15 ? e.start - prevEnd : 0;
@@ -885,6 +885,10 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                           </React.Fragment>
                         );
                       })}
+                      {/* Agregar en esta franja: parte a su hora (o la siguiente libre). */}
+                      <button type="button" onClick={() => onAdd(x.d, toTime(Math.max(partRange(k, parts)[0], mine.length ? Math.min(1425, Math.max(...mine.map((e) => e.end))) : 0)))} aria-label={`Agregar en la ${info.name.toLowerCase()} del ${x.name.toLowerCase()}`} data-help={`Nueva tarea en la ${info.name.toLowerCase()}`} className="flex w-full items-center justify-center rounded-lg py-1 text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200">
+                        <Plus className="h-4 w-4" />
+                      </button>
                     </div>
                   );
                 })}
@@ -892,7 +896,8 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
             );
           })}
 
-          {days.map(({ name, d }) => (
+          {/* Sin nada esa semana: un + por día para empezar. */}
+          {rows.length === 0 && days.map(({ name, d }) => (
             <button key={name} type="button" onClick={() => onAdd(d)} {...drop(d)} className="mt-3 flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>

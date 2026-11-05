@@ -122,3 +122,4 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 - Cada casilla lleva `PART_INFO[k].grad` (degradado de esa hora). Al fondo `SkyDecor`: sol (mañana), sol con nubes (tarde), luna y estrellas (noche/madrugada), según la hora actual.
 - Menú 👁️ Mostrar: nuevo campo **Nombres de las partes** (`partes`), oculta los títulos de las franjas (queda la línea y la flecha) y la etiqueta de parte en Galería/Lista.
 - Tarjeta: clase `.hz-card` en globals.css (gris sólido, más gris en tema claro).
+- (2026-11-05, después) Cada casilla de franja corta a la altura de sus acciones (`self-start`, ya no se estira a la más alta) y lleva un **+** al final: crea la tarea ese día en esa franja, a la hora en que termina lo último (o al inicio de la franja); `addItem` ahora toma `p.time` como hora preferida y busca la siguiente libre. La fila final «Nueva tarea» solo sale si la semana está vacía.

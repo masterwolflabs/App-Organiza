@@ -145,8 +145,8 @@ export function useHorario() {
     const sort = sameDay.length;
     const title = p.title ?? 'Nueva tarea';
     // Nace en la primera hora libre desde las 9:00 (no encima de otra acción).
-    const time = freeTime(sameDay, '09:00', p.minutes ?? 30);
-    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, time, minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p });
+    const time = freeTime(sameDay, p.time ?? '09:00', p.minutes ?? 30);
+    const [made] = await db.insert<Item>('organiza_items', { schedule_id: scheduleId, weekday, sort, minutes: 30, title, icon: '', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'flexible', category: '', priority: 2, block: '', ...p, time });
     if (made) {
       setItems((l) => [...l, made]);
       record(`Nueva «${made.title}»`, `n:${made.id}`, () => dropItem(made.id), () => putItem(made));
