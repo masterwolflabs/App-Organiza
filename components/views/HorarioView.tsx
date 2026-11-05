@@ -538,7 +538,6 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
   const moved = !move?.off && move?.time && move.time !== item.time;
   const startT = moved ? move!.time! : item.time;
   const endT = toTime((toMinutes(startT) + item.minutes) % 1440);
-  const extras = show.extras && (item.focus || item.alarm !== 'no');
   return (
     <button
       type="button"
@@ -554,14 +553,18 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           <ItemIcon value={item.icon || emojiFor(item.title)} />
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
-        {/* Estado, racha, focus y alarma en una sola fila. */}
-        {((show.estado && live) || (show.racha && streak) || extras) && (
+        {/* Arriba como máximo 3: estado, racha y focus; la alarma o el aviso van abajo (Emanuel, 2026-11-05). */}
+        {((show.estado && live) || (show.racha && streak) || (show.extras && item.focus)) && (
           <div className="flex flex-wrap items-center gap-1.5">
             {show.estado && live && <span data-help={live.help} className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${live.pulse ? 'animate-pulse' : ''}`} style={{ background: `${live.color}26`, color: live.color }}>{live.label}</span>}
             {show.racha && streak && <StreakChip streak={streak} />}
             {show.extras && item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
-            {show.extras && item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
-            {show.extras && item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
+          </div>
+        )}
+        {show.extras && item.alarm !== 'no' && (
+          <div className="flex items-center gap-1.5">
+            {item.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
+            {item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
           </div>
         )}
         {(clash.length > 0 || ownTime || warn || crossed.length > 0 || move?.off || moved) && (
