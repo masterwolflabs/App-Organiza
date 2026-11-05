@@ -611,7 +611,7 @@ const evChip = (o: Occurrence) => {
   const kind = KINDS.find((k) => k.id === o.ev.kind);
   const google = o.ev.source === 'google';
   return (
-    <div key={o.key} data-help="Está en tu calendario: se respeta al reacomodar" className="relative z-10 overflow-hidden rounded-xl border text-left backdrop-blur-sm" style={{ background: `linear-gradient(135deg, ${color}2e, ${color}10 60%), #17191fe6`, borderColor: `${color}66`, borderLeft: `3px solid ${color}` }}>
+    <div key={o.key} data-help="Está en tu calendario: se respeta al reacomodar" className="hz-card relative z-10 overflow-hidden rounded-xl border text-left" style={{ backgroundImage: `linear-gradient(135deg, ${color}2e, ${color}10 60%)`, borderColor: `${color}66`, borderLeft: `3px solid ${color}` }}>
       <div className="space-y-2 p-3">
         <p className="flex items-center gap-2 font-semibold text-white">
           <span aria-hidden>{kind?.emoji ?? '📅'}</span>
