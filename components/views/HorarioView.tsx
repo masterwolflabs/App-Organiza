@@ -485,9 +485,9 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 type Streak = { n: number; ghost: boolean; missed?: boolean };
 
 /** Qué se ve en cada tarjeta (menú «Mostrar», Emanuel 2026-11-04). En este dispositivo. */
-type Fields = { portada: boolean; estado: boolean; racha: boolean; extras: boolean; etiqueta: boolean; hora: boolean; duracion: boolean };
-const FIELDS_ALL: Fields = { portada: true, estado: true, racha: true, extras: true, etiqueta: true, hora: true, duracion: true };
-const FIELD_NAMES: [keyof Fields, string][] = [['portada', '🖼️ Portada'], ['estado', '🟢 Estado'], ['racha', '🔥 Racha'], ['extras', '⚡ Focus y alarma'], ['etiqueta', '🏷️ Categoría'], ['hora', '🕘 Hora'], ['duracion', '⏱️ Hasta y duración']];
+type Fields = { partes: boolean; portada: boolean; estado: boolean; racha: boolean; extras: boolean; etiqueta: boolean; hora: boolean; duracion: boolean };
+const FIELDS_ALL: Fields = { partes: true, portada: true, estado: true, racha: true, extras: true, etiqueta: true, hora: true, duracion: true };
+const FIELD_NAMES: [keyof Fields, string][] = [['partes', '🌗 Nombres de las partes'], ['portada', '🖼️ Portada'], ['estado', '🟢 Estado'], ['racha', '🔥 Racha'], ['extras', '⚡ Focus y alarma'], ['etiqueta', '🏷️ Categoría'], ['hora', '🕘 Hora'], ['duracion', '⏱️ Hasta y duración']];
 
 /**
  * Estado en vivo de una tarea de hoy (Emanuel, 2026-11-04): Pendiente → Por activarse (30 min antes) →
@@ -544,7 +544,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
       onClick={() => onOpen(item.id)}
-      className={`relative z-10 block w-full overflow-hidden rounded-xl bg-[#17191f]/90 text-left ring-1 backdrop-blur-sm transition hover:bg-[#1d2027] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
+      className={`relative z-10 block w-full overflow-hidden hz-card rounded-xl text-left ring-1 transition ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
       style={mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : undefined}
     >
       {show.portada && item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
@@ -678,10 +678,10 @@ const AIMarksBar: React.FC<{ marks: AIMarks; present: number; onApply: () => Pro
 export type Parts = { manana: string; tarde: string; noche: string };
 const PARTS_DEFAULT: Parts = { manana: '06:00', tarde: '12:00', noche: '19:00' };
 const PART_INFO = {
-  madrugada: { name: 'Madrugada', emoji: '🌙', cls: 'text-indigo-300' },
-  manana: { name: 'Mañana', emoji: '☀️', cls: 'text-amber-300' },
-  tarde: { name: 'Tarde', emoji: '🌤️', cls: 'text-orange-300' },
-  noche: { name: 'Noche', emoji: '🌆', cls: 'text-violet-300' },
+  madrugada: { name: 'Madrugada', emoji: '🌙', cls: 'text-indigo-300', grad: 'linear-gradient(180deg, rgba(30,27,75,.28), rgba(129,140,248,.10))' },
+  manana: { name: 'Mañana', emoji: '☀️', cls: 'text-amber-300', grad: 'linear-gradient(180deg, rgba(125,211,252,.13), rgba(253,230,138,.15))' },
+  tarde: { name: 'Tarde', emoji: '🌤️', cls: 'text-orange-300', grad: 'linear-gradient(180deg, rgba(253,186,116,.17), rgba(244,114,182,.07) 55%, rgba(165,180,252,.12))' },
+  noche: { name: 'Noche', emoji: '🌆', cls: 'text-violet-300', grad: 'linear-gradient(180deg, rgba(167,139,250,.15), rgba(49,46,129,.24))' },
 } as const;
 type PartKey = keyof typeof PART_INFO;
 const partOf = (m: number, p: Parts): PartKey => (m < toMinutes(p.manana) ? 'madrugada' : m < toMinutes(p.tarde) ? 'manana' : m < toMinutes(p.noche) ? 'tarde' : 'noche');
@@ -709,9 +709,14 @@ const PartsForm: React.FC<{ value: Parts; onSave: (p: Parts) => void }> = ({ val
   );
 };
 
+/**
+ * Tablero en franjas (Emanuel, 2026-11-05, con su maqueta): Mañana, Tarde y Noche cruzan todos los días,
+ * así en cada franja las columnas parten a la misma altura. Plegar una franja la pliega en toda la semana;
+ * cada casilla lleva el degradado de esa hora y al fondo hay un sol, nubes o la luna según la hora.
+ */
 const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; show?: Fields; onLabel?: (id: string) => void; onAdd: (d: number) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, show = FIELDS_ALL, onLabel, onOpen, onAdd, onMove }) => {
-  // Partes plegadas o abiertas a mano (por día). Sin tocar: hoy se pliega lo que ya pasó.
-  const [fold, setFold] = useState<Record<string, boolean>>({});
+  // Franjas plegadas o abiertas a mano. Sin tocar: si la semana es esta, se pliega lo que ya pasó hoy.
+  const [fold, setFold] = useState<Partial<Record<PartKey, boolean>>>({});
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
   const usual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -731,135 +736,216 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
   // Después de reacomodar: «¿Te gustó el cambio?» con lo que se movió (y lo que dijo la IA).
   const [review, setReview] = useState<{ d: number; lines: Line[]; summary?: string } | null>(null);
   const today = weekdayOf(new Date());
-  const scroller = useRef<HTMLDivElement>(null);
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // «Comenzar desde» una hora distinta de las 00:00 (o desde una acción): la madrugada va al final.
+  const madrugadaLast = dayStart.startsWith('a:') || toMinutes(dayStart.slice(2) || '00:00') > 0;
+  const order: PartKey[] = madrugadaLast ? ['manana', 'tarde', 'noche', 'madrugada'] : ['madrugada', 'manana', 'tarde', 'noche'];
+
+  type Entry = { key: string; start: number; end: number } & ({ kind: 'item'; i: Item } | { kind: 'ev'; o: Occurrence } | { kind: 'extra'; x: Extra });
+  const days = WEEK.map((name, d) => {
+    const date = weekStart ? addDays(weekStart, d) : null;
+    const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
+    const plan = date ? planOf?.(date) ?? null : null;
+    // Ordenadas por la hora que valen ESE día (si reacomodaste, con la hora nueva).
+    const eff = (i: Item) => toMinutes(plan?.moves?.[i.id]?.time ?? i.time);
+    const dayItems = items.filter((i) => i.weekday === d).sort((a, b) => eff(a) - eff(b));
+    // La rutina de la mañana después de un evento temprano (ej. carrera 7:00, levantarse 9:00) también es choque.
+    const morning = morningConflict(dayItems, dayOcc, plan);
+    // Acciones, eventos del calendario y lo agregado solo ese día, por hora.
+    const entries: Entry[] = [
+      ...dayItems.map((i): Entry => ({ kind: 'item', i, key: i.id, start: eff(i), end: plan?.moves?.[i.id]?.off ? eff(i) : eff(i) + i.minutes })),
+      ...dayOcc.filter((o) => !o.ev.all_day).map((o): Entry => ({ kind: 'ev', o, key: o.key, start: minutesOf(o.start), end: sameDay(o.start, o.end) ? minutesOf(o.end) : 1440 })),
+      ...(plan?.extras ?? []).map((x): Entry => ({ kind: 'extra', x, key: x.id, start: toMinutes(x.time), end: toMinutes(x.time) + x.minutes })),
+    ].sort((a, b) => a.start - b.start || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
+    const s0 = dayStart.startsWith('a:') ? (() => { const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2)); return a ? eff(a) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
+    const rel = (m: number) => (m - s0 + 1440) % 1440;
+    const when = date ? dayDiff(date) : 0;
+    // Hoy: una parte ya pasó cuando terminó (la madrugada del final es la de esta noche, esa no).
+    const passed = (k: PartKey) => when === 0 && !!date && partRange(k, parts)[1] <= nowMin && !(k === 'madrugada' && madrugadaLast);
+    // «Enfocar hoy»: lo que pasó en gris, hoy a todo color, lo que viene a media luz.
+    const tone = (e: Entry) => {
+      if (!focusToday || !date) return '';
+      if (when < 0) return 'tone-past';
+      if (when > 0) return 'tone-next';
+      const madrugada = s0 > 0 && e.start < s0;
+      return !madrugada && e.end <= nowMin ? 'tone-past' : '';
+    };
+    const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
+    return { name, d, date, dayOcc, plan, dayItems, morning, entries, rel, when, passed, tone, hasClash };
+  });
+  const todayCol = days.find((x) => x.date && x.when === 0);
+  // Solo las franjas que tienen algo en la semana.
+  const rows = order.filter((k) => days.some((x) => x.entries.some((e) => partOf(e.start, parts) === k)));
+  const drop = (d: number) => ({
+    onDragOver: (e: React.DragEvent) => e.preventDefault(),
+    onDrop: (e: React.DragEvent) => {
+      const id = e.dataTransfer.getData('text/plain');
+      if (id) onMove(id, d);
+    },
+  });
+  const cols = { gridTemplateColumns: `repeat(${WEEK.length}, 16rem)` };
+
   return (
-    <div ref={scroller} className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" data-tour="tablero">
-      {WEEK.map((name, d) => {
-        const date = weekStart ? addDays(weekStart, d) : null;
-        const dayOcc = date ? occ.filter((o) => sameDay(o.start, date)).sort((a, b) => +a.start - +b.start) : [];
-        const plan = date ? planOf?.(date) ?? null : null;
-        // Ordenadas por la hora que valen ESE día (si reacomodaste, con la hora nueva).
-        const eff = (i: Item) => toMinutes(plan?.moves?.[i.id]?.time ?? i.time);
-        const dayItems = items.filter((i) => i.weekday === d).sort((a, b) => eff(a) - eff(b));
-        // Los eventos del calendario van entre las acciones, según su hora (los de todo el día, arriba).
-        const timed = dayOcc.filter((o) => !o.ev.all_day);
-        // La rutina de la mañana después de un evento temprano (ej. carrera 7:00, levantarse 9:00) también es choque.
-        const morning = morningConflict(dayItems, dayOcc, plan);
-        // Todo el día en una sola fila por hora: acciones, eventos del calendario y lo agregado solo ese día.
-        type Entry = { key: string; start: number; end: number } & ({ kind: 'item'; i: Item } | { kind: 'ev'; o: Occurrence } | { kind: 'extra'; x: Extra });
-        const entries: Entry[] = [
-          ...dayItems.map((i): Entry => ({ kind: 'item', i, key: i.id, start: eff(i), end: plan?.moves?.[i.id]?.off ? eff(i) : eff(i) + i.minutes })),
-          ...timed.map((o): Entry => ({ kind: 'ev', o, key: o.key, start: minutesOf(o.start), end: sameDay(o.start, o.end) ? minutesOf(o.end) : 1440 })),
-          ...(plan?.extras ?? []).map((x): Entry => ({ kind: 'extra', x, key: x.id, start: toMinutes(x.time), end: toMinutes(x.time) + x.minutes })),
-        ];
-        // «Comenzar desde» (Emanuel, 2026-11-04): el día parte a esa hora (o en esa acción, ej. Levantarse);
-        // lo que cae antes (madrugada) va al final.
-        const s0 = dayStart.startsWith('a:') ? (() => { const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2)); return a ? eff(a) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
-        const rel = (m: number) => (m - s0 + 1440) % 1440;
-        entries.sort((a, b) => rel(a.start) - rel(b.start) || (a.kind === 'ev' ? -1 : b.kind === 'ev' ? 1 : 0));
-        // «Enfocar hoy» (Emanuel, 2026-11-04): lo que pasó en gris, hoy a todo color, lo que viene a media luz.
-        const now = new Date();
-        const when = date ? Math.sign(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) : 0;
-        const nowMin = now.getHours() * 60 + now.getMinutes();
-        const tone = (e: Entry) => {
-          if (!focusToday || !date) return '';
-          if (when < 0) return 'tone-past';
-          if (when > 0) return 'tone-next';
-          const madrugada = s0 > 0 && e.start < s0;
-          return !madrugada && e.end <= nowMin ? 'tone-past' : '';
-        };
-        const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
-        return (
-        <section
-          key={name}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            const id = e.dataTransfer.getData('text/plain');
-            if (id) onMove(id, d);
-          }}
-          className="relative w-64 shrink-0 overflow-hidden rounded-2xl bg-white/[0.025] p-2 ring-1 ring-white/5"
-        >
-          {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
-          <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
-          <div className="relative mt-1 space-y-2">
-            {dayOcc.filter((o) => o.ev.all_day).map(evChip)}
-            {hasClash && date && onApply && review?.d !== d && (
-              <button
-                type="button"
-                onClick={() => {
-                  const p = proposeDay(dayItems, dayOcc, plan);
-                  onApply(date, { moves: p.moves });
-                  setReview({ d, lines: p.lines });
-                }}
-                className="neon-red flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-2 py-2 text-xs font-bold text-[#fff] hover:bg-rose-500"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-[#fff]" /> Reacomodar este día
-              </button>
-            )}
-            {!hasClash && date && onApply && review?.d !== d && (Object.keys(plan?.moves ?? {}).length > 0 || (plan?.extras?.length ?? 0) > 0) && (
-              <button type="button" onClick={() => setReview({ d, lines: [] })} className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-sky-300 ring-1 ring-sky-400/20 hover:bg-sky-500/10"><Sparkles className="h-3.5 w-3.5" /> Día reacomodado · ajustar</button>
-            )}
-            {review?.d === d && date && (
-              <AdjustBox
-                title={`Reacomodé el ${name.toLowerCase()} ${date.getDate()}`}
-                lines={review.lines}
-                summary={review.summary}
-                onLike={() => setReview(null)}
-                onUndo={() => {
-                  onUndo?.();
-                  setReview(null);
-                }}
-                onSend={async (text) => {
-                  const r = await adjustDayAI({ dayLabel: `${name} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`, items: dayItems, events: dayOcc, plan, request: text });
-                  onApply?.(date, { moves: r.moves, extras: r.extras });
-                  setReview({ d, lines: r.lines, summary: r.summary });
-                }}
-              />
-            )}
-            {entries.map((e, n) => {
-              const part = partOf(e.start, parts);
-              const head = n === 0 || partOf(entries[n - 1].start, parts) !== part;
-              const [, partEnd] = partRange(part, parts);
-              // Hoy: una parte ya pasó cuando terminó (la madrugada del final es la de esta noche, esa no).
-              const passed = when === 0 && !!date && partEnd <= nowMin && !(part === 'madrugada' && s0 > 0);
-              const fk = `${d}:${part}`;
-              const folded = fold[fk] ?? passed;
-              const mine = entries.filter((x) => partOf(x.start, parts) === part);
-              const acts = mine.filter((x): x is Extract<Entry, { kind: 'item' }> => x.kind === 'item' && !plan?.moves?.[x.i.id]?.off);
-              const done = status ? acts.filter((x) => status(x.i) === 'hecho').length : 0;
-              const info = PART_INFO[part];
-              const prevEnd = n ? Math.max(...entries.slice(0, n).map((x) => rel(x.start) + (x.end - x.start))) : null;
-              const free = prevEnd !== null && rel(e.start) - prevEnd >= 15 ? rel(e.start) - prevEnd : 0;
-              const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
-              const live = e.kind === 'item' ? liveStatus(st, rel(e.start), rel(e.end), rel(nowMin), passed) : null;
-              return (
-                <React.Fragment key={e.key}>
-                  {head && (
-                    <button type="button" onClick={() => setFold((f) => ({ ...f, [fk]: !folded }))} aria-expanded={!folded} className={`flex w-full items-center gap-2 rounded-lg px-2 pb-0.5 pt-2 text-left text-xs font-semibold hover:bg-white/[0.03] ${info.cls}`}>
+    <div className="relative" data-tour="tablero">
+      <SkyDecor parts={parts} />
+      <div className="relative -mx-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+        <div className="grid w-max gap-x-3" style={cols}>
+          {/* Cabecera de cada día: fecha, eventos de todo el día y reacomodar. */}
+          {days.map(({ name, d, date, dayOcc, dayItems, plan, hasClash }) => (
+            <section key={name} {...drop(d)} className="relative self-start overflow-hidden rounded-2xl bg-white/[0.035] p-2 ring-1 ring-white/5">
+              {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
+              <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
+              <div className="relative space-y-2 empty:hidden">
+                {dayOcc.filter((o) => o.ev.all_day).map(evChip)}
+                {hasClash && date && onApply && review?.d !== d && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = proposeDay(dayItems, dayOcc, plan);
+                      onApply(date, { moves: p.moves });
+                      setReview({ d, lines: p.lines });
+                    }}
+                    className="neon-red flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-2 py-2 text-xs font-bold text-[#fff] hover:bg-rose-500"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-[#fff]" /> Reacomodar este día
+                  </button>
+                )}
+                {!hasClash && date && onApply && review?.d !== d && (Object.keys(plan?.moves ?? {}).length > 0 || (plan?.extras?.length ?? 0) > 0) && (
+                  <button type="button" onClick={() => setReview({ d, lines: [] })} className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-sky-300 ring-1 ring-sky-400/20 hover:bg-sky-500/10"><Sparkles className="h-3.5 w-3.5" /> Día reacomodado · ajustar</button>
+                )}
+                {review?.d === d && date && (
+                  <AdjustBox
+                    title={`Reacomodé el ${name.toLowerCase()} ${date.getDate()}`}
+                    lines={review.lines}
+                    summary={review.summary}
+                    onLike={() => setReview(null)}
+                    onUndo={() => {
+                      onUndo?.();
+                      setReview(null);
+                    }}
+                    onSend={async (text) => {
+                      const r = await adjustDayAI({ dayLabel: `${name} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`, items: dayItems, events: dayOcc, plan, request: text });
+                      onApply?.(date, { moves: r.moves, extras: r.extras });
+                      setReview({ d, lines: r.lines, summary: r.summary });
+                    }}
+                  />
+                )}
+              </div>
+            </section>
+          ))}
+
+          {rows.map((k) => {
+            const info = PART_INFO[k];
+            const folded = fold[k] ?? (todayCol ? todayCol.passed(k) : false);
+            // Resumen al plegar: lo de hoy (si la semana es esta) o cuántas tareas hay en la semana.
+            const actsOf = (x: (typeof days)[number]) => x.entries.filter((e): e is Extract<Entry, { kind: 'item' }> => e.kind === 'item' && partOf(e.start, parts) === k && !x.plan?.moves?.[e.i.id]?.off);
+            const acts = todayCol ? actsOf(todayCol) : days.flatMap(actsOf);
+            const done = todayCol && status ? acts.filter((e) => status(e.i) === 'hecho').length : 0;
+            const late = todayCol && status && todayCol.passed(k) ? acts.length - done : 0;
+            return (
+              <React.Fragment key={k}>
+                <button
+                  type="button"
+                  onClick={() => setFold((f) => ({ ...f, [k]: !folded }))}
+                  aria-expanded={!folded}
+                  aria-label={show.partes ? undefined : `${info.name}: ${folded ? 'desplegar' : 'plegar'}`}
+                  className={`col-span-full flex items-center gap-2 text-left text-sm font-semibold ${show.partes ? 'pb-2 pt-5' : 'pb-1.5 pt-3'} ${info.cls}`}
+                  style={{ gridColumn: '1 / -1' }}
+                >
+                  {show.partes && (
+                    <span className="sticky left-0 flex shrink-0 items-center gap-2">
                       <span aria-hidden>{info.emoji}</span> {info.name}
-                      {folded && acts.length > 0 && <span className="font-normal text-zinc-400">· {status ? `${done} de ${acts.length} hechas` : `${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`}{status && acts.length - done > 0 && passed ? <span className="text-rose-300"> · {acts.length - done} se pasaron</span> : null}</span>}
-                      <span className="ml-auto h-px flex-1 bg-current opacity-20" />
-                      <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${folded ? '-rotate-90' : ''}`} />
-                    </button>
+                      {folded && acts.length > 0 && <span className="font-normal text-zinc-400">· {todayCol ? (status ? `hoy ${done} de ${acts.length} hechas` : `hoy ${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`) : `${acts.length} ${acts.length === 1 ? 'tarea' : 'tareas'}`}{late > 0 ? <span className="text-rose-300"> · {late} se pasaron</span> : null}</span>}
+                    </span>
                   )}
-                  {!folded && free > 0 && !head && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
-                  {/* Atrasada todavía se puede hacer: no va en gris. */}
-                  {!folded && <div className={live?.label === '⏳ Atrasada' ? '' : tone(e)}>
-                  {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
-                    const i = e.i;
-                    return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((x) => x.id !== i.id && !plan?.moves?.[x.id]?.off).map((x) => ({ ...x, time: plan?.moves?.[x.id]?.time ?? x.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((x) => x.title))]} streak={streak?.(i, date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((x) => x.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onOpen={onOpen} draggable />;
-                  })()}
-                  </div>}
-                </React.Fragment>
-              );
-            })}
-            <button type="button" onClick={() => onAdd(d)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
+                  <span className="h-0 flex-1 border-t border-dotted border-current opacity-50" />
+                  <ChevronDown className={`sticky right-0 h-4 w-4 shrink-0 opacity-70 transition-transform ${folded ? '-rotate-90' : ''}`} />
+                </button>
+                {!folded && days.map((x) => {
+                  const mine = x.entries.filter((e) => partOf(e.start, parts) === k);
+                  return (
+                    <div key={x.name} {...drop(x.d)} className="min-h-14 space-y-2 rounded-2xl p-2 ring-1 ring-white/[0.04]" style={{ background: info.grad }}>
+                      {mine.map((e, n) => {
+                        const prevEnd = n ? Math.max(...mine.slice(0, n).map((y) => y.end)) : null;
+                        const free = prevEnd !== null && e.start - prevEnd >= 15 ? e.start - prevEnd : 0;
+                        const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
+                        const live = e.kind === 'item' ? liveStatus(st, x.rel(e.start), x.rel(e.end), x.rel(nowMin), x.passed(k)) : null;
+                        const { plan, dayItems, dayOcc, morning } = x;
+                        return (
+                          <React.Fragment key={e.key}>
+                            {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
+                            {/* Atrasada todavía se puede hacer: no va en gris. */}
+                            <div className={live?.label === '⏳ Atrasada' ? '' : x.tone(e)}>
+                              {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
+                                const i = e.i;
+                                return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((y) => y.id !== i.id && !plan?.moves?.[y.id]?.off).map((y) => ({ ...y, time: plan?.moves?.[y.id]?.time ?? y.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((y) => y.title))]} streak={streak?.(i, x.date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((y) => y.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onOpen={onOpen} draggable />;
+                              })()}
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+
+          {days.map(({ name, d }) => (
+            <button key={name} type="button" onClick={() => onAdd(d)} {...drop(d)} className="mt-3 flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200">
               <Plus className="h-4 w-4" /> Nueva tarea
             </button>
-          </div>
-        </section>
-        );
-      })}
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Al fondo del tablero, sutil: sol en la mañana, sol con nubes en la tarde, luna y estrellas de noche. */
+const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
+  const [min, setMin] = useState(() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); });
+  useEffect(() => {
+    const t = setInterval(() => { const n = new Date(); setMin(n.getHours() * 60 + n.getMinutes()); }, 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const k = partOf(min, parts);
+  const cloud = (x: number, y: number, s: number, o: number) => (
+    <g transform={`translate(${x} ${y}) scale(${s})`} opacity={o} fill="#cbd5e1">
+      <ellipse cx="0" cy="0" rx="46" ry="20" /><circle cx="-18" cy="-12" r="20" /><circle cx="12" cy="-20" r="26" />
+    </g>
+  );
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <svg viewBox="0 0 400 260" className="absolute -right-6 -top-8 h-72 w-[28rem] max-w-full opacity-[0.22] sm:opacity-30">
+        <defs>
+          <radialGradient id="hz-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde68a" /><stop offset="55%" stopColor="#fbbf24" stopOpacity=".55" /><stop offset="100%" stopColor="#fbbf24" stopOpacity="0" /></radialGradient>
+          <radialGradient id="hz-moon" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#c7d2fe" stopOpacity=".7" /><stop offset="100%" stopColor="#818cf8" stopOpacity="0" /></radialGradient>
+        </defs>
+        {k === 'manana' && (
+          <g>
+            <circle cx="290" cy="110" r="110" fill="url(#hz-sun)" />
+            <circle cx="290" cy="110" r="38" fill="#fcd34d" />
+            {cloud(170, 170, 0.8, 0.5)}
+          </g>
+        )}
+        {k === 'tarde' && (
+          <g>
+            <circle cx="300" cy="150" r="110" fill="url(#hz-sun)" />
+            <circle cx="300" cy="150" r="36" fill="#fb923c" />
+            {cloud(240, 175, 1.1, 0.75)}
+            {cloud(120, 90, 0.8, 0.5)}
+          </g>
+        )}
+        {(k === 'noche' || k === 'madrugada') && (
+          <g>
+            <circle cx="300" cy="100" r="95" fill="url(#hz-moon)" />
+            <path d="M318 62a44 44 0 1 0 0 76a36 36 0 1 1 0-76z" fill="#e0e7ff" />
+            {[[150, 60], [200, 140], [110, 120], [250, 40], [360, 190], [170, 210]].map(([x, y], n) => <circle key={n} cx={x} cy={y} r={n % 2 ? 1.6 : 2.4} fill="#e0e7ff" />)}
+          </g>
+        )}
+      </svg>
     </div>
   );
 };
@@ -997,7 +1083,7 @@ const Gallery: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: It
                   <div className="flex flex-wrap items-center gap-1.5">
                     {show.hora && <span className="text-sm font-bold tabular-nums text-white">{i.time}</span>}
                     {show.duracion && <span className="text-sm tabular-nums text-zinc-400">– {toTime((m + i.minutes) % 1440)} · {i.minutes} min</span>}
-                    <PartTag k={partOf(m, ctx.parts)} />
+                    {show.partes && <PartTag k={partOf(m, ctx.parts)} />}
                     {show.racha && streak && <StreakChip streak={streak(i, g.date)} />}
                     {show.extras && i.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
                     {show.extras && i.alarm === 'alarma' && <Chip color="#f59e0b" icon={AlarmClock} help="Suena una alarma">Alarma</Chip>}
@@ -1027,7 +1113,7 @@ const ListView: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: I
             const l = labelOf(labels, i.label_id);
             return (
               <li key={i.id} className="border-b border-white/5 last:border-0">
-                {head && <p className="px-4 pb-0.5 pt-2"><PartTag k={part} /></p>}
+                {head && show.partes && <p className="px-4 pb-0.5 pt-2"><PartTag k={part} /></p>}
                 <button type="button" onClick={() => onOpen(i.id)} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
                   {show.hora && <span className="w-12 shrink-0 text-sm font-bold tabular-nums text-white">{i.time}</span>}
                   <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>

@@ -726,3 +726,9 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 .tone-past { filter: grayscale(1) brightness(.75); opacity: .6; }
 .tone-next { filter: saturate(.45) brightness(.9); opacity: .85; }
 .tone-past:hover, .tone-next:hover { filter: none; opacity: 1; }
+
+/* Tarjeta de una acción en el Tablero (Emanuel, 2026-11-05): gris, sólida, que no se pierda sobre el degradado. */
+.hz-card { background-color: #1c1e25; }
+.hz-card:hover { background-color: #23262e; }
+:root[data-theme='light'] .hz-card:not(.theme-fixed *) { background-color: #e1e3e8; --tw-ring-color: rgba(15, 23, 42, .16); }
+:root[data-theme='light'] .hz-card:not(.theme-fixed *):hover { background-color: #d8dbe1; }
