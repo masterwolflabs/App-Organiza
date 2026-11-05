@@ -737,3 +737,8 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 .hz-glow { transform-box: fill-box; transform-origin: center; animation: hz-glow 5s ease-in-out infinite; }
 @keyframes hz-glow { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { .hz-glow { animation: none; } }
+.hz-star { animation: hz-star 3.2s ease-in-out infinite; }
+@keyframes hz-star { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.hz-rays { transform-box: view-box; transform-origin: 270px 205px; animation: hz-rays 6s ease-in-out infinite; }
+@keyframes hz-rays { 0%, 100% { opacity: .45; transform: scale(.95); } 50% { opacity: .9; transform: scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .hz-star, .hz-rays { animation: none; } }

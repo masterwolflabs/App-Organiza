@@ -926,7 +926,11 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
   );
 };
 
-/** Al fondo del tablero, sutil: sol en la mañana, sol con nubes en la tarde, luna y estrellas de noche. */
+/**
+ * Fondo del horario (Emanuel, 2026-11-05): una escena por parte del día — 🌅 amanecer (mañana),
+ * 🌇 atardecer (tarde), 🌆 anochecer (noche) y 🌌 madrugada. Arriba a la derecha, sutil; el resplandor respira
+ * y las estrellas titilan.
+ */
 const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
   const [min, setMin] = useState(() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); });
   useEffect(() => {
@@ -934,39 +938,81 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
     return () => clearInterval(t);
   }, []);
   const k = partOf(min, parts);
-  const cloud = (x: number, y: number, s: number, o: number) => (
-    <g transform={`translate(${x} ${y}) scale(${s})`} opacity={o} fill="#cbd5e1">
-      <ellipse cx="0" cy="0" rx="46" ry="20" /><circle cx="-18" cy="-12" r="20" /><circle cx="12" cy="-20" r="26" />
+  const cloud = (x: number, y: number, s: number, o: number, fill = '#e2e8f0') => (
+    <g transform={`translate(${x} ${y}) scale(${s})`} opacity={o} fill={fill}>
+      <ellipse cx="0" cy="0" rx="46" ry="16" /><circle cx="-18" cy="-10" r="18" /><circle cx="12" cy="-17" r="24" />
     </g>
   );
+  const stars = (list: [number, number, number][], color: string) =>
+    list.map(([x, y, r], n) => <circle key={n} className="hz-star" style={{ animationDelay: `${(n * 0.7) % 4}s` }} cx={x} cy={y} r={r} fill={color} />);
+  // Horizonte suave: dos lomas abajo del dibujo.
+  const hills = (fill: string, o: number) => <path d="M0 230 Q70 200 150 218 T300 210 T400 214 V260 H0z" fill={fill} opacity={o} />;
   return (
-    // Arriba a la derecha, en el encabezado; al deslizar se queda arriba en la página (Emanuel, 2026-11-05). El resplandor respira.
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-0">
-      <svg viewBox="0 0 400 260" className="absolute -top-6 right-0 h-72 w-[28rem] max-w-full opacity-30 sm:opacity-40">
+      <svg viewBox="0 0 400 260" className="absolute -top-6 right-0 h-72 w-[28rem] max-w-full opacity-35 sm:opacity-45">
         <defs>
-          <radialGradient id="hz-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde68a" /><stop offset="55%" stopColor="#fbbf24" stopOpacity=".55" /><stop offset="100%" stopColor="#fbbf24" stopOpacity="0" /></radialGradient>
-          <radialGradient id="hz-moon" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#c7d2fe" stopOpacity=".7" /><stop offset="100%" stopColor="#818cf8" stopOpacity="0" /></radialGradient>
+          <radialGradient id="hz-amanecer" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde68a" /><stop offset="45%" stopColor="#fdba74" stopOpacity=".6" /><stop offset="75%" stopColor="#f9a8d4" stopOpacity=".25" /><stop offset="100%" stopColor="#f9a8d4" stopOpacity="0" /></radialGradient>
+          <radialGradient id="hz-atardecer" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fdba74" /><stop offset="45%" stopColor="#f97316" stopOpacity=".55" /><stop offset="75%" stopColor="#e11d48" stopOpacity=".2" /><stop offset="100%" stopColor="#e11d48" stopOpacity="0" /></radialGradient>
+          <radialGradient id="hz-anochecer" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#ddd6fe" stopOpacity=".8" /><stop offset="55%" stopColor="#a78bfa" stopOpacity=".35" /><stop offset="100%" stopColor="#7c3aed" stopOpacity="0" /></radialGradient>
+          <radialGradient id="hz-madrugada" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#e0e7ff" stopOpacity=".85" /><stop offset="50%" stopColor="#818cf8" stopOpacity=".35" /><stop offset="100%" stopColor="#312e81" stopOpacity="0" /></radialGradient>
+          <linearGradient id="hz-sol-amanecer" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fde047" /><stop offset="100%" stopColor="#fb923c" /></linearGradient>
+          <linearGradient id="hz-sol-atardecer" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb923c" /><stop offset="100%" stopColor="#e11d48" /></linearGradient>
+          <clipPath id="hz-horizonte"><rect x="0" y="0" width="400" height="212" /></clipPath>
+          {/* Todo se desvanece hacia los bordes del dibujo: así nada queda cortado en una línea recta. */}
+          <radialGradient id="hz-fade-g" cx="65%" cy="50%" r="62%"><stop offset="55%" stopColor="#fff" /><stop offset="100%" stopColor="#000" /></radialGradient>
+          <mask id="hz-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="260"><rect width="400" height="260" fill="url(#hz-fade-g)" /></mask>
         </defs>
+
+        {/* 🌅 Amanecer: el sol saliendo por el horizonte, con rayos y nubecitas rosadas. */}
         {k === 'manana' && (
-          <g>
-            <circle className="hz-glow" cx="270" cy="112" r="100" fill="url(#hz-sun)" />
-            <circle cx="270" cy="112" r="36" fill="#fcd34d" />
-            {cloud(170, 170, 0.8, 0.5)}
+          <g mask="url(#hz-fade)">
+            <circle className="hz-glow" cx="270" cy="200" r="120" fill="url(#hz-amanecer)" />
+            <g clipPath="url(#hz-horizonte)">
+              <g className="hz-rays" stroke="#fcd34d" strokeWidth="3" strokeLinecap="round" opacity=".7">
+                {Array.from({ length: 9 }, (_, n) => {
+                  const a = Math.PI + (n * Math.PI) / 8;
+                  return <line key={n} x1={270 + Math.cos(a) * 54} y1={205 + Math.sin(a) * 54} x2={270 + Math.cos(a) * 78} y2={205 + Math.sin(a) * 78} />;
+                })}
+              </g>
+              <circle cx="270" cy="205" r="42" fill="url(#hz-sol-amanecer)" />
+            </g>
+            {hills('#fcd9b6', 0.9)}
+            {cloud(150, 120, 0.8, 0.7, '#fbcfe8')}
+            {cloud(345, 95, 0.6, 0.6, '#fde2e4')}
           </g>
         )}
+
+        {/* 🌇 Atardecer: el sol bajo y rojizo, a medio esconder entre nubes. */}
         {k === 'tarde' && (
-          <g>
-            <circle className="hz-glow" cx="270" cy="115" r="100" fill="url(#hz-sun)" />
-            <circle cx="270" cy="115" r="34" fill="#fb923c" />
-            {cloud(220, 150, 1.1, 0.75)}
-            {cloud(120, 90, 0.8, 0.5)}
+          <g mask="url(#hz-fade)">
+            <circle className="hz-glow" cx="270" cy="160" r="115" fill="url(#hz-atardecer)" />
+            <circle cx="270" cy="160" r="40" fill="url(#hz-sol-atardecer)" />
+            {cloud(230, 178, 1.15, 0.85, '#fed7aa')}
+            {cloud(320, 150, 0.8, 0.75, '#fecdd3')}
+            {cloud(140, 100, 0.7, 0.5, '#fde68a')}
+            {hills('#fdba74', 0.45)}
           </g>
         )}
-        {(k === 'noche' || k === 'madrugada') && (
-          <g>
-            <circle className="hz-glow" cx="280" cy="110" r="95" fill="url(#hz-moon)" />
-            <path d="M298 67a44 44 0 1 0 0 76a36 36 0 1 1 0-76z" fill="#e0e7ff" />
-            {[[150, 60], [200, 140], [110, 120], [250, 40], [350, 200], [170, 210]].map(([x, y], n) => <circle key={n} cx={x} cy={y} r={n % 2 ? 1.6 : 2.4} fill="#e0e7ff" />)}
+
+        {/* 🌆 Anochecer: luna creciente sobre un cielo violeta y las primeras estrellas. */}
+        {k === 'noche' && (
+          <g mask="url(#hz-fade)">
+            <circle className="hz-glow" cx="285" cy="105" r="100" fill="url(#hz-anochecer)" />
+            <path d="M303 67a42 42 0 1 0 0 76a34 34 0 1 1 0-76z" fill="#c4b5fd" />
+            {stars([[150, 60, 2.2], [200, 130, 1.5], [120, 150, 1.8], [240, 40, 1.6], [360, 180, 1.4]], '#a78bfa')}
+            {hills('#4c1d95', 0.35)}
+          </g>
+        )}
+
+        {/* 🌌 Madrugada: luna llena con cráteres y un cielo lleno de estrellas que titilan. */}
+        {k === 'madrugada' && (
+          <g mask="url(#hz-fade)">
+            <circle className="hz-glow" cx="280" cy="100" r="105" fill="url(#hz-madrugada)" />
+            <circle cx="280" cy="100" r="36" fill="#c7d2fe" />
+            <circle cx="268" cy="90" r="7" fill="#a5b4fc" />
+            <circle cx="292" cy="112" r="5" fill="#a5b4fc" />
+            <circle cx="286" cy="84" r="3.5" fill="#a5b4fc" />
+            {stars([[110, 40, 2.2], [150, 90, 1.4], [190, 30, 1.8], [210, 160, 1.5], [130, 170, 2], [350, 40, 1.6], [370, 150, 2.2], [330, 200, 1.4], [175, 210, 1.7], [90, 120, 1.5], [240, 220, 1.3], [380, 90, 1.5]], '#a5b4fc')}
           </g>
         )}
       </svg>
