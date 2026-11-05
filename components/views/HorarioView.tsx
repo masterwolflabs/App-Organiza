@@ -835,7 +835,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
             </section>
           ))}
 
-          {rows.map((k) => {
+          {rows.map((k, r) => {
             const info = PART_INFO[k];
             const folded = fold[k] ?? (todayCol ? todayCol.passed(k) : false);
             // Resumen al plegar: lo de hoy (si la semana es esta) o cuántas tareas hay en la semana.
@@ -850,7 +850,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                   onClick={() => setFold((f) => ({ ...f, [k]: !folded }))}
                   aria-expanded={!folded}
                   aria-label={show.partes ? undefined : `${info.name}: ${folded ? 'desplegar' : 'plegar'}`}
-                  className={`col-span-full flex items-center gap-2 text-left text-sm font-semibold ${show.partes ? 'pb-2 pt-5' : 'pb-1.5 pt-3'} ${info.cls}`}
+                  className={`col-span-full flex items-center gap-2 rounded-md text-left text-sm font-semibold outline-none focus-visible:ring-1 focus-visible:ring-current ${r === 0 ? 'py-1' : show.partes ? 'pb-1.5 pt-3' : 'pb-1 pt-2'} ${info.cls}`}
                   style={{ gridColumn: '1 / -1' }}
                 >
                   {show.partes && (
