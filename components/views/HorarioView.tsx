@@ -5,7 +5,7 @@ import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { MoreHorizontal, AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
@@ -35,8 +35,6 @@ export const HorarioView: React.FC = () => {
   // Hora de la app (manual para probar o la real): todo lo que se ve depende de ella.
   const clock = useAppNow();
   const h = useHorario();
-  // Menú ⋯ del encabezado (Pasar a borrador, Borrar).
-  const [more, setMore] = useState<DOMRect | null>(null);
   const c = useChecks();
   // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
   const [weekShift, setWeekShift] = useState(0);
@@ -286,21 +284,15 @@ export const HorarioView: React.FC = () => {
         <button type="button" onClick={() => setPanel('nuevo')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
           <Plus className="h-4 w-4" /> Nuevo horario
         </button>
-        {/* Pasar a borrador y Borrar viven aquí (Emanuel, 2026-11-05): abajo quedaban lejos del contenido. */}
-        <button type="button" aria-label="Más opciones del horario" data-help="Más opciones" onClick={(e) => setMore(e.currentTarget.getBoundingClientRect())} className="inline-flex items-center rounded-xl bg-white/[0.05] px-2.5 py-2 text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
-          <MoreHorizontal className="h-5 w-5" />
-        </button>
-        {more && (
-          <PickMenu
-            at={more}
-            title={s.name}
-            onClose={() => setMore(null)}
-            options={[
-              ...(s.status === 'publicado' ? [{ key: 'b', label: <><PauseCircle className="h-4 w-4 text-zinc-400" /> Pasar a borrador</>, onPick: async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); } }] : []),
-              { key: 'x', label: <span className="flex items-center gap-2 text-rose-300"><Trash2 className="h-4 w-4" /> Borrar este horario</span>, onPick: async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); } },
-            ]}
-          />
+        {/* Pasar a borrador y Borrar, a la vista arriba (Emanuel, 2026-11-05): abajo quedaban lejos del contenido. */}
+        {s.status === 'publicado' && (
+          <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
+            <PauseCircle className="h-4 w-4" /> Pasar a borrador
+          </button>
         )}
+        <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-rose-500/15 hover:text-rose-300 hover:ring-rose-400/30">
+          <Trash2 className="h-4 w-4" /> Borrar este horario
+        </button>
       </div>
 
       <ModeBar key={s.id} s={s} h={h} />
