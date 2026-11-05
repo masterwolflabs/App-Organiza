@@ -793,7 +793,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
         <div className="grid w-max gap-x-3" style={cols}>
           {/* Cabecera de cada día: fecha, eventos de todo el día y reacomodar. */}
           {days.map(({ name, d, date, dayOcc, dayItems, plan, hasClash }) => (
-            <section key={name} {...drop(d)} className="relative self-start overflow-hidden rounded-2xl bg-white/[0.035] p-2 ring-1 ring-white/5">
+            <section key={name} {...drop(d)} className="relative overflow-hidden rounded-2xl bg-white/[0.035] p-2 ring-1 ring-white/5">
               {date && <span aria-hidden className="pointer-events-none absolute -right-1 -top-4 select-none font-display text-[104px] font-black leading-none tracking-tighter text-white/[0.07]">{date.getDate()}</span>}
               <h2 className="relative px-2 py-1.5"><span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${(date ? sameDay(date, new Date()) : d === today) ? 'bg-sky-500/20 text-sky-200' : 'bg-white/[0.06] text-zinc-300'}`}>{name}{date && <span className="ml-1 font-normal opacity-70">{date.getDate()} {MONTHS_SHORT[date.getMonth()]}</span>}</span></h2>
               <div className="relative space-y-2 empty:hidden">
@@ -850,7 +850,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                   onClick={() => setFold((f) => ({ ...f, [k]: !folded }))}
                   aria-expanded={!folded}
                   aria-label={show.partes ? undefined : `${info.name}: ${folded ? 'desplegar' : 'plegar'}`}
-                  className={`col-span-full flex items-center gap-2 rounded-md text-left text-sm font-semibold outline-none focus-visible:ring-1 focus-visible:ring-current ${r === 0 ? 'py-1' : show.partes ? 'pb-1.5 pt-3' : 'pb-1 pt-2'} ${info.cls}`}
+                  className={`col-span-full flex items-center gap-2 rounded-md text-left text-sm font-semibold outline-none ${r === 0 ? 'py-2' : show.partes ? 'pb-2 pt-3' : 'pb-1.5 pt-2'} ${info.cls}`}
                   style={{ gridColumn: '1 / -1' }}
                 >
                   {show.partes && (
