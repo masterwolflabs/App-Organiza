@@ -960,36 +960,55 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                     <ChevronDown className={`h-4 w-4 shrink-0 opacity-70 transition-transform ${folded ? '-rotate-90' : ''}`} />
                   </span>
                 </button>
-                {!folded && days.map((x) => {
-                  const mine = x.entries.filter((e) => partOf(e.start, parts) === k);
+                {/* Alineado por hora (Emanuel, 2026-11-05): dentro de la franja, una fila por hora; la misma
+                    actividad queda a la misma altura todos los días y donde un día no tiene nada queda un hueco suave. */}
+                {!folded && (() => {
+                  const inPart = days.map((x) => x.entries.filter((e) => partOf(e.start, parts) === k));
+                  const slots = [...new Set(inPart.flat().map((e) => e.start))].sort((a, b) => a - b);
+                  const rowOf = (m: number) => slots.indexOf(m) + 2; // la fila 1 es el margen de arriba
                   return (
-                    <div key={x.name} {...drop(x.d)} className="space-y-2 self-start rounded-2xl p-2 ring-1 ring-white/[0.04]" style={{ background: info.grad }}>
-                      {mine.map((e, n) => {
-                        const prevEnd = n ? Math.max(...mine.slice(0, n).map((y) => y.end)) : null;
-                        const free = prevEnd !== null && e.start - prevEnd >= 15 ? e.start - prevEnd : 0;
-                        const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
-                        const live = e.kind === 'item' ? liveStatus(st, x.rel(e.start), x.rel(e.end), x.rel(nowMin), x.passed(k)) : null;
+                    <div className="grid gap-x-3 gap-y-2" style={{ ...cols, gridColumn: '1 / -1', gridTemplateRows: `0px repeat(${slots.length + 1}, auto)` }}>
+                      {days.map((x, c) => {
+                        const mine = inPart[c];
+                        const last = mine.length ? rowOf(mine[mine.length - 1].start) : 1;
                         const { plan, dayItems, dayOcc, morning } = x;
                         return (
-                          <React.Fragment key={e.key}>
-                            {free > 0 && <p className="px-2 text-xs text-zinc-500">{free} min libres</p>}
-                            {/* Atrasada todavía se puede hacer: no va en gris. */}
-                            <div className={live?.label === '⏳ Atrasada' ? '' : x.tone(e)}>
-                              {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
-                                const i = e.i;
-                                return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((y) => y.id !== i.id && !plan?.moves?.[y.id]?.off).map((y) => ({ ...y, time: plan?.moves?.[y.id]?.time ?? y.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((y) => y.title))]} streak={streak?.(i, x.date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((y) => y.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onPatch={onPatch ? (p) => onPatch(i, p) : undefined} onOpen={onOpen} draggable />;
-                              })()}
+                          <React.Fragment key={x.name}>
+                            {/* El fondo de la casilla llega hasta el + de ese día. */}
+                            <div {...drop(x.d)} className="rounded-2xl ring-1 ring-white/[0.04]" style={{ background: info.grad, gridColumn: c + 1, gridRow: `1 / ${last + 2}` }} />
+                            {slots.map((m) => {
+                              const here = mine.filter((e) => e.start === m);
+                              if (!here.length) return null;
+                              return (
+                                <div key={m} {...drop(x.d)} className="space-y-2 px-2" style={{ gridColumn: c + 1, gridRow: rowOf(m) }}>
+                                  {here.map((e) => {
+                                    const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
+                                    const live = e.kind === 'item' ? liveStatus(st, x.rel(e.start), x.rel(e.end), x.rel(nowMin), x.passed(k)) : null;
+                                    return (
+                                      // Atrasada todavía se puede hacer: no va en gris.
+                                      <div key={e.key} className={live?.label === '⏳ Atrasada' ? '' : x.tone(e)}>
+                                        {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
+                                          const i = e.i;
+                                          return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((y) => y.id !== i.id && !plan?.moves?.[y.id]?.off).map((y) => ({ ...y, time: plan?.moves?.[y.id]?.time ?? y.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((y) => y.title))]} streak={streak?.(i, x.date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((y) => y.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onPatch={onPatch ? (p) => onPatch(i, p) : undefined} onOpen={onOpen} draggable />;
+                                        })()}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                            {/* Agregar en esta franja: parte a su hora (o la siguiente libre). */}
+                            <div className="px-2 pb-2" style={{ gridColumn: c + 1, gridRow: last + 1 }}>
+                              <button type="button" onClick={() => onAdd(x.d, toTime(Math.max(partRange(k, parts)[0], mine.length ? Math.min(1425, Math.max(...mine.map((e) => e.end))) : 0)))} aria-label={`Agregar en la ${info.name.toLowerCase()} del ${x.name.toLowerCase()}`} data-help={`Nueva tarea en la ${info.name.toLowerCase()}`} className="flex w-full items-center justify-center rounded-lg py-1 text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200">
+                                <Plus className="h-4 w-4" />
+                              </button>
                             </div>
                           </React.Fragment>
                         );
                       })}
-                      {/* Agregar en esta franja: parte a su hora (o la siguiente libre). */}
-                      <button type="button" onClick={() => onAdd(x.d, toTime(Math.max(partRange(k, parts)[0], mine.length ? Math.min(1425, Math.max(...mine.map((e) => e.end))) : 0)))} aria-label={`Agregar en la ${info.name.toLowerCase()} del ${x.name.toLowerCase()}`} data-help={`Nueva tarea en la ${info.name.toLowerCase()}`} className="flex w-full items-center justify-center rounded-lg py-1 text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200">
-                        <Plus className="h-4 w-4" />
-                      </button>
                     </div>
                   );
-                })}
+                })()}
               </React.Fragment>
             );
           })}
