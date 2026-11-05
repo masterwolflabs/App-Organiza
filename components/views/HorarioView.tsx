@@ -5,7 +5,7 @@ import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { MoreHorizontal, AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
@@ -35,6 +35,8 @@ export const HorarioView: React.FC = () => {
   // Hora de la app (manual para probar o la real): todo lo que se ve depende de ella.
   const clock = useAppNow();
   const h = useHorario();
+  // Menú ⋯ del encabezado (Pasar a borrador, Borrar).
+  const [more, setMore] = useState<DOMRect | null>(null);
   const c = useChecks();
   // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
   const [weekShift, setWeekShift] = useState(0);
@@ -284,6 +286,21 @@ export const HorarioView: React.FC = () => {
         <button type="button" onClick={() => setPanel('nuevo')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
           <Plus className="h-4 w-4" /> Nuevo horario
         </button>
+        {/* Pasar a borrador y Borrar viven aquí (Emanuel, 2026-11-05): abajo quedaban lejos del contenido. */}
+        <button type="button" aria-label="Más opciones del horario" data-help="Más opciones" onClick={(e) => setMore(e.currentTarget.getBoundingClientRect())} className="inline-flex items-center rounded-xl bg-white/[0.05] px-2.5 py-2 text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
+        {more && (
+          <PickMenu
+            at={more}
+            title={s.name}
+            onClose={() => setMore(null)}
+            options={[
+              ...(s.status === 'publicado' ? [{ key: 'b', label: <><PauseCircle className="h-4 w-4 text-zinc-400" /> Pasar a borrador</>, onPick: async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); } }] : []),
+              { key: 'x', label: <span className="flex items-center gap-2 text-rose-300"><Trash2 className="h-4 w-4" /> Borrar este horario</span>, onPick: async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); } },
+            ]}
+          />
+        )}
       </div>
 
       <ModeBar key={s.id} s={s} h={h} />
@@ -318,7 +335,7 @@ export const HorarioView: React.FC = () => {
               {l.icon && <ItemIcon value={l.icon} />}{l.name}
             </button>
           ))}
-          <button type="button" onClick={() => setPanel('nueva-etiqueta')} className="inline-flex items-center gap-1 rounded-full border border-dashed border-white/20 px-2.5 py-1 text-xs font-semibold text-sky-300 hover:bg-white/[0.05]">
+          <button type="button" onClick={() => setPanel('nueva-etiqueta')} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-white/20 px-2.5 py-1 text-xs font-semibold text-sky-300 hover:bg-white/[0.05]">
             <Plus className="h-3 w-3" /> Nueva
           </button>
           <button type="button" onClick={() => setPanel('etiquetas')} data-tour="etiquetas" className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-zinc-400 hover:text-white">
@@ -374,16 +391,6 @@ export const HorarioView: React.FC = () => {
         {view === 'lista' && <ListView items={shown} labels={h.labels} ctx={{ weekStart, dayStart, focusToday, parts }} show={show} streak={streakFor} onOpen={setOpenId} />}
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-2">
-        {s.status === 'publicado' && (
-          <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
-            <PauseCircle className="h-4 w-4" /> Pasar a borrador
-          </button>
-        )}
-        <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-rose-500/15 hover:text-rose-300 hover:ring-rose-400/30">
-          <Trash2 className="h-4 w-4" /> Borrar este horario
-        </button>
-      </div>
 
       {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} onOpen={setOpenId} />}
       {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => h.publish(s.id, a, days)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
@@ -490,7 +497,7 @@ const Pill: React.FC<{ color: string; children: React.ReactNode }> = ({ color, c
 
 type Status = 'hecho' | 'curso' | 'no' | 'pendiente' | null;
 const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.ReactNode; help: string }> = ({ color, icon: I, children, help }) => (
-  <span data-help={help} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
+  <span data-help={help} className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-semibold" style={{ background: `${color}22`, color }}><I className="h-3.5 w-3.5" />{children}</span>
 );
 
 type Streak = { n: number; ghost: boolean; missed?: boolean };
@@ -529,7 +536,7 @@ const Ghost: React.FC<{ children: React.ReactNode; help: string; onPick: (anchor
     data-help={help}
     onClick={(e) => { e.stopPropagation(); onPick((e.currentTarget as HTMLElement).getBoundingClientRect()); }}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick((e.currentTarget as HTMLElement).getBoundingClientRect()); } }}
-    className="inline-flex items-center gap-1 rounded-full border border-dashed border-white/20 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-500 transition hover:border-white/40 hover:text-zinc-200"
+    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-dashed border-white/20 px-1.5 text-[11px] font-semibold text-zinc-500 transition hover:border-white/40 hover:text-zinc-200"
   >
     <Plus className="h-3 w-3" />{children}
   </span>
@@ -572,7 +579,7 @@ const TagChip: React.FC<{ label: Label; onClick?: () => void }> = ({ label, onCl
     tabIndex={onClick ? 0 : undefined}
     onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
     data-help={onClick ? `Ver solo ${label.name}` : undefined}
-    className="relative inline-flex items-center gap-1 py-0.5 pl-3.5 pr-2 text-xs font-semibold"
+    className="relative inline-flex h-6 items-center gap-1 pl-3.5 pr-2 text-xs font-semibold"
     style={{ background: `${label.color}2e`, color: label.color, clipPath: 'polygon(9px 0, 100% 0, 100% 100%, 9px 100%, 0 50%)', borderRadius: '0 6px 6px 0' }}
   >
     <span aria-hidden className="absolute left-[7px] top-1/2 h-1 w-1 -translate-y-1/2 rounded-full" style={{ background: label.color }} />
@@ -582,10 +589,10 @@ const TagChip: React.FC<{ label: Label; onClick?: () => void }> = ({ label, onCl
 
 /** Racha (Emanuel, 2026-11-04): el fueguito y el número. ✕ si ese día no se cumplió; en gris lo que viene. */
 const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
-  if (streak.missed) return <span data-help="Este día no se cumplió: la racha vuelve a partir" className="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-300">✕</span>;
+  if (streak.missed) return <span data-help="Este día no se cumplió: la racha vuelve a partir" className="inline-flex h-6 min-w-[2.75rem] shrink-0 items-center justify-center rounded-full bg-rose-500/15 px-2 text-xs font-bold text-rose-300">✕</span>;
   const lit = !streak.ghost && streak.n > 0;
   return (
-    <span data-help={streak.ghost ? 'La racha que alcanzas si cumples hasta este día' : 'Días seguidos cumplidos'} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${lit ? 'bg-amber-500/15 text-amber-300' : 'bg-white/[0.06] text-zinc-400'}`}>
+    <span data-help={streak.ghost ? 'La racha que alcanzas si cumples hasta este día' : 'Días seguidos cumplidos'} className={`inline-flex h-6 min-w-[2.75rem] shrink-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-bold tabular-nums ${lit ? 'bg-amber-500/15 text-amber-300' : 'bg-white/[0.06] text-zinc-400'}`}>
       <span aria-hidden className={lit ? '' : 'grayscale opacity-60'}>🔥</span>{streak.n}
     </span>
   );
@@ -612,13 +619,14 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
           <ItemIcon value={item.icon || emojiFor(item.title)} />
           <span className="min-w-0 flex-1 truncate">{item.title || 'Sin título'}</span>
         </p>
-        {/* Arriba como máximo 3: estado, racha y focus; la alarma o el aviso van abajo (Emanuel, 2026-11-05). */}
+        {/* Arriba como máximo 3: racha, focus y estado; la alarma o el aviso van abajo (Emanuel, 2026-11-05). */}
         {((show.estado && live) || (show.racha && streak) || (show.extras && (item.focus || onPatch))) && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {show.estado && live && <span data-help={live.help} className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${live.pulse ? 'animate-pulse' : ''}`} style={{ background: `${live.color}26`, color: live.color }}>{live.label}</span>}
+          <div className="flex items-center gap-1.5">
+            {/* Lugares fijos (Emanuel, 2026-11-05): racha y Focus siempre en el mismo sitio; el estado del día va al final. */}
             {show.racha && streak && <StreakChip streak={streak} />}
             {show.extras && item.focus && <Chip color="#a78bfa" icon={Zap} help="Tiene modo focus">Focus</Chip>}
             {show.extras && !item.focus && onPatch && <Ghost help="Activar el modo focus" onPick={() => onPatch({ focus: true })}>Focus</Ghost>}
+            {show.estado && live && <span data-help={live.help} className={`h-6 min-w-0 truncate rounded-full px-2 text-xs font-semibold leading-6 ${live.pulse ? 'animate-pulse' : ''}`} style={{ background: `${live.color}26`, color: live.color }}>{live.label}</span>}
           </div>
         )}
         {show.extras && (item.alarm !== 'no' || onPatch) && (
@@ -638,8 +646,8 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             {moved && <Pill color="#38bdf8">↪ Solo este día</Pill>}
           </div>
         )}
-        {show.etiqueta && label && <div><TagChip label={label} onClick={onLabel ? () => onLabel(label.id) : undefined} /></div>}
-        {show.etiqueta && !label && onPatch && <div><Ghost help="Ponerle una categoría" onPick={(at) => setMenu({ kind: 'categoria', at })}>Categoría</Ghost></div>}
+        {show.etiqueta && label && <div className="flex"><TagChip label={label} onClick={onLabel ? () => onLabel(label.id) : undefined} /></div>}
+        {show.etiqueta && !label && onPatch && <div className="flex"><Ghost help="Ponerle una categoría" onPick={(at) => setMenu({ kind: 'categoria', at })}>Categoría</Ghost></div>}
         {menu && onPatch && (
           <PickMenu
             at={menu.at}
