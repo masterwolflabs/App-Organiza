@@ -732,3 +732,8 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 .hz-card:hover { background-color: #23262e; }
 :root[data-theme='light'] .hz-card:not(.theme-fixed *) { background-color: #e1e3e8; --tw-ring-color: rgba(15, 23, 42, .16); }
 :root[data-theme='light'] .hz-card:not(.theme-fixed *):hover { background-color: #d8dbe1; }
+
+/* Fondo del horario: el resplandor del sol/luna respira (Emanuel, 2026-11-05). */
+.hz-glow { transform-box: fill-box; transform-origin: center; animation: hz-glow 5s ease-in-out infinite; }
+@keyframes hz-glow { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .hz-glow { animation: none; } }
