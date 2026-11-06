@@ -10,6 +10,7 @@ import { ThemePref } from '@/utils/theme';
 import { loadClock, saveClock, useAppNow, type ClockPref } from '@/utils/appClock';
 import { UiPrefs } from '@/utils/uiPrefs';
 import { EdgeDrawer } from '@/components/ui/EdgeDrawer';
+import { PlanPage } from '@/components/plans/PlansView';
 
 /** 'perfil' | 'seguridad' | 'configuracion', o la clave de una página propia de la app (SETTINGS_PAGES). */
 export type UserSection = string;
@@ -44,12 +45,12 @@ const NAV: { key: UserSection; label: string; icon: React.ElementType }[] = [
   { key: 'perfil', label: 'Perfil', icon: UserRound },
   { key: 'seguridad', label: 'Seguridad e inicio de sesión', icon: ShieldCheck },
   { key: 'configuracion', label: 'Configuración', icon: Settings },
+  { key: 'plan', label: 'Plan', icon: Gem },
 ];
 
 // Del Centro de usuario de Finance; llegan a la plantilla en las próximas fases.
 const SOON: { label: string; icon: React.ElementType }[] = [
   { label: 'Almacenamiento', icon: HardDrive },
-  { label: 'Plan', icon: Gem },
   { label: 'Bóveda cifrada', icon: Vault },
   { label: 'Datos y privacidad', icon: Database },
 ];
@@ -123,10 +124,11 @@ export const UserCenter: React.FC<{
             </div>
           </EdgeDrawer>
           <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-8">
-            <div className="mx-auto max-w-2xl space-y-6">
+            <div className={`mx-auto space-y-6 ${section === 'plan' ? 'max-w-6xl' : 'max-w-2xl'}`}>
               {section === 'perfil' && <Perfil user={user} onSaved={onProfileSaved} />}
               {section === 'seguridad' && <Seguridad user={user} />}
               {section === 'configuracion' && <Configuracion settings={settings} pages={pages} go={setSection} />}
+              {section === 'plan' && <PlanPage userId={user.id} />}
               {Page && <Page />}
             </div>
           </main>
