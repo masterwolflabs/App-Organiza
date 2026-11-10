@@ -5,7 +5,7 @@ import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
-import { AlarmClock, Bell, BellRing, CalendarClock, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
@@ -596,6 +596,11 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
   const moved = !move?.off && move?.time && move.time !== item.time;
   const startT = moved ? move!.time! : item.time;
   const endT = toTime((toMinutes(startT) + item.minutes) % 1440);
+  const issues = [
+    ...clash.map((o) => `Choca con ${o.ev.title} (${fmtTime(o.start)})`),
+    ...(warn ? [warn] : []),
+    ...(crossed.length ? [`Se cruza con ${crossed.join(', ')}`] : []),
+  ];
   return (
     <button
       type="button"
@@ -628,12 +633,11 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             {item.alarm === 'no' && onPatch && <Ghost help="Ponerle aviso o alarma" onPick={(at) => setMenu({ kind: 'alarma', at })}>Alarma</Ghost>}
           </div>
         )}
-        {(clash.length > 0 || ownTime || warn || crossed.length > 0 || move?.off || moved) && (
+        {(issues.length > 0 || ownTime || move?.off || moved) && (
           <div className="flex flex-col items-start gap-1.5">
-            {clash.map((o) => <Pill key={o.key} color="#f43f5e">⚠️ Choca con {o.ev.title} ({fmtTime(o.start)})</Pill>)}
+            {/* Todos los choques en un solo aviso de una línea (el detalle al pasar el mouse): no estira la fila. */}
+            {issues.length > 0 && <span className="max-w-full" data-help={issues.join(' · ')}><Pill color="#f43f5e">⚠️ {issues.length === 1 ? issues[0] : `${issues.length} choques: ${issues[0]}`}</Pill></span>}
             {ownTime && <span data-help="Esta acción tiene otra hora este día (misma racha)"><Pill color="#a1a1aa">🕐 Hora propia de este día</Pill></span>}
-            {warn && <Pill color="#f43f5e">⏰ {warn}</Pill>}
-            {crossed.length > 0 && <Pill color="#f43f5e">⚠️ Se cruza con {crossed.join(', ')}</Pill>}
             {move?.off && <Pill color="#94a3b8">⏸️ Aplazado este día</Pill>}
             {moved && <Pill color="#38bdf8">↪ Solo este día</Pill>}
           </div>
@@ -691,21 +695,11 @@ const evChip = (o: Occurrence) => {
   const kind = KINDS.find((k) => k.id === o.ev.kind);
   const google = o.ev.source === 'google';
   return (
-    <div key={o.key} data-help="Está en tu calendario: se respeta al reacomodar" className="hz-card relative z-10 overflow-hidden rounded-xl border text-left" style={{ backgroundImage: `linear-gradient(135deg, ${color}2e, ${color}10 60%)`, borderColor: `${color}66`, borderLeft: `3px solid ${color}` }}>
-      <div className="space-y-2 p-3">
-        <p className="flex items-center gap-2 font-semibold text-white">
-          <span aria-hidden>{kind?.emoji ?? '📅'}</span>
-          <span className="min-w-0 flex-1 truncate">{o.ev.title}</span>
-        </p>
-        <span className="flex flex-wrap items-center gap-1.5">
-          <Pill color={color}>📅 Calendario{google ? ' · Google' : ''}</Pill>
-          {kind && kind.id !== 'evento' && <Pill color={color}>{kind.label}</Pill>}
-        </span>
-        <div className="flex items-center gap-2 text-sm tabular-nums text-zinc-300">
-          <span>{o.ev.all_day ? 'Todo el día' : `${fmtTime(o.start)} – ${fmtTime(o.end)}`}</span>
-          <span className="ml-auto"><Chip color={color} icon={CalendarClock} help="Evento fijo de tu calendario">Evento</Chip></span>
-        </div>
-      </div>
+    // Compacto (Emanuel, 2026-11-10): una sola línea, así no estira la fila de esa hora en todos los días.
+    <div key={o.key} data-help={`Está en tu calendario${google ? ' (Google)' : ''}: se respeta al reacomodar`} className="hz-card relative z-10 flex items-center gap-2 overflow-hidden rounded-xl border px-3 py-2 text-left text-sm" style={{ backgroundImage: `linear-gradient(135deg, ${color}2e, ${color}10 60%)`, borderColor: `${color}66`, borderLeft: `3px solid ${color}` }}>
+      <span aria-hidden>{kind?.emoji ?? '📅'}</span>
+      <span className="min-w-0 flex-1 truncate font-semibold text-white">{o.ev.title}</span>
+      <span className="shrink-0 tabular-nums text-xs text-zinc-300">{o.ev.all_day ? 'Todo el día' : `${fmtTime(o.start)}–${fmtTime(o.end)}`}</span>
     </div>
   );
 };
