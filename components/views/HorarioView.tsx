@@ -857,6 +857,9 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
     const s0 = dayStart.startsWith('a:') ? (() => { const a = dayItems.find((i) => refOf(i.title) === dayStart.slice(2)); return a ? eff(a) : 0; })() : toMinutes(dayStart.slice(2) || '00:00');
     const rel = (m: number) => (m - s0 + 1440) % 1440;
     const when = date ? dayDiff(date) : 0;
+    // Antes de que empiece el día (ej. 02:30 con «Comenzar desde» Levantarse 09:00) todo lo de hoy está por venir:
+    // la hora de ahora queda «antes del inicio», no al final del día (si no, todo salía ⏳ Atrasada).
+    const nowRel = s0 > 0 && nowMin < s0 ? nowMin - s0 : rel(nowMin);
     // Hoy: una parte ya pasó cuando terminó (la madrugada del final es la de esta noche, esa no).
     const passed = (k: PartKey) => when === 0 && !!date && partRange(k, parts)[1] <= nowMin && !(k === 'madrugada' && madrugadaLast);
     // «Enfocar hoy»: lo que pasó en gris, hoy a todo color, lo que viene a media luz.
@@ -868,7 +871,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
       return !madrugada && e.end <= nowMin ? 'tone-past' : '';
     };
     const hasClash = !!morning || dayItems.some((i) => !plan?.moves?.[i.id]?.off && clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc).length > 0);
-    return { name, d, date, dayOcc, plan, dayItems, morning, entries, rel, when, passed, tone, hasClash };
+    return { name, d, date, dayOcc, plan, dayItems, morning, entries, rel, nowRel, when, passed, tone, hasClash };
   });
   const todayCol = days.find((x) => x.date && x.when === 0);
   // Solo las franjas que tienen algo en la semana.
@@ -983,7 +986,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                                 <div key={m} {...drop(x.d)} className="space-y-2 px-2" style={{ gridColumn: c + 1, gridRow: rowOf(m) }}>
                                   {here.map((e) => {
                                     const st = e.kind === 'item' ? status?.(e.i) ?? null : null;
-                                    const live = e.kind === 'item' ? liveStatus(st, x.rel(e.start), x.rel(e.end), x.rel(nowMin), x.passed(k)) : null;
+                                    const live = e.kind === 'item' ? liveStatus(st, x.rel(e.start), x.rel(e.end), x.nowRel, x.passed(k)) : null;
                                     return (
                                       // Atrasada todavía se puede hacer: no va en gris.
                                       <div key={e.key} className={live?.label === '⏳ Atrasada' ? '' : x.tone(e)}>
@@ -1034,6 +1037,12 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
   const n = useAppNow();
   const min = n.getHours() * 60 + n.getMinutes();
   const k = partOf(min, parts);
+  // La luz de fondo de toda la app sigue la hora mientras estás en el Horario (de noche, color noche; no naranjo).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.sky = k;
+    return () => { delete root.dataset.sky; };
+  }, [k]);
   const cloud = (x: number, y: number, s: number, o: number, fill = '#e2e8f0') => (
     <g transform={`translate(${x} ${y}) scale(${s})`} opacity={o} fill={fill}>
       <ellipse cx="0" cy="0" rx="46" ry="16" /><circle cx="-18" cy="-10" r="18" /><circle cx="12" cy="-17" r="24" />
