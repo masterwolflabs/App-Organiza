@@ -9,7 +9,21 @@ import { coverCss, honesty, iso, refOf, type Item } from '@/components/organiza/
 import { useConfirm } from '@/components/ui/confirm';
 import type { useChecks } from '@/components/organiza/useHorario';
 
-const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, '0')}`;
+/** 0:42 · 12:05 · 6:59:42 (con horas cuando pasa de 60 min, Emanuel 2026-11-10: nada de «419:42»). */
+const mmss = (s: number) => {
+  const a = Math.abs(s);
+  const h = Math.floor(a / 3600);
+  const m = Math.floor((a % 3600) / 60);
+  const ss = String(a % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+};
+
+/**
+ * El focus abierto ahora (sea cual sea quien lo abrió). AutoFocus lo mira para cambiarlo a la hora de la
+ * siguiente acción y le avisa con el evento `organiza:focus-switch` (detail = id de la nueva acción).
+ */
+export let openFocus: Item | null = null;
+export const FOCUS_SWITCH = 'organiza:focus-switch';
 
 /**
  * Modo focus (Emanuel, 2026-11-03): la acción a pantalla completa con su tiempo. Si tiene Paso a paso,
@@ -63,6 +77,22 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
     checks.mark(item.title, today, true, { ...check?.value, started: true });
     onDone();
   };
+
+  // El horario manda (Emanuel, 2026-11-10): llegó la hora de otra acción → este focus se cierra solo,
+  // aunque su tiempo no haya llegado a cero (queda «en curso» si no lo marcaste hecho).
+  const leaveRef = React.useRef(leave);
+  leaveRef.current = leave;
+  useEffect(() => {
+    openFocus = item;
+    const onSwitch = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== item.id) leaveRef.current();
+    };
+    window.addEventListener(FOCUS_SWITCH, onSwitch);
+    return () => {
+      window.removeEventListener(FOCUS_SWITCH, onSwitch);
+      if (openFocus?.id === item.id) openFocus = null;
+    };
+  }, [item]);
 
   return (
     <BodyPortal>
