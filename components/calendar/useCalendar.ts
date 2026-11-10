@@ -26,6 +26,8 @@ export function useCalendar(from: Date, to: Date, enabled = true) {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'signed-out'>('loading');
   const [dir, setDir] = useState<Directory>({ users: [], people: [], clients: [], apps: [NUBE] });
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = userId;
   const range = useRef({ from, to });
   range.current = { from, to };
 
@@ -64,7 +66,10 @@ export function useCalendar(from: Date, to: Date, enabled = true) {
       .eq('space', space)
       .neq('status', 'cancelado');
     if (error) return setStatus('error');
-    const next = (data ?? []) as CalEvent[];
+    // Lo rechazado desaparece; lo que aún no responde se ve como tentativo.
+    const { data: mine } = await supabase.from('organiza_invites').select('event_id, status').neq('status', 'aceptada');
+    const answers = new Map(((mine ?? []) as { event_id: string; status: string }[]).filter((x) => (data ?? []).some((e) => e.id === x.event_id && e.owner_id !== userIdRef.current)).map((x) => [x.event_id, x.status]));
+    const next = ((data ?? []) as CalEvent[]).filter((e) => answers.get(e.id) !== 'rechazada').map((e) => (answers.get(e.id) === 'pendiente' ? { ...e, status: 'tentativo' as const } : e));
     setEvents((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next)); // nada cambió: no se repinta
     setStatus('ready');
   }, [space]);

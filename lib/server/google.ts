@@ -12,7 +12,7 @@ type GEvent = {
   id: string; status?: string; summary?: string; description?: string; location?: string; hangoutLink?: string; updated?: string; recurrence?: string[]; recurringEventId?: string;
   start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string };
 };
-type Row = { id: string; owner_id: string; owner_scope: string; title: string; description: string | null; location: string | null; starts_at: string; ends_at: string; all_day: boolean; time_zone: string; rrule: string | null; exdates: string[] | null; google_event_id: string | null; status: string; updated_at: string; source: string };
+type Row = { id: string; owner_id: string; owner_scope: string; title: string; description: string | null; location: string | null; starts_at: string; ends_at: string; all_day: boolean; time_zone: string; rrule: string | null; exdates: string[] | null; google_event_id: string | null; status: string; updated_at: string; source: string; attendee_emails?: string[] | null };
 
 const API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 
@@ -41,7 +41,8 @@ export function toGoogle(e: Row) {
   const recurrence = e.rrule
     ? [`RRULE:${e.rrule}`, ...(e.exdates?.length ? [`EXDATE;VALUE=DATE:${e.exdates.map((d) => d.replace(/-/g, '')).join(',')}`] : [])]
     : undefined;
-  return { ...base, ...when, ...(recurrence ? { recurrence } : {}) };
+  const attendees = e.attendee_emails?.length ? e.attendee_emails.map((email: string) => ({ email })) : undefined;
+  return { ...base, ...when, ...(recurrence ? { recurrence } : {}), ...(attendees ? { attendees } : {}) };
 }
 
 /** Un evento de Google como fila de `calendar_events`. */
@@ -111,7 +112,7 @@ export async function syncGoogle(db: SupabaseClient, conn: Conn) {
   for (const e of local) {
     if (e.status === 'cancelado' || (e.google_event_id && pulled.has(e.google_event_id))) continue;
     if (e.google_event_id && Date.parse(e.updated_at) <= since) continue;
-    const res = await fetch(e.google_event_id ? `${API}/${e.google_event_id}` : API, { method: e.google_event_id ? 'PATCH' : 'POST', headers: auth, body: JSON.stringify(toGoogle(e)) });
+    const res = await fetch(`${e.google_event_id ? `${API}/${e.google_event_id}` : API}${e.attendee_emails?.length ? '?sendUpdates=all' : ''}`, { method: e.google_event_id ? 'PATCH' : 'POST', headers: auth, body: JSON.stringify(toGoogle(e)) });
     if (!res.ok) continue;
     if (!e.google_event_id) {
       const made = (await res.json()) as GEvent;

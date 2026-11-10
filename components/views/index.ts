@@ -17,6 +17,7 @@ import { RutaView } from '@/components/views/RutaView';
 import { ConexionesView } from '@/components/views/ConexionesView';
 import { ConceptosView } from '@/components/views/ConceptosView';
 import { AlimentacionView, EntrenamientoView } from '@/components/organiza/Planner';
+import { AvisosView } from '@/components/views/AvisosView';
 
 export type ViewProps = { onOpenSettings: () => void; onOpenCloud: () => void };
 
@@ -29,6 +30,7 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   daily: DailyPage,
   checklist: ChecklistView,
   ruta: RutaView,
+  avisos: AvisosView,
   conexiones: ConexionesView,
   alimentacion: AlimentacionView,
   entrenamiento: EntrenamientoView,
