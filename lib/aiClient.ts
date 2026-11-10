@@ -82,6 +82,8 @@ export interface SendAIParams {
   agent?: string;
   regenerate?: boolean;
   editMessageId?: string | null;
+  /** Lo que la persona ve en pantalla (Organiza: fecha/hora local, horario abierto). */
+  screen?: string;
 }
 
 export const sendAIMessage = (p: SendAIParams, signal?: AbortSignal) =>
