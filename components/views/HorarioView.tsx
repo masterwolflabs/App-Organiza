@@ -3,6 +3,7 @@
 import { MARK_COLORS, setMarks, useAIMarks, type AIChange, type AIMarks } from '@/components/organiza/aiMarks';
 import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { askNotifications } from '@/components/organiza/notify';
 import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
 import { AlarmClock, Bell, BellRing, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
@@ -385,7 +386,7 @@ export const HorarioView: React.FC = () => {
 
 
       {open && <ItemPanel item={open} h={h} c={c} onClose={() => setOpenId(null)} onOpen={setOpenId} />}
-      {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => h.publish(s.id, a, days)} onSetAllAlarms={async () => { for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
+      {panel === 'publicar' && <PublishDialog schedule={s} items={h.activeItems} onClose={() => setPanel(null)} onPublish={(a, days) => { void askNotifications(); return h.publish(s.id, a, days); }} onSetAllAlarms={async () => { void askNotifications(); for (const i of h.activeItems.filter((x) => x.alarm === 'no')) await h.patchItem(i.id, { alarm: 'notificacion' }); }} onUnpublish={() => h.unpublish(s.id)} />}
       {importing && <ImportHorario onClose={() => setImporting(false)} onCreate={h.createImported} />}
       {panel === 'nuevo' && (
         <Dialog title="Nuevo horario" onClose={() => setPanel(null)}>
@@ -651,8 +652,8 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             onClose={() => setMenu(null)}
             options={menu.kind === 'alarma'
               ? [
-                  { key: 'n', label: <><Bell className="h-4 w-4 text-sky-300" /> Aviso (notificación)</>, onPick: () => onPatch({ alarm: 'notificacion' }) },
-                  { key: 'a', label: <><AlarmClock className="h-4 w-4 text-amber-300" /> Alarma (suena)</>, onPick: () => onPatch({ alarm: 'alarma' }) },
+                  { key: 'n', label: <><Bell className="h-4 w-4 text-sky-300" /> Aviso (notificación)</>, onPick: () => { void askNotifications(); onPatch({ alarm: 'notificacion' }); } },
+                  { key: 'a', label: <><AlarmClock className="h-4 w-4 text-amber-300" /> Alarma (suena)</>, onPick: () => { void askNotifications(); onPatch({ alarm: 'alarma' }); } },
                 ]
               : labels.length
                 ? labels.map((l) => ({ key: l.id, label: <><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: l.color }} />{l.icon && <ItemIcon value={l.icon} />}<span className="truncate">{l.name}</span></>, onPick: () => onPatch({ label_id: l.id }) }))

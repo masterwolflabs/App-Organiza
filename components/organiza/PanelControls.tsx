@@ -5,6 +5,7 @@ import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronRight, Feather, Lock, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm';
+import { askNotifications, notifState, type NotifState } from '@/components/organiza/notify';
 import { getSound, playLoop, playOnce, setSound, soundsOf, tick, type SoundKind } from '@/components/organiza/sounds';
 import type { AlarmKind, Flex, Label } from '@/components/organiza/model';
 import type { useHorario } from '@/components/organiza/useHorario';
@@ -162,7 +163,11 @@ export const SoundList: React.FC<{ kind: SoundKind }> = ({ kind }) => {
   useEffect(() => setSel(getSound(kind)), [kind]);
   useEffect(() => () => stop.current?.(), []);
   const list = soundsOf(kind);
+  const [perm, setPerm] = useState<NotifState>('unsupported');
+  useEffect(() => setPerm(notifState()), []);
+  const ask = async () => setPerm(await askNotifications());
   const pick = (id: string) => {
+    void ask();
     stop.current?.();
     setSel(id);
     setSound(kind, id);
@@ -190,6 +195,15 @@ export const SoundList: React.FC<{ kind: SoundKind }> = ({ kind }) => {
           ))}
           <li className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">Se guarda en este dispositivo.</li>
         </ul>
+      )}
+      {/* La notificación del navegador (además del sonido): hay que darle permiso una vez. */}
+      {perm === 'default' && (
+        <button type="button" onClick={() => void ask()} className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2.5 text-left text-sm font-semibold text-sky-300 hover:bg-white/[0.05]">
+          🔔 Activar notificaciones del navegador
+        </button>
+      )}
+      {perm === 'denied' && (
+        <p className="border-t border-white/10 px-3 py-2.5 text-xs text-amber-300">🔕 El navegador tiene bloqueadas las notificaciones de Organiza. Toca el 🔒 junto a la dirección (arriba) → Notificaciones → Permitir.</p>
       )}
     </div>
   );

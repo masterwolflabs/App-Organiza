@@ -48,7 +48,31 @@ export function setSound(k: SoundKind, id: string) {
 }
 
 let shared: AudioContext | null = null;
-const ctx = () => (shared ??= new AudioContext());
+let master: AudioNode | null = null;
+const ctx = () => {
+  shared ??= new AudioContext();
+  // Si el navegador la dejó en pausa (sin un toque reciente), la despierta.
+  if (shared.state === 'suspended') void shared.resume().catch(() => {});
+  return shared;
+};
+/**
+ * Salida fuerte (Emanuel, 2026-11-10: «que suene como cuando pones una canción en YouTube o Spotify»):
+ * los tonos suenan casi al máximo, al nivel de la música, con un limitador para que no se saturen.
+ */
+const out = (c: AudioContext) => {
+  if (!master) {
+    // Limitador: los tonos van casi al máximo (antes ~15%) y esto evita que al sumarse se rompan.
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -3;
+    comp.knee.value = 0;
+    comp.ratio.value = 20;
+    comp.attack.value = 0.001;
+    comp.release.value = 0.1;
+    comp.connect(c.destination);
+    master = comp;
+  }
+  return master;
+};
 
 /** Agenda una frase desde `at`; devuelve cuánto dura. */
 function phrase(c: AudioContext, s: Sound, at: number) {
@@ -59,13 +83,28 @@ function phrase(c: AudioContext, s: Sound, at: number) {
       const gain = c.createGain();
       osc.type = wave;
       osc.frequency.value = freq;
-      const vol = wave === 'square' || wave === 'sawtooth' ? 0.05 : 0.16;
+      const vol = wave === 'square' || wave === 'sawtooth' ? 0.35 : 0.8;
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      // Se sostiene casi entera y cae al final: más cuerpo que un «tic».
+      gain.gain.setValueAtTime(vol, t + dur * 0.6);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      osc.connect(gain).connect(c.destination);
+      osc.connect(gain).connect(out(c));
       osc.start(t);
       osc.stop(t + dur + 0.02);
+      // Una octava arriba, más suave: se oye con parlantes chicos y por encima de la música.
+      if (wave === 'sine' || wave === 'triangle') {
+        const hi = c.createOscillator();
+        const hg = c.createGain();
+        hi.type = 'sine';
+        hi.frequency.value = freq * 2;
+        hg.gain.setValueAtTime(0.0001, t);
+        hg.gain.exponentialRampToValueAtTime(vol * 0.3, t + 0.01);
+        hg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        hi.connect(hg).connect(out(c));
+        hi.start(t);
+        hi.stop(t + dur + 0.02);
+      }
     }
     t += dur;
   }

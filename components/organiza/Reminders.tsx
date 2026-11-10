@@ -7,6 +7,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
 import { playLoop, playOnce } from '@/components/organiza/sounds';
+import { notify } from '@/components/organiza/notify';
 
 type NativeNotifications = {
   requestPermissions: () => Promise<{ display: string }>;
@@ -56,7 +57,7 @@ export const Reminders: React.FC = () => {
         if (seen.current.has(key)) continue;
         seen.current.add(key);
         const body = i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`;
-        if ('Notification' in window && Notification.permission === 'granted') new Notification(`${iconText(i.icon)} ${i.title}`.trim(), { body });
+        void notify(`${iconText(i.icon)} ${i.title}`.trim(), body, kind === 'alarma');
         if (kind === 'alarma') setRinging(i);
         else playOnce('notificacion');
       }
