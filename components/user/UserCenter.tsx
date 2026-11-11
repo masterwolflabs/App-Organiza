@@ -11,6 +11,7 @@ import { loadClock, saveClock, useAppNow, type ClockPref } from '@/utils/appCloc
 import { UiPrefs } from '@/utils/uiPrefs';
 import { EdgeDrawer } from '@/components/ui/EdgeDrawer';
 import { PlanPage } from '@/components/plans/PlansView';
+import { SoundList } from '@/components/organiza/PanelControls';
 
 /** 'perfil' | 'seguridad' | 'configuracion', o la clave de una página propia de la app (SETTINGS_PAGES). */
 export type UserSection = string;
@@ -317,6 +318,13 @@ const Configuracion: React.FC<{ settings: SettingsApi; pages: SettingsPage[]; go
       </div>
     </Card>
     <ClockCard />
+    {/* Organiza (2026-11-11): sonidos de avisos y alarmas, con los propios. Si update:template pisa este archivo, reponerlo. */}
+    <Card title="Sonidos" description="Elige con qué suenan tus avisos y alarmas, o sube los tuyos (quedan en tu cuenta, en todos tus dispositivos).">
+      <div className="space-y-2">
+        <SoundList kind="notificacion" manage />
+        <SoundList kind="alarma" manage />
+      </div>
+    </Card>
     <Card title="Paleta de colores" description="El color de acento de botones, menús y destacados.">
       <div className="flex flex-wrap gap-2">
         {ACCENTS.map((a) => (

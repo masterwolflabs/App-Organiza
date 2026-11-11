@@ -4,7 +4,8 @@
  * por dispositivo. La alarma suena en bucle hasta que se cierra (máximo 1 minuto).
  */
 type Note = [freq: number, seconds: number, wave?: OscillatorType];
-type Sound = { id: string; label: string; phrase: Note[]; gap: number };
+/** De fábrica (`phrase`, sintetizado aquí) o propio de la persona (`url`, archivo subido; id «u:<uuid>»). */
+export type Sound = { id: string; label: string; phrase: Note[]; gap: number; url?: string; custom?: boolean };
 
 export const ALARM_SOUNDS: Sound[] = [
   { id: 'amanecer', label: 'Amanecer', phrase: [[523, 0.18], [659, 0.18], [784, 0.18], [1046, 0.35]], gap: 0.5 },
@@ -27,17 +28,37 @@ export const NOTIF_SOUNDS: Sound[] = [
 ];
 
 export type SoundKind = 'alarma' | 'notificacion';
-export const soundsOf = (k: SoundKind) => (k === 'alarma' ? ALARM_SOUNDS : NOTIF_SOUNDS);
+
+/**
+ * Sonidos propios (Daily sonidos-subir-propios, 2026-11-11): los carga `customSounds.ts` desde la cuenta
+ * y quedan aquí registrados. Van arriba en la lista, antes que los de fábrica.
+ */
+const custom: Record<SoundKind, Sound[]> = { alarma: [], notificacion: [] };
+const listeners = new Set<() => void>();
+export function setCustomSounds(k: SoundKind, list: { id: string; label: string; url: string }[]) {
+  custom[k] = list.map((x) => ({ id: x.id, label: x.label, url: x.url, phrase: [], gap: 0.4, custom: true }));
+  // Se bajan y decodifican al tiro: así la alarma propia suena sin espera cuando llega su hora.
+  custom[k].forEach((x) => void bufferOf(x));
+  listeners.forEach((f) => f());
+}
+/** Avisa cuando cambian los sonidos propios (para refrescar listas). */
+export function onCustomSounds(f: () => void) {
+  listeners.add(f);
+  return () => void listeners.delete(f);
+}
+export const factoryOf = (k: SoundKind) => (k === 'alarma' ? ALARM_SOUNDS : NOTIF_SOUNDS);
+export const soundsOf = (k: SoundKind): Sound[] => [...custom[k], ...factoryOf(k)];
 const KEY = (k: SoundKind) => `organiza-sonido-${k}`;
 
 export function getSound(k: SoundKind): string {
   try {
     const v = localStorage.getItem(KEY(k));
-    if (v && soundsOf(k).some((s) => s.id === v)) return v;
+    // Uno propio («u:…») vale aunque su lista todavía no termine de cargar.
+    if (v && (v.startsWith('u:') || soundsOf(k).some((s) => s.id === v))) return v;
   } catch {
     /* modo privado */
   }
-  return soundsOf(k)[0].id;
+  return factoryOf(k)[0].id;
 }
 export function setSound(k: SoundKind, id: string) {
   try {
@@ -111,13 +132,55 @@ function phrase(c: AudioContext, s: Sound, at: number) {
   return t - at;
 }
 
-const find = (k: SoundKind, id?: string) => soundsOf(k).find((s) => s.id === (id ?? getSound(k))) ?? soundsOf(k)[0];
+const find = (k: SoundKind, id?: string) => soundsOf(k).find((s) => s.id === (id ?? getSound(k))) ?? factoryOf(k)[0];
+
+/** Archivo propio ya decodificado (se baja una vez por sesión). */
+const buffers = new Map<string, Promise<AudioBuffer | null>>();
+function bufferOf(s: Sound): Promise<AudioBuffer | null> {
+  if (!s.url) return Promise.resolve(null);
+  if (!buffers.has(s.id)) {
+    buffers.set(
+      s.id,
+      fetch(s.url)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((b) => ctx().decodeAudioData(b))
+        .catch(() => {
+          buffers.delete(s.id);
+          return null;
+        }),
+    );
+  }
+  return buffers.get(s.id)!;
+}
+/** Toca un archivo propio por el mismo limitador que los de fábrica. Devuelve cómo pararlo. */
+function playBuffer(c: AudioContext, b: AudioBuffer, loop: boolean) {
+  const src = c.createBufferSource();
+  src.buffer = b;
+  src.loop = loop;
+  const g = c.createGain();
+  g.gain.value = 0.9;
+  src.connect(g).connect(out(c));
+  src.start(c.currentTime + 0.02);
+  return () => {
+    try {
+      src.stop();
+    } catch {
+      /* ya paró */
+    }
+  };
+}
 
 /** Suena una vez (notificaciones). */
 export function playOnce(k: SoundKind, id?: string) {
   try {
     const c = ctx();
-    phrase(c, find(k, id), c.currentTime + 0.02);
+    const s = find(k, id);
+    if (s.custom) {
+      // Si el archivo no carga (sin internet, borrado), suena el de fábrica: el aviso nunca queda mudo.
+      void bufferOf(s).then((b) => (b ? playBuffer(c, b, false) : phrase(c, factoryOf(k)[0], c.currentTime + 0.02)));
+      return;
+    }
+    phrase(c, s, c.currentTime + 0.02);
   } catch {
     /* sin audio */
   }
@@ -131,6 +194,23 @@ export function playLoop(k: SoundKind, id?: string, max = 60): () => void {
   try {
     const c = ctx();
     const s = find(k, id);
+    if (s.custom) {
+      // Propio: el archivo en bucle (si no carga, el de fábrica en bucle), hasta cerrarlo o `max` segundos.
+      let halt: (() => void) | undefined;
+      let fallback: (() => void) | undefined;
+      void bufferOf(s).then((b) => {
+        if (stopped) return;
+        if (b) halt = playBuffer(c, b, true);
+        else fallback = playLoop(k, factoryOf(k)[0].id, max);
+      });
+      timer = setTimeout(() => halt?.(), max * 1000);
+      return () => {
+        stopped = true;
+        clearTimeout(timer);
+        halt?.();
+        fallback?.();
+      };
+    }
     const round = () => {
       if (stopped || Date.now() > until) return;
       const len = phrase(c, s, c.currentTime + 0.02);

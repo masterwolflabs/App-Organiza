@@ -3,10 +3,12 @@
 import { ItemIcon } from '@/components/organiza/IconPicker';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronRight, Feather, Lock, Plus, RefreshCw, Trash2, X } from 'lucide-react';
-import { useConfirm } from '@/components/ui/confirm';
+import { Check, ChevronRight, Feather, Lock, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { useAsk, useConfirm } from '@/components/ui/confirm';
+import { useSpace } from '@/components/organiza/space';
+import { ACCEPT, MAX_SECONDS, deleteCustomSound, loadCustomSounds, renameCustomSound, uploadCustomSound } from '@/components/organiza/customSounds';
 import { askNotifications, notifState, type NotifState } from '@/components/organiza/notify';
-import { getSound, playLoop, playOnce, setSound, soundsOf, tick, type SoundKind } from '@/components/organiza/sounds';
+import { getSound, onCustomSounds, playLoop, playOnce, setSound, soundsOf, tick, type SoundKind } from '@/components/organiza/sounds';
 import type { AlarmKind, Flex, Label } from '@/components/organiza/model';
 import type { useHorario } from '@/components/organiza/useHorario';
 
@@ -155,14 +157,33 @@ export const AlarmPicker: React.FC<{ value: AlarmKind; onChange: (v: AlarmKind) 
   </div>
 );
 
-/** Lista de sonidos como la del iPhone: fila «Sonido ›» que abre la lista con ✓; tocar uno lo hace sonar. */
-export const SoundList: React.FC<{ kind: SoundKind }> = ({ kind }) => {
-  const [open, setOpen] = useState(false);
+/**
+ * Lista de sonidos como la del iPhone: fila «Sonido ›» que abre la lista con ✓; tocar uno lo hace sonar.
+ * Arriba van los sonidos propios de la cuenta (🎵 Tuyo). Con `manage` (Configuración → Sonidos) además se
+ * suben, renombran y borran (Daily sonidos-subir-propios, 2026-11-11).
+ */
+export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?: boolean }> = ({ kind, manage = false, startOpen = false }) => {
+  const { userId } = useSpace();
+  const confirm = useConfirm();
+  const ask2 = useAsk();
+  const [open, setOpen] = useState(startOpen);
   const [sel, setSel] = useState(() => getSound(kind));
   const stop = useRef<(() => void) | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const [, bump] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   useEffect(() => setSel(getSound(kind)), [kind]);
   useEffect(() => () => stop.current?.(), []);
+  useEffect(() => {
+    void loadCustomSounds();
+    return onCustomSounds(() => {
+      bump((n) => n + 1);
+      setSel(getSound(kind));
+    });
+  }, [kind]);
   const list = soundsOf(kind);
+  const firstFactory = list.findIndex((s) => !s.custom);
   const [perm, setPerm] = useState<NotifState>('unsupported');
   useEffect(() => setPerm(notifState()), []);
   const ask = async () => setPerm(await askNotifications());
@@ -176,6 +197,25 @@ export const SoundList: React.FC<{ kind: SoundKind }> = ({ kind }) => {
       stop.current = s;
     } else playOnce('notificacion', id);
   };
+  const upload = async (f: File | undefined) => {
+    if (!f || !userId) return;
+    setErr('');
+    setBusy(true);
+    const r = await uploadCustomSound(userId, kind, f);
+    setBusy(false);
+    if (file.current) file.current.value = '';
+    if (r.error) return setErr(r.error);
+    if (r.id) pick(r.id);
+  };
+  const rename = async (id: string, label: string) => {
+    const n = await ask2({ title: 'Cambiar el nombre del sonido', input: { label: 'Nombre', placeholder: label }, confirmLabel: 'Guardar' });
+    if (n?.trim()) await renameCustomSound(id, n);
+  };
+  const remove = async (id: string, label: string) => {
+    if (!(await confirm({ title: `¿Borrar «${label}»?`, message: 'Se borra de tu cuenta en todos tus dispositivos.', confirmLabel: 'Borrar', tone: 'danger' }))) return;
+    stop.current?.();
+    await deleteCustomSound(id);
+  };
   return (
     <div className="overflow-hidden rounded-xl bg-white/[0.04] ring-1 ring-white/10">
       <button type="button" onClick={() => { setOpen((v) => !v); if (open) stop.current?.(); }} className="flex w-full items-center justify-between px-3 py-2.5 text-sm">
@@ -184,16 +224,36 @@ export const SoundList: React.FC<{ kind: SoundKind }> = ({ kind }) => {
       </button>
       {open && (
         <ul className="border-t border-white/10">
-          {list.map((s, i) => (
-            <li key={s.id}>
-              <button type="button" onClick={() => pick(s.id)} className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-zinc-200 hover:bg-white/[0.05] ${i ? 'border-t border-white/[0.06]' : ''}`}>
-                <span className="flex w-4 justify-center text-sky-400">{sel === s.id && <Check className="h-4 w-4" />}</span>
-                {s.label}
-                {i === 0 && <span className="ml-auto text-xs text-zinc-500">Predeterminado</span>}
+          {manage && (
+            <li>
+              <input ref={file} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+              <button type="button" disabled={busy || !userId} onClick={() => file.current?.click()} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-sky-300 hover:bg-white/[0.05] disabled:opacity-50">
+                {busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {busy ? 'Subiendo…' : 'Subir mi sonido'}
+                <span className="ml-auto text-[11px] font-normal text-zinc-500">MP3, M4A o WAV · hasta 5 MB · {MAX_SECONDS[kind]} s</span>
               </button>
+              {err && <p className="px-3 pb-2 text-xs text-rose-300">{err}</p>}
+            </li>
+          )}
+          {list.map((s, i) => (
+            <li key={s.id} className={`flex items-center ${i || manage ? 'border-t border-white/[0.06]' : ''}`}>
+              <button type="button" onClick={() => pick(s.id)} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left text-sm text-zinc-200 hover:bg-white/[0.05]">
+                <span className="flex w-4 shrink-0 justify-center text-sky-400">{sel === s.id && <Check className="h-4 w-4" />}</span>
+                <span className="truncate">{s.label}</span>
+                {s.custom && <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 text-[10px] font-semibold text-sky-200">🎵 Tuyo</span>}
+                {i === firstFactory && <span className="ml-auto shrink-0 text-xs text-zinc-500">Predeterminado</span>}
+              </button>
+              {manage && s.custom && (
+                <span className="flex shrink-0 items-center pr-1.5">
+                  <button type="button" aria-label="Cambiar nombre" data-help="Cambiar nombre" onClick={() => void rename(s.id, s.label)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label="Borrar sonido" data-help="Borrar este sonido" onClick={() => void remove(s.id, s.label)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                </span>
+              )}
             </li>
           ))}
-          <li className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">Se guarda en este dispositivo.</li>
+          <li className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+            La elección se guarda en este dispositivo; tus sonidos subidos, en tu cuenta.
+            {manage && ' Con Organiza cerrada, la notificación del sistema suena con el sonido del teléfono o del computador: los tuyos suenan con Organiza abierta.'}
+          </li>
         </ul>
       )}
       {/* La notificación del navegador (además del sonido): hay que darle permiso una vez. */}

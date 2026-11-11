@@ -7,6 +7,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
 import { playLoop, playOnce } from '@/components/organiza/sounds';
+import { loadCustomSounds } from '@/components/organiza/customSounds';
 import { notify } from '@/components/organiza/notify';
 import { playSound, useAvisos } from '@/components/organiza/useAvisos';
 
@@ -59,6 +60,11 @@ export const Reminders: React.FC = () => {
     if (prefs.sounds) playSound(prefs.sound);
     if (prefs.notifications && 'Notification' in window && Notification.permission === 'granted') new Notification(last.title, { body: last.body });
   }, [notices, prefs]);
+
+  // Los sonidos propios se bajan al abrir Organiza: así la alarma tuya suena al tiro cuando llega su hora.
+  useEffect(() => {
+    void loadCustomSounds();
+  }, []);
 
   useEffect(() => {
     if (published) scheduleNative(publishedItems, 'elegidas').catch(() => {});
