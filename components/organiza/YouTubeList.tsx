@@ -150,7 +150,11 @@ export async function playlistIds(list: string): Promise<string[]> {
   });
 }
 
-type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; loadedAt?: number; readyAt?: number; preload?: boolean; failed?: boolean };
+/**
+ * Un canal (reproductor). `stateAt` = cuándo cambió de estado por última vez y `nudges` = cuántas veces
+ * el vigilante tuvo que empujarlo: así se nota si quedó pegado «cargando» o pausado sin que nadie lo pidiera.
+ */
+type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; stateAt?: number; nudges?: number; loadedAt?: number; readyAt?: number; preload?: boolean; failed?: boolean };
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
 export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number } }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek }) => {
@@ -163,7 +167,12 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const [playing, setPlaying] = useState(true);
   const playingRef = useRef(true);
   const [title, setTitle] = useState('');
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinishedState] = useState(false);
+  const finishedRef = useRef(false);
+  const setFinished = (f: boolean) => {
+    finishedRef.current = f;
+    setFinishedState(f);
+  };
   const [blocked, setBlocked] = useState(false);
   const [skipped, setSkipped] = useState(0);
   // La última que YouTube no dejó tocar aquí (error 150: el dueño o el sello lo bloquean fuera de YouTube).
@@ -206,26 +215,31 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       playerVars: vars,
       events: {
         onReady: (e: { target: YTPlayer }) => {
+          // Un reproductor viejo de este canal (ya reemplazado) no puede marcar como listo al nuevo.
+          if (slots.current[slot].player && slots.current[slot].player !== e.target) return;
           lengths.current[index] = e.target.getDuration?.() || lengths.current[index];
           if (startAt !== undefined && parsed.video) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
           if (mutedRef.current) e.target.mute?.();
           if (preload) {
-            // Precarga: suena en silencio un momento para llenar el búfer y queda lista en su inicio.
+            // Precarga: suena en silencio unos segundos para llenar bien el búfer y queda lista en su inicio.
             e.target.setVolume(0);
             e.target.playVideo();
             setTimeout(() => {
-              if (!slots.current[slot].preload) return;
+              if (!slots.current[slot].preload || slots.current[slot].player !== e.target) return;
               e.target.pauseVideo();
               e.target.seekTo(begin, true);
-            }, 2500);
+            }, 6000);
           } else if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
           slots.current[slot].readyAt = Date.now();
           if (slot === activeRef.current) setTitle(e.target.getVideoData?.().title ?? '');
         },
         onStateChange: (e: { data: number; target: YTPlayer }) => {
+          if (slots.current[slot].player && slots.current[slot].player !== e.target) return;
           slots.current[slot].state = e.data;
+          slots.current[slot].stateAt = Date.now();
+          if (e.data === 1) slots.current[slot].nudges = 0;
           if (slot !== activeRef.current) return;
           if (e.data === YT.PlayerState.PLAYING) {
             setTitle(e.target.getVideoData?.().title ?? '');
@@ -278,6 +292,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const start: Promise<boolean> = reuse
       ? Promise.resolve().then(() => {
           ready.preload = false;
+          ready.readyAt = Date.now();
+          ready.stateAt = Date.now();
           ready.player!.setVolume(fade ? 0 : 100);
           if (playingRef.current) ready.player!.playVideo();
           return true;
@@ -298,12 +314,34 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       const step = () => {
         const p = fade ? Math.min(1, (Date.now() - started) / (fade * 1000)) : 1;
         slots.current[old].player?.setVolume(Math.round(100 * (1 - p)));
-        if (slots.current[other].ready) slots.current[other].player?.setVolume(Math.round(100 * p));
+        const inc = slots.current[other];
+        if (inc.ready) {
+          inc.player?.setVolume(Math.round(100 * p));
+          // Si la que entra quedó pausada en pleno fade, se reanuda (cada ~1 s, sin insistir de más).
+          if (playingRef.current && inc.state === 2 && Date.now() - (inc.stateAt ?? 0) > 800) {
+            inc.stateAt = Date.now();
+            inc.player?.playVideo();
+          }
+        }
         if (p < 1) setTimeout(step, 100);
         else {
-          slots.current[old].player?.destroy();
+          // La vieja se calla y se pausa al tiro, pero se desarma un rato después: destruirla justo
+          // cuando la nueva arranca podía dejar a la nueva pegada «cargando».
+          const gone = slots.current[old];
+          gone.player?.setVolume(0);
+          gone.player?.pauseVideo();
           slots.current[old] = { player: null, index: -1, ready: false };
-          if (boxes[old].current) boxes[old].current.innerHTML = '';
+          const box = boxes[old].current;
+          const host = box?.firstChild;
+          setTimeout(() => {
+            try {
+              gone.player?.destroy();
+            } catch {
+              /* ya no está */
+            }
+            // Solo se limpia si el canal no se volvió a usar mientras tanto.
+            if (box && host && box.firstChild === host && !slots.current[old].player) box.innerHTML = '';
+          }, 2000);
           fading.current = false;
         }
       };
@@ -391,16 +429,34 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       }
       // El navegador no la dejó sonar sola: se pide un toque.
       if (cur.state !== 1 && cur.state !== 3 && Date.now() - (cur.readyAt ?? Date.now()) > 3500) setBlocked(true);
-      if (fading.current || !parseYouTube(v.url)?.video) return;
+      if (fading.current || finishedRef.current) return;
+      // Vigilante: la canción que suena NUNCA se queda frenada. Pausada sin que nadie lo pidiera → play;
+      // pegada «cargando» → se empuja al mismo segundo; si sigue pegada, se recarga ahí mismo.
+      const since = Date.now() - (cur.stateAt ?? cur.readyAt ?? Date.now());
+      if ((cur.state === 2 || cur.state === 5 || cur.state === -1) && since > 1500) {
+        cur.stateAt = Date.now();
+        cur.player.playVideo();
+      } else if (cur.state === 3 && since > 5000) {
+        cur.stateAt = Date.now();
+        cur.nudges = (cur.nudges ?? 0) + 1;
+        const t0 = cur.player.getCurrentTime?.() ?? 0;
+        if (cur.nudges >= 3) {
+          load(activeRef.current, cur.index, 100, t0);
+          return;
+        }
+        cur.player.seekTo(t0, true);
+        cur.player.playVideo();
+      }
+      if (!parseYouTube(v.url)?.video) return;
       const now = cur.player.getCurrentTime?.() ?? 0;
       const end = v.to ?? cur.player.getDuration?.() ?? 0;
       if (!end) return;
       const lead = v.loop ? 0.3 : Math.max(0.3, crossfade);
       if (now >= end - lead) return advance();
-      // 20 s antes del cambio se precarga la siguiente en el otro canal.
+      // 30 s antes del cambio se precarga la siguiente en el otro canal (suena en silencio 6 s para llenar el búfer).
       const n = nextIndex(cur.index);
       const other = slots.current[1 - activeRef.current];
-      if (!v.loop && n >= 0 && now >= end - lead - 20 && other.index !== n) load(1 - activeRef.current, n, 0, undefined, true);
+      if (!v.loop && n >= 0 && now >= end - lead - 30 && other.index !== n) load(1 - activeRef.current, n, 0, undefined, true);
     }, 250);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
