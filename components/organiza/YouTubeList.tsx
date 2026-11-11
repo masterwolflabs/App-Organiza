@@ -150,6 +150,51 @@ export async function playlistIds(list: string): Promise<string[]> {
   });
 }
 
+/** ▶ Probar el volumen del focus: toca unos segundos la canción a ese volumen (oculta). Devuelve cómo pararla. */
+export function previewVolume(v: Video, volume: number, ms = 6000): () => void {
+  const parsed = parseYouTube(v.url);
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;width:200px;height:112px;left:0;bottom:0;opacity:0;pointer-events:none';
+  document.body.appendChild(host);
+  let p: YTPlayer | null = null;
+  let done = false;
+  const stop = () => {
+    if (done) return;
+    done = true;
+    try {
+      p?.destroy();
+    } catch {
+      /* ya no está */
+    }
+    host.remove();
+  };
+  if (!parsed) {
+    stop();
+    return stop;
+  }
+  loadYT().then((YT) => {
+    if (done) return;
+    const vars: Record<string, unknown> = { autoplay: 1, playsinline: 1, rel: 0 };
+    if (parsed.video && v.from) vars.start = Math.floor(v.from);
+    if (!parsed.video) Object.assign(vars, { listType: 'playlist', list: parsed.list });
+    p = new YT.Player(host, {
+      width: 200,
+      height: 112,
+      videoId: parsed.video,
+      playerVars: vars,
+      events: {
+        onReady: (e: { target: YTPlayer }) => {
+          e.target.setVolume(volume);
+          e.target.playVideo();
+        },
+        onError: stop,
+      },
+    });
+    setTimeout(stop, ms);
+  });
+  return stop;
+}
+
 /**
  * Un canal (reproductor). `stateAt` = cuándo cambió de estado por última vez y `nudges` = cuántas veces
  * el vigilante tuvo que empujarlo: así se nota si quedó pegado «cargando» o pausado sin que nadie lo pidiera.
@@ -157,7 +202,10 @@ export async function playlistIds(list: string): Promise<string[]> {
 type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: number; stateAt?: number; nudges?: number; loadedAt?: number; readyAt?: number; preload?: boolean; failed?: boolean };
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
-export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number } }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek }) => {
+/** `volume` (0–100): el volumen propio de este focus (2026-11-11), el máximo al que sube cada canción y el crossfade. */
+export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number }; volume?: number }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek, volume = 100 }) => {
+  const top = useRef(volume);
+  top.current = Math.max(0, Math.min(100, Math.round(volume)));
   const boxes = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
   const slots = useRef<Slot[]>([{ player: null, index: -1, ready: false }, { player: null, index: -1, ready: false }]);
   const [active, setActive] = useState(0);
@@ -294,11 +342,11 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           ready.preload = false;
           ready.readyAt = Date.now();
           ready.stateAt = Date.now();
-          ready.player!.setVolume(fade ? 0 : 100);
+          ready.player!.setVolume(fade ? 0 : top.current);
           if (playingRef.current) ready.player!.playVideo();
           return true;
         })
-      : load(other, n, fade ? 0 : 100);
+      : load(other, n, fade ? 0 : top.current);
     start.then((ok) => {
       if (!ok) {
         fading.current = false;
@@ -313,10 +361,10 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       setAt(n);
       const step = () => {
         const p = fade ? Math.min(1, (Date.now() - started) / (fade * 1000)) : 1;
-        slots.current[old].player?.setVolume(Math.round(100 * (1 - p)));
+        slots.current[old].player?.setVolume(Math.round(top.current * (1 - p)));
         const inc = slots.current[other];
         if (inc.ready) {
-          inc.player?.setVolume(Math.round(100 * p));
+          inc.player?.setVolume(Math.round(top.current * p));
           // Si la que entra quedó pausada en pleno fade, se reanuda (cada ~1 s, sin insistir de más).
           if (playingRef.current && inc.state === 2 && Date.now() - (inc.stateAt ?? 0) > 800) {
             inc.stateAt = Date.now();
@@ -387,8 +435,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     setAt(index);
     if (cur.index === index && cur.player && cur.ready) {
       cur.player.seekTo(at, true);
-      cur.player.setVolume(100);
-    } else load(activeRef.current, index, 100, at);
+      cur.player.setVolume(top.current);
+    } else load(activeRef.current, index, top.current, at);
   };
 
   // Adelantar o retroceder el focus mueve la música al mismo momento.
@@ -396,6 +444,13 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     if (seek) seekGlobal(seek.t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seek?.n]);
+
+  // Cambiar el volumen del focus se nota al tiro (si está en pleno crossfade, el fade ya sube hasta el nuevo).
+  useEffect(() => {
+    if (fading.current) return;
+    const cur = slots.current[activeRef.current];
+    if (cur.ready && !cur.preload) cur.player?.setVolume(top.current);
+  }, [volume]);
 
   // Pausar el focus pausa la música.
   useEffect(() => {
@@ -406,7 +461,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
 
   // Arranca con la primera canción.
   useEffect(() => {
-    load(0, 0, 100);
+    load(0, 0, top.current);
     const all = slots.current;
     return () => all.forEach((s) => s.player?.destroy());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -441,7 +496,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         cur.nudges = (cur.nudges ?? 0) + 1;
         const t0 = cur.player.getCurrentTime?.() ?? 0;
         if (cur.nudges >= 3) {
-          load(activeRef.current, cur.index, 100, t0);
+          load(activeRef.current, cur.index, top.current, t0);
           return;
         }
         cur.player.seekTo(t0, true);

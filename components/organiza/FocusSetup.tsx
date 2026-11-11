@@ -2,9 +2,9 @@
 
 import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, ListMusic, Loader2, Music, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ListMusic, Loader2, Music, Pause, Play, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
-import { canEmbed, fmtSeconds, parseYouTube, playlistIds, toSeconds } from '@/components/organiza/YouTubeList';
+import { canEmbed, fmtSeconds, parseYouTube, playlistIds, previewVolume, toSeconds } from '@/components/organiza/YouTubeList';
 import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
 
@@ -35,6 +35,25 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [videos, setVideos] = useState<Video[]>(current?.videos ?? []);
   const [crossfade, setCrossfade] = useState(current?.crossfade ?? 3);
   const [loopAll, setLoopAll] = useState(current?.loopAll ?? false);
+  const [volume, setVolume] = useState(current?.volume ?? 100);
+  // ▶ Probar el volumen: la primera canción suena unos segundos a ese volumen.
+  const stopTest = React.useRef<(() => void) | null>(null);
+  const [testing, setTesting] = useState(false);
+  const testVolume = () => {
+    stopTest.current?.();
+    if (testing) return setTesting(false);
+    const first = videos[0] ?? pending[0];
+    if (!first) return;
+    setTesting(true);
+    const stop = previewVolume(first, volume);
+    const t = setTimeout(() => setTesting(false), 6000);
+    stopTest.current = () => {
+      clearTimeout(t);
+      stop();
+      stopTest.current = null;
+    };
+  };
+  React.useEffect(() => () => stopTest.current?.(), []);
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   // Cambiar el link de una canción: conserva desde/hasta y bucle.
@@ -43,9 +62,9 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
 
   // Un link pegado sin tocar «Agregar» también se guarda.
   const pending = parseYouTube(url) && !parseYouTube(url)?.list ? [{ url: url.trim() }] : [];
-  const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false });
+  const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll, volume }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false, volume: current?.volume ?? 100 });
   const save = () => {
-    const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll };
+    const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll, volume };
     onSave(current ? item.modules.map((m) => (m.id === current.id ? music : m)) : [...item.modules, music]);
   };
   const set = (i: number, p: Partial<Video>) => setVideos((l) => l.map((v, j) => (j === i ? { ...v, ...p } : v)));
@@ -164,6 +183,16 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
               <input type="range" min={0} max={12} value={crossfade} onChange={(e) => setCrossfade(Number(e.target.value))} className="mt-1 w-full accent-sky-500" />
               <span className="text-xs text-zinc-500">Cuánto se funde el final de una canción con el inicio de la siguiente.</span>
             </label>
+            <div className="block text-sm text-zinc-200">
+              <span className="flex items-center justify-between"><b className="font-semibold">Volumen de este focus</b>
+                <span className="flex items-center gap-2">
+                  <span className="tabular-nums text-zinc-400">🔊 {volume}%</span>
+                  <button type="button" disabled={!videos.length && !pending.length} onClick={testVolume} data-help="Probar: suena unos segundos a este volumen" aria-label="Probar volumen" className={`rounded-lg p-1 hover:bg-white/10 disabled:opacity-30 ${testing ? 'text-sky-300' : 'text-zinc-200'}`}>{testing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}</button>
+                </span>
+              </span>
+              <input type="range" min={0} max={100} step={5} value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label="Volumen de este focus" className="mt-1 w-full accent-sky-500" />
+              <span className="text-xs text-zinc-500">Aparte de los parlantes: ej. Dormir bajito (25%) y Levantarse a todo (100%).</span>
+            </div>
             <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-200">
               <span><b className="block font-semibold">Repetir toda la lista</b><span className="text-xs text-zinc-500">Al terminar la última, vuelve a la primera.</span></span>
               <input type="checkbox" checked={loopAll} onChange={(e) => setLoopAll(e.target.checked)} className="h-4 w-4 accent-sky-500" />

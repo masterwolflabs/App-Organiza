@@ -161,7 +161,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
           </div>
           {videos.length > 0 && (
             <div className="relative mx-auto mt-5 max-w-md">
-              <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} />
+              <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} volume={music?.volume ?? 100} />
             </div>
           )}
         </div>

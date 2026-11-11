@@ -25,6 +25,8 @@ export type Module = {
   crossfade?: number;
   /** Al terminar la última, vuelve a la primera. */
   loopAll?: boolean;
+  /** Volumen propio de la música de este focus, 0–100 (por defecto 100; los parlantes aparte). */
+  volume?: number;
 };
 
 export type Label = { id: string; owner_id?: string; space: Space; name: string; color: string; icon: string; sort?: number };
