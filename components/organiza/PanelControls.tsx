@@ -8,7 +8,8 @@ import { useAsk, useConfirm } from '@/components/ui/confirm';
 import { useSpace } from '@/components/organiza/space';
 import { ACCEPT, MAX_SECONDS, deleteCustomSound, loadCustomSounds, renameCustomSound, uploadCustomSound } from '@/components/organiza/customSounds';
 import { askNotifications, notifState, type NotifState } from '@/components/organiza/notify';
-import { getSound, onCustomSounds, playLoop, playOnce, setSound, soundsOf, tick, type SoundKind } from '@/components/organiza/sounds';
+import { factoryOf, getSound, onCustomSounds, playLoop, playOnce, setSound, soundsOf, tick, type SoundKind } from '@/components/organiza/sounds';
+import { arrange, countUse, hiddenCount, hideSound, loadSoundLibrary, onSoundLibrary, restoreSounds } from '@/components/organiza/soundLibrary';
 import type { AlarmKind, Flex, Label } from '@/components/organiza/model';
 import type { useHorario } from '@/components/organiza/useHorario';
 
@@ -182,8 +183,15 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
       setSel(getSound(kind));
     });
   }, [kind]);
-  const list = soundsOf(kind);
-  const firstFactory = list.findIndex((s) => !s.custom);
+  // Mi lista (Daily sonidos-elegir-ranking): sin los que eliminé y con los más usados primero.
+  useEffect(() => {
+    void loadSoundLibrary(userId);
+    return onSoundLibrary(() => bump((n) => n + 1));
+  }, [userId]);
+  const all = soundsOf(kind);
+  const list = arrange(all);
+  const removed = hiddenCount(all.map((s) => s.id));
+  const factoryDefault = factoryOf(kind)[0].id;
   const [perm, setPerm] = useState<NotifState>('unsupported');
   useEffect(() => setPerm(notifState()), []);
   const ask = async () => setPerm(await askNotifications());
@@ -192,6 +200,7 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
     stop.current?.();
     setSel(id);
     setSound(kind, id);
+    countUse(id);
     if (kind === 'alarma') {
       const s = playLoop('alarma', id, 6);
       stop.current = s;
@@ -215,6 +224,17 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
     if (!(await confirm({ title: `¿Borrar «${label}»?`, message: 'Se borra de tu cuenta en todos tus dispositivos.', confirmLabel: 'Borrar', tone: 'danger' }))) return;
     stop.current?.();
     await deleteCustomSound(id);
+  };
+  const hide = async (id: string) => {
+    if (!(await confirm({ title: '¿Seguro que quieres eliminar este sonido?', message: 'Sale de TU lista (no de la de los demás). Lo puedes restaurar abajo, en «Restaurar eliminados».', confirmLabel: 'Sí, eliminar', tone: 'danger' }))) return;
+    stop.current?.();
+    hideSound(id);
+    // Si era el elegido, queda el primero de tu lista.
+    if (sel === id) {
+      const next = arrange(soundsOf(kind))[0]?.id ?? factoryDefault;
+      setSel(next);
+      setSound(kind, next);
+    }
   };
   return (
     <div className="overflow-hidden rounded-xl bg-white/[0.04] ring-1 ring-white/10">
@@ -240,7 +260,7 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
                 <span className="flex w-4 shrink-0 justify-center text-sky-400">{sel === s.id && <Check className="h-4 w-4" />}</span>
                 <span className="truncate">{s.label}</span>
                 {s.custom && <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 text-[10px] font-semibold text-sky-200">🎵 Tuyo</span>}
-                {i === firstFactory && <span className="ml-auto shrink-0 text-xs text-zinc-500">Predeterminado</span>}
+                {s.id === factoryDefault && <span className="ml-auto shrink-0 text-xs text-zinc-500">Predeterminado</span>}
               </button>
               {manage && s.custom && (
                 <span className="flex shrink-0 items-center pr-1.5">
@@ -248,10 +268,20 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
                   <button type="button" aria-label="Borrar sonido" data-help="Borrar este sonido" onClick={() => void remove(s.id, s.label)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
                 </span>
               )}
+              {list.length > 1 && !(manage && s.custom) && (
+                <button type="button" aria-label="Eliminar de mi lista" data-help="Eliminar de mi lista" onClick={() => void hide(s.id)} className="mr-1.5 shrink-0 rounded-lg p-1.5 text-zinc-500 hover:bg-white/10 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+              )}
             </li>
           ))}
+          {removed > 0 && (
+            <li className="border-t border-white/10">
+              <button type="button" onClick={() => restoreSounds(all.map((s) => s.id))} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-zinc-300 hover:bg-white/[0.05]">
+                <RefreshCw className="h-3.5 w-3.5" /> Restaurar eliminados ({removed})
+              </button>
+            </li>
+          )}
           <li className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
-            La elección se guarda en este dispositivo; tus sonidos subidos, en tu cuenta.
+            Los que más usas salen primero. La elección se guarda en este dispositivo; tu lista y tus sonidos subidos, en tu cuenta.
             {manage && ' Con Organiza cerrada, la notificación del sistema suena con el sonido del teléfono o del computador: los tuyos suenan con Organiza abierta.'}
           </li>
         </ul>

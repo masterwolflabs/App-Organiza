@@ -6,7 +6,9 @@ import { BellRing, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { toMinutes, weekdayOf, type Item, type Schedule } from '@/components/organiza/model';
 import { useHorario } from '@/components/organiza/useHorario';
-import { playLoop, playOnce } from '@/components/organiza/sounds';
+import { getSound, playLoop, playOnce } from '@/components/organiza/sounds';
+import { countUse, loadSoundLibrary } from '@/components/organiza/soundLibrary';
+import { useSpace } from '@/components/organiza/space';
 import { loadCustomSounds } from '@/components/organiza/customSounds';
 import { notify } from '@/components/organiza/notify';
 import { playSound, useAvisos } from '@/components/organiza/useAvisos';
@@ -65,6 +67,10 @@ export const Reminders: React.FC = () => {
   useEffect(() => {
     void loadCustomSounds();
   }, []);
+  const { userId } = useSpace();
+  useEffect(() => {
+    void loadSoundLibrary(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (published) scheduleNative(publishedItems, 'elegidas').catch(() => {});
@@ -85,7 +91,10 @@ export const Reminders: React.FC = () => {
         const body = i.alarm_before ? `En ${i.alarm_before} minutos` : `Son las ${i.time}`;
         void notify(`${iconText(i.icon)} ${i.title}`.trim(), body, kind === 'alarma');
         if (kind === 'alarma') setRinging(i);
-        else playOnce('notificacion');
+        else {
+          playOnce('notificacion');
+          countUse(getSound('notificacion'));
+        }
       }
     };
     tick();
@@ -94,7 +103,11 @@ export const Reminders: React.FC = () => {
   }, [published, publishedItems, itemsOn]);
 
   // La alarma suena en bucle hasta que la cierras (máximo 1 minuto).
-  useEffect(() => (ringing ? playLoop('alarma') : undefined), [ringing]);
+  useEffect(() => {
+    if (!ringing) return;
+    countUse(getSound('alarma'));
+    return playLoop('alarma');
+  }, [ringing]);
 
   if (!ringing) return null;
   return (
