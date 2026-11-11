@@ -502,8 +502,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         </span>
       </div>
       {blocked && !finished && (
-        <button type="button" onClick={() => { slots.current[activeRef.current].player?.playVideo(); setBlocked(false); }} className="flex w-full items-center justify-center gap-1.5 border-t border-white/10 py-2 text-xs font-semibold text-amber-200 hover:bg-white/5">
-          <Play className="h-3.5 w-3.5" /> Tu navegador pausó la música · toca para seguir
+        <button type="button" onClick={() => { slots.current[activeRef.current].player?.playVideo(); setBlocked(false); }} className="flex w-full items-center justify-center gap-2 border-t border-white/10 bg-amber-400/15 py-3.5 text-base font-bold text-amber-100 hover:bg-amber-400/25">
+          <Play className="h-5 w-5" /> Tocar para sonar
+          <span className="text-xs font-normal text-amber-200/80">(tu navegador pausó la música)</span>
         </button>
       )}
       {blockedSong !== null && videos[blockedSong] && (

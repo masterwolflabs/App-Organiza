@@ -247,7 +247,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               {item.focus && (
                 <>
                   <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
-                    <span><b className="block text-sm font-semibold text-white">⏰ Abrirse solo a las {item.time}</b><span className="text-xs text-zinc-400">Con Organiza abierta, el focus se abre a esa hora (la de tu dispositivo, donde estés). Lo puedes cerrar cuando quieras.</span></span>
+                    <span><b className="block text-sm font-semibold text-white">⏰ Abrirse solo a las {item.time}</b><span className="text-xs text-zinc-400">Con Organiza abierta en una pestaña, el focus se abre a esa hora (la de tu dispositivo). Si la abres o despiertas el equipo más tarde, se abre igual mientras dure la acción. Para que te despierte aunque esté cerrada, ponle también ⏰ Alarma.</span></span>
                     <input type="checkbox" checked={!!item.auto_focus} onChange={(e) => set({ auto_focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
                   </label>
                   <div className="flex gap-2">
