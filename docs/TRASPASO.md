@@ -168,3 +168,7 @@ Clic derecho en una tarjeta del Tablero (o mantener 2 s en el celular) → `comp
 
 ## 😴 Dormir: registro del sueño (Daily dormir-detectado, 2026-11-12)
 `components/organiza/SleepLog.tsx`. Todo queda en la tarea **Dormir** (`SLEEP_REF`), aunque se anote desde Levantarse o el focus (antes cada tarea guardaba lo suyo; las noches viejas se siguen leyendo). Por noche (día en que despiertas, en `organiza_checks.value`): acostarse / despertar (horas calculadas; «me desperté» se adivina con la hora en que marcaste Levantarse), ⭐ calidad 1-5, horas bien dormidas, 🌙 despertares (horas), 💭 sueño. Resumen: barras de 14 noches (verde = meta cumplida), promedio vs meta y calidad, 📔 diario de sueños. `setSleep` le pone el módulo a Dormir; los Dormir viejos lo muestran igual. En el focus de **Levantarse** sale «😴 ¿Cómo dormiste? · 1 minuto».
+
+## 🎨 Pintar en la Daily + borde por categoría en el Horario (2026-11-12)
+- Daily: clic derecho en el nombre → **Pintar** (o mantener 2 s en el celular) → `ColorMenu`: fondo (al 25 %) y borde (barra de 4 px a la izquierda). Se guarda en la tarea (`DailyTask.color / border`). `DataTable` tiene ahora `rowStyle` opcional.
+- Horario → Mostrar → **🎨 Borde por categoría**: cada acción toma el color de su categoría como borde, si no tiene uno propio.

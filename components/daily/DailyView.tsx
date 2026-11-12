@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlignLeft, Archive, ArchiveRestore, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
+import { AlignLeft, Archive, ArchiveRestore, Palette, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
 import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type Filter, type ViewDef } from '@/components/tables/table';
@@ -12,6 +12,7 @@ import { McAvatar } from '@/components/calendar/McAvatar';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
 import { DailyBoard } from '@/components/daily/DailyBoard';
 import { BulkBar } from '@/components/daily/BulkBar';
+import { ColorMenu } from '@/components/organiza/ColorMenu';
 import { DailyManual } from '@/components/daily/DailyManual';
 import { DocStoreProvider, useDocStore } from '@/components/daily/docStore';
 import { useTableViewsStore } from '@/components/tables/viewsStore';
@@ -281,6 +282,9 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [writing, setWriting] = useState<string | null>(null);
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
+  // 🎨 Pintar una tarea (clic derecho → Pintar, o mantener 2 s en el celular).
+  const [paint, setPaint] = useState<{ x: number; y: number; id: string } | null>(null);
+  const hold = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   // Acciones múltiples (Emanuel, 2026-11-12): marcar varias tareas y cambiarlas / archivarlas / borrarlas juntas.
   const [sel, setSel] = useState<string[]>([]);
   const toggleSel = (id: string) => setSel((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
@@ -413,6 +417,15 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
             e.stopPropagation();
             setRowMenu({ x: e.clientX, y: e.clientY, t });
           }}
+          onPointerDown={(e) => {
+            if (e.pointerType === 'mouse') return;
+            const x = e.clientX, y = e.clientY;
+            if (hold.current) clearTimeout(hold.current);
+            hold.current = setTimeout(() => { navigator.vibrate?.(15); setPaint({ x, y, id: t.id }); }, 2000);
+          }}
+          onPointerUp={() => hold.current && clearTimeout(hold.current)}
+          onPointerCancel={() => hold.current && clearTimeout(hold.current)}
+          onPointerMove={() => hold.current && clearTimeout(hold.current)}
         >
           <input
             type="checkbox"
@@ -516,7 +529,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
     />
   );
-  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} rowStyle={(t) => (t.color || t.border ? { ...(t.color ? { backgroundImage: `linear-gradient(${t.color}40, ${t.color}40)` } : {}), ...(t.border ? { boxShadow: `inset 4px 0 0 ${t.border}` } : {}) } : undefined)} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
 
   return (
     <div>
@@ -546,11 +559,16 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           y={rowMenu.y}
           onClose={() => setRowMenu(null)}
           items={[
+            { label: 'Pintar', icon: <Palette className="h-3.5 w-3.5" />, onClick: () => setPaint({ x: rowMenu.x, y: rowMenu.y, id: rowMenu.t.id }) },
             { label: rowMenu.t.archived ? 'Desarchivar' : 'Archivar', icon: rowMenu.t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />, onClick: () => actions.onArchive(rowMenu.t) },
             { label: 'Borrar', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => actions.onDelete(rowMenu.t) },
           ]}
         />
       )}
+      {paint && (() => {
+        const pt = doc.tasks.find((x) => x.id === paint.id);
+        return pt ? <ColorMenu x={paint.x} y={paint.y} title={pt.title} bg={pt.color} border={pt.border} onChange={(p) => patch(pt.id, { ...(p.bg_color !== undefined ? { color: p.bg_color } : {}), ...(p.border_color !== undefined ? { border: p.border_color } : {}) })} onClose={() => setPaint(null)} /> : null;
+      })()}
       {sel.length > 0 && (
         <BulkBar
           count={sel.length}

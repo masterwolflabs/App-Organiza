@@ -398,7 +398,7 @@ export const HorarioView: React.FC = () => {
                     {FIELD_NAMES.map(([k, name]) => (
                       <label key={k} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/[0.06]">
                         {name}
-                        <input type="checkbox" checked={show[k]} onChange={() => setShow({ ...show, [k]: !show[k] })} className="accent-sky-500" />
+                        <input type="checkbox" checked={!!show[k]} onChange={() => setShow({ ...show, [k]: !show[k] })} className="accent-sky-500" />
                       </label>
                     ))}
                     <button type="button" onClick={() => setShow(FIELDS_ALL)} className="mt-1 w-full rounded-lg px-2 py-1.5 text-left text-xs font-semibold text-sky-300 hover:bg-white/[0.06]">Ver todo</button>
@@ -530,9 +530,9 @@ const Chip: React.FC<{ color: string; icon: React.ElementType; children: React.R
 type Streak = { n: number; ghost: boolean; missed?: boolean };
 
 /** Qué se ve en cada tarjeta (menú «Mostrar», Emanuel 2026-11-04). En este dispositivo. */
-type Fields = { partes: boolean; portada: boolean; estado: boolean; racha: boolean; extras: boolean; etiqueta: boolean; hora: boolean; duracion: boolean };
+type Fields = { partes: boolean; portada: boolean; estado: boolean; racha: boolean; extras: boolean; etiqueta: boolean; hora: boolean; duracion: boolean; /** Borde del color de la categoría (si la acción no tiene borde propio). */ borde?: boolean };
 const FIELDS_ALL: Fields = { partes: true, portada: true, estado: true, racha: true, extras: true, etiqueta: true, hora: true, duracion: true };
-const FIELD_NAMES: [keyof Fields, string][] = [['partes', '🌗 Nombres de las partes'], ['portada', '🖼️ Portada'], ['estado', '🟢 Estado'], ['racha', '🔥 Racha'], ['extras', '⚡ Focus y alarma'], ['etiqueta', '🏷️ Categoría'], ['hora', '🕘 Hora'], ['duracion', '⏱️ Hasta y duración']];
+const FIELD_NAMES: [keyof Fields, string][] = [['partes', '🌗 Nombres de las partes'], ['portada', '🖼️ Portada'], ['estado', '🟢 Estado'], ['racha', '🔥 Racha'], ['extras', '⚡ Focus y alarma'], ['etiqueta', '🏷️ Categoría'], ['hora', '🕘 Hora'], ['duracion', '⏱️ Hasta y duración'], ['borde', '🎨 Borde por categoría']];
 
 /**
  * Estado en vivo de una tarea de hoy (Emanuel, 2026-11-04): Pendiente → Por activarse (30 min antes) →
@@ -665,7 +665,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; weather?: { emoji: string; t
       onPointerUp={endHold}
       onPointerCancel={endHold}
       className={`relative z-10 block w-full overflow-hidden hz-card rounded-xl text-left ring-1 transition [-webkit-touch-callout:none] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
-      style={{ ...tintCss(item.bg_color, item.border_color), ...(mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : {}) }}
+      style={{ ...tintCss(item.bg_color, item.border_color ?? (show.borde && label ? label.color : null)), ...(mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : {}) }}
     >
       {show.portada && item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
       <div className="space-y-2 p-3">

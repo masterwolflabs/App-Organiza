@@ -1602,11 +1602,11 @@ export interface Col<T> {
   className?: string;
 }
 
-export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle, onFilters }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string>; onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void; onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void; noTitle?: boolean; onFilters?: (filters: Filter[]) => void }) {
+export function DataTable<T>({ id, columns, rows, rowKey, minWidth = 900, empty, rowClassName, rowStyle, title, defaultViews, peekExtra, peekHide, help, onAddField, onColumnMenu, noTitle, onFilters }: { id: string; columns: Col<T>[]; rows: T[]; rowKey: (r: T) => string; minWidth?: number; empty?: string; rowClassName?: string; /** Color de fondo / borde por fila (Daily: pintar tareas). */ rowStyle?: (r: T) => React.CSSProperties | undefined; title?: string; defaultViews?: ViewDef[]; peekExtra?: (rowKey: string) => React.ReactNode; peekHide?: string[]; help?: Record<string, string>; onAddField?: (type: (typeof ADDABLE_TYPES)[number]) => void; onColumnMenu?: (key: string, anchor: HTMLElement, sort: (dir: 'asc' | 'desc') => void) => void; noTitle?: boolean; onFilters?: (filters: Filter[]) => void }) {
   return (
     <Table id={id} title={title} defaultViews={defaultViews} peekExtra={peekExtra} peekHide={peekHide} help={help} onAddField={onAddField} onColumnMenu={onColumnMenu} noTitle={noTitle} onFilters={onFilters} head={columns.map((c) => c.label)} colKeys={columns.map((c) => c.key)} minWidth={minWidth} empty={empty} isEmpty={!rows.length}>
       {rows.map((r) => (
-        <tr key={rowKey(r)} className={rowClassName ?? 'border-b border-white/[0.05] hover:bg-white/[0.02]'}>
+        <tr key={rowKey(r)} className={rowClassName ?? 'border-b border-white/[0.05] hover:bg-white/[0.02]'} style={rowStyle?.(r)}>
           {columns.map((c) => (
             <Td key={c.key} right={c.right} mono={c.mono} noClamp={c.noClamp} className={c.className}>
               {c.cell(r)}

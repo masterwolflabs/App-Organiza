@@ -25,6 +25,9 @@ export type DailyTask = {
   order: number;
   /** Archived = out of every view ("Ver archivadas" brings them back). */
   archived?: boolean;
+  /** Pintar (Emanuel, 2026-11-12): color de fondo y de borde de la fila. */
+  color?: string | null;
+  border?: string | null;
   /** Claude has everything and only waits for this permission (Tablero → "Faltan Permisos"). */
   permission?: string | null;
   /** Its page written by Claude from the terminal (scripts/daily.sh in Finance) — wins over utils/dailyPages. */
