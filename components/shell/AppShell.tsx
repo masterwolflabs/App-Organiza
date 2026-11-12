@@ -35,6 +35,7 @@ import { useMyRole } from '@/utils/mente';
 import { SpaceProvider, SpaceSwitch } from '@/components/organiza/space';
 import { GuidedTour, TourPrompt } from '@/components/tour/GuidedTour';
 import { Reminders } from '@/components/organiza/Reminders';
+import { AIActionsHost } from '@/components/organiza/AIConfirm';
 import { AutoFocus } from '@/components/organiza/AutoFocus';
 
 /**
@@ -334,6 +335,7 @@ export function AppShell({ session }: { session: Session }) {
       )}
       <Reminders />
       <AutoFocus />
+      <AIActionsHost />
 
       {/* Calculadora de Finance: flota encima de todas las páginas y ventanas (portal, z-[95]). */}
       <CalculatorWidget ref={calculatorRef} />

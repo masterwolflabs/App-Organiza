@@ -8,7 +8,8 @@ import { loadMessages, sendAIMessage, type AIMessage } from '@/lib/aiClient';
 import { useConfirm } from '@/components/ui/confirm';
 import { MicButton } from '@/components/organiza/DayAdjust';
 import { marksFromActions, setMarks } from '@/components/organiza/aiMarks';
-import { runAIActions } from '@/components/organiza/aiExecutor';
+import { describeActions, isLiveAction, runAIActions, runScreenActions } from '@/components/organiza/aiExecutor';
+import { AIConfirmCard } from '@/components/organiza/AIConfirm';
 import type { useHorario } from '@/components/organiza/useHorario';
 import type { useCalendar } from '@/components/calendar/useCalendar';
 
@@ -35,6 +36,8 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
   });
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [results, setResults] = useState<Record<string, string[]>>({});
+  // «Voy a…: ¿sí?» (2026-11-12): los cambios de datos esperan el Sí de la persona.
+  const [pending, setPending] = useState<{ id: string; actions: unknown[]; lines: string[] } | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -77,7 +80,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     const screen = [
       `Ahora es ${now.toLocaleString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Hoy es ${now.toLocaleDateString('sv-SE')}.`,
       `La persona está en Organiza viendo el Horario «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
-      'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en vivo en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
+      'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, pantalla, analizar_horario, etc.). Los cambios de datos le aparecen en una tarjeta «Voy a…» y se aplican cuando dice Sí (dile que confirme); los de pantalla (pantalla) van directo. Si pide que le expliques cómo se hace algo, usa explicar_en_pantalla. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
     ].join('\n');
     try {
       const res = await sendAIMessage({ conversationId: convId, text: msg, engine: 'auto', screen });
@@ -94,12 +97,9 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
       const actions = res.assistantMessage.metadata?.actions;
       const marks = marksFromActions(actions);
       if (marks) setMarks(marks);
-      const lines = await runAIActions(actions, { ...live.current, confirm });
-      if (lines.length) {
-        setResults((r) => ({ ...r, [res.assistantMessage.id]: lines }));
-        // Las otras pantallas abiertas (ej. el calendario) se recargan solas al «volver el foco».
-        window.dispatchEvent(new Event('focus'));
-      }
+      runScreenActions(actions);
+      const data = (Array.isArray(actions) ? actions : []).filter(isLiveAction);
+      if (data.length) setPending({ id: res.assistantMessage.id, actions: data, lines: describeActions(data, live.current.h, live.current.cal) });
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== temp.id));
       setText(msg);
@@ -116,7 +116,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600"><Sparkles className="h-4 w-4 text-[#fff]" /></span>
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-white">IA de Organiza</p>
-            <p className="text-xs text-zinc-400">Lo que pidas se hace en vivo · ↶ para deshacer</p>
+            <p className="text-xs text-zinc-400">Te muestra lo que va a hacer y lo hace con tu Sí · ↶ deshace</p>
           </div>
           <button type="button" onClick={fresh} data-help="Conversación nueva" aria-label="Conversación nueva" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /></button>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
@@ -137,6 +137,19 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
             ) : (
               <div key={m.id} className="space-y-2 text-sm leading-6 text-zinc-200">
                 <ChatMarkdown text={m.content} />
+                {pending?.id === m.id && (
+                  <AIConfirmCard
+                    lines={pending.lines}
+                    onYes={async () => {
+                      const lines = await runAIActions(pending.actions, { ...live.current, confirm: async () => true });
+                      setPending(null);
+                      setResults((r) => ({ ...r, [m.id]: lines }));
+                      // Las otras pantallas abiertas (ej. el calendario) se recargan solas al «volver el foco».
+                      window.dispatchEvent(new Event('focus'));
+                    }}
+                    onNo={() => { setPending(null); setResults((r) => ({ ...r, [m.id]: ['↩️ No hice nada.'] })); }}
+                  />
+                )}
                 {results[m.id]?.length ? (
                   <div className="space-y-0.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100 ring-1 ring-emerald-400/25">
                     {results[m.id].map((l, k) => <p key={k}>{l}</p>)}

@@ -240,6 +240,19 @@ export const HorarioView: React.FC = () => {
     }
   };
   const [openId, setOpenId] = useState<string | null>(null);
+  // 🤖 El agente cambia lo que ves (herramienta «pantalla»): vista, qué mostrar, enfocar hoy, semana, abrir una acción.
+  useEffect(() => {
+    const onUi = (e: Event) => {
+      const d = (e as CustomEvent<{ vista?: string; mostrar?: Partial<Fields>; enfocar_hoy?: boolean; semana?: number; abrir?: string }>).detail ?? {};
+      if (d.vista && ['tablero', 'semana', 'galeria', 'lista'].includes(d.vista)) setView(d.vista as ViewId);
+      if (d.mostrar && typeof d.mostrar === 'object') setShow({ ...show, ...d.mostrar });
+      if (typeof d.enfocar_hoy === 'boolean') setFocusToday(d.enfocar_hoy);
+      if (typeof d.semana === 'number') setWeekShift(Math.max(-52, Math.min(52, Math.round(d.semana))));
+      if (typeof d.abrir === 'string') setOpenId(d.abrir);
+    };
+    window.addEventListener('organiza:ui', onUi);
+    return () => window.removeEventListener('organiza:ui', onUi);
+  });
   const [filter, setFilter] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [panel, setPanel] = useState<'publicar' | 'nuevo' | 'etiquetas' | 'nueva-etiqueta' | null>(null);

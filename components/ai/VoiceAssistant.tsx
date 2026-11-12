@@ -140,6 +140,9 @@ export const VoiceAssistant = forwardRef<
         const r = await authFetch(cloudAI('/api/ai/voice/tool'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: c.name, args, app: APP.slug }) });
         const j = (await r.json().catch(() => ({}))) as { output?: string; error?: string; control?: { instructions: string; tools: unknown[] } | null };
         output = j.output ?? JSON.stringify({ error: j.error ?? 'No se pudo consultar.' });
+        // Lo que el robot quiere hacer en la app (Organiza: «Voy a…: ¿sí?» en pantalla).
+        const acts = (j as { actions?: unknown[] }).actions;
+        if (Array.isArray(acts) && acts.length) window.dispatchEvent(new CustomEvent('mw:ai-actions', { detail: acts }));
         if (c.name === 'mw_control_activate' && j.control) {
           extra.current = j.control;
           setControl(true);
