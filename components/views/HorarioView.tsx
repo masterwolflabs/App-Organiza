@@ -9,6 +9,7 @@ import { useCalendar } from '@/components/calendar/useCalendar';
 import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWeek, type Occurrence } from '@/components/calendar/model';
 import { AlarmClock, Bell, BellRing, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
+import { ColorMenu, tintCss } from '@/components/organiza/ColorMenu';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
@@ -615,6 +616,14 @@ const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
 
 const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; live?: Live | null; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; show?: Fields; onLabel?: (id: string) => void; onPatch?: (p: Partial<Item>) => void; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, live, clash = [], warn, ownTime, mark, move, show = FIELDS_ALL, onLabel, onPatch, onOpen, draggable }) => {
   const [menu, setMenu] = useState<{ kind: 'alarma' | 'categoria'; at: DOMRect } | null>(null);
+  // 🎨 Pintar (Emanuel, 2026-11-12): clic derecho, o mantener 2 s en el celular.
+  const [paint, setPaint] = useState<{ x: number; y: number } | null>(null);
+  const hold = useRef<{ t: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+  const held = useRef(false);
+  const endHold = () => {
+    if (hold.current) clearTimeout(hold.current.t);
+    hold.current = null;
+  };
   const label = labelOf(labels, item.label_id);
   const moved = !move?.off && move?.time && move.time !== item.time;
   const startT = moved ? move!.time! : item.time;
@@ -629,9 +638,23 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
       type="button"
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', item.id)}
-      onClick={() => onOpen(item.id)}
-      className={`relative z-10 block w-full overflow-hidden hz-card rounded-xl text-left ring-1 transition ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
-      style={mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : undefined}
+      onClick={() => {
+        // Después de mantener presionado para pintar, soltar no abre la acción.
+        if (held.current) return void (held.current = false);
+        onOpen(item.id);
+      }}
+      onContextMenu={onPatch ? (e) => { e.preventDefault(); setPaint({ x: e.clientX, y: e.clientY }); } : undefined}
+      onPointerDown={onPatch ? (e) => {
+        if (e.pointerType === 'mouse') return;
+        const x = e.clientX, y = e.clientY;
+        endHold();
+        hold.current = { x, y, t: setTimeout(() => { held.current = true; hold.current = null; navigator.vibrate?.(15); setPaint({ x, y }); }, 2000) };
+      } : undefined}
+      onPointerMove={(e) => { const h = hold.current; if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > 10) endHold(); }}
+      onPointerUp={endHold}
+      onPointerCancel={endHold}
+      className={`relative z-10 block w-full overflow-hidden hz-card rounded-xl text-left ring-1 transition [-webkit-touch-callout:none] ${clash.length || crossed.length || warn ? 'ring-rose-400/60' : 'ring-white/10'} ${mark ? 'ai-mark' : ''}`}
+      style={{ ...tintCss(item.bg_color, item.border_color), ...(mark ? ({ ['--mark' as string]: mark } as React.CSSProperties) : {}) }}
     >
       {show.portada && item.cover_url && <div className="h-16" style={coverCss(item.cover_url)} />}
       <div className="space-y-2 p-3">
@@ -682,6 +705,7 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
                 : [{ key: 'none', label: <span className="text-zinc-400">Aún no tienes categorías: créalas con «+ Nueva»</span>, onPick: () => {} }]}
           />
         )}
+        {paint && onPatch && <ColorMenu x={paint.x} y={paint.y} title={item.title || 'Acción'} bg={item.bg_color} border={item.border_color} onChange={(p) => onPatch(p)} onClose={() => setPaint(null)} />}
         {(show.hora || show.duracion) && (
           <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm tabular-nums text-zinc-400">
             {/* Si ese día se reacomodó, la hora que vale es la nueva (la de siempre queda tachada). */}
@@ -1268,7 +1292,7 @@ const Gallery: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: It
             const m = toMinutes(i.time);
             const l = labelOf(labels, i.label_id);
             return (
-              <button key={i.id} type="button" onClick={() => onOpen(i.id)} className={`overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
+              <button key={i.id} type="button" onClick={() => onOpen(i.id)} className={`overflow-hidden rounded-2xl bg-white/[0.04] text-left ring-1 ring-white/10 hover:bg-white/[0.08] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`} style={tintCss(i.bg_color, i.border_color)}>
                 {show.portada && <div className="flex h-24 items-center justify-center bg-white/[0.04] text-3xl" style={coverCss(i.cover_url)}>{!i.cover_url && <ItemIcon value={i.icon || emojiFor(i.title)} />}</div>}
                 <div className="space-y-1.5 p-3">
                   <p className="truncate font-semibold text-white">{i.title || 'Sin título'}</p>
@@ -1306,7 +1330,7 @@ const ListView: React.FC<ViewProps & { ctx: DayCtx; show: Fields; streak?: (i: I
             return (
               <li key={i.id} className="border-b border-white/5 last:border-0">
                 {head && show.partes && <p className="px-4 pb-0.5 pt-2"><PartTag k={part} /></p>}
-                <button type="button" onClick={() => onOpen(i.id)} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`}>
+                <button type="button" onClick={() => onOpen(i.id)} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] ${toneOf(ctx, g.date, g.s0, m, m + i.minutes)}`} style={{ ...(i.bg_color ? { backgroundImage: `linear-gradient(${i.bg_color}47, ${i.bg_color}47)` } : {}), ...(i.border_color ? { boxShadow: `inset 3px 0 0 ${i.border_color}` } : {}) }}>
                   {show.hora && <span className="w-12 shrink-0 text-sm font-bold tabular-nums text-white">{i.time}</span>}
                   <span className="min-w-0 flex-1 truncate text-white"><ItemIcon value={i.icon || emojiFor(i.title)} /> {i.title}</span>
                   {show.duracion && <span className="hidden shrink-0 text-xs tabular-nums text-zinc-400 sm:inline">hasta {toTime((m + i.minutes) % 1440)} · {i.minutes} min</span>}

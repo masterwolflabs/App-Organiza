@@ -75,6 +75,9 @@ export type Item = {
   phone_focus?: boolean;
   /** El modo focus se abre solo a la hora de la acción (con la app abierta). */
   auto_focus?: boolean;
+  /** Color de fondo y de borde de la tarjeta (clic derecho → pintar; SQL 39). «#rrggbb» o null. */
+  bg_color?: string | null;
+  border_color?: string | null;
 };
 export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; started?: boolean; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada' } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
