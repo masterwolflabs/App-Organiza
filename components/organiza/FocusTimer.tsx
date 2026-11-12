@@ -4,6 +4,7 @@ import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
 import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucide-react';
 import { desktop } from '@/lib/desktop';
+import { SleepLog } from '@/components/organiza/SleepLog';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { YouTubeList } from '@/components/organiza/YouTubeList';
 import { coverCss, honesty, iso, refOf, type Item } from '@/components/organiza/model';
@@ -169,6 +170,15 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
             <div className="relative mx-auto mt-5 max-w-md">
               <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} volume={music?.volume ?? 100} />
             </div>
+          )}
+          {/* 😴 «¿Cómo dormiste?» en el focus de la mañana (Daily dormir-detectado): queda en la tarea Dormir. */}
+          {/levantar/i.test(item.title) && (
+            <details className="mx-auto mt-5 max-w-md rounded-2xl bg-white/[0.05] p-3 text-left ring-1 ring-white/10" open>
+              <summary className="cursor-pointer text-sm font-semibold text-white">😴 ¿Cómo dormiste? <span className="font-normal text-zinc-400">· 1 minuto</span></summary>
+              <div className="mt-3">
+                <SleepLog checks={checks} compact />
+              </div>
+            </details>
           )}
         </div>
 

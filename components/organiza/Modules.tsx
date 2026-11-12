@@ -13,6 +13,7 @@ import { PlanLink } from '@/components/organiza/Planner';
 import { slotFor } from '@/components/organiza/plan';
 import { fmtSeconds, parseYouTube, toSeconds } from '@/components/organiza/YouTubeList';
 import type { useChecks } from '@/components/organiza/useHorario';
+import { SleepLog } from '@/components/organiza/SleepLog';
 
 type Props = { item: Item; modules: Module[]; checks: ReturnType<typeof useChecks>; onChange: (m: Module[]) => void; weekdays?: number[] };
 const input = 'w-full min-w-0 rounded-md bg-transparent px-1.5 py-1 text-sm text-white outline-none focus:bg-white/[0.06]';
@@ -41,6 +42,13 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange, week
   const shown = drag ? moveItem(modules, drag.from, drag.to) : modules;
   return (
     <div ref={list} className="space-y-3">
+      {/* Dormir de antes (sin módulo de sueño): igual trae su registro. */}
+      {item.block === 'sueno' && !modules.some((m) => m.type === 'sueno') && (
+        <div className="rounded-2xl bg-white/[0.03] p-3 ring-1 ring-white/10">
+          <p className="mb-2 text-sm font-semibold text-white">😴 Mi sueño</p>
+          <SleepLog item={item} checks={checks} bedDefault={item.time} />
+        </div>
+      )}
       {shown.map((m) => (
         <Box
           key={m.id}
@@ -52,7 +60,7 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange, week
           extra={<button type="button" aria-label={`Quitar ${m.title}`} onClick={() => onChange(modules.filter((x) => x.id !== m.id))} className="rounded p-1 text-zinc-500 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>}
         >
           {(m.type === 'habitos' || m.type === 'reglas') && <Habits item={item} m={m} checks={checks} patch={(p) => patch(m.id, p)} />}
-          {m.type === 'sueno' && <Sleep item={item} checks={checks} />}
+          {m.type === 'sueno' && <SleepLog item={item} checks={checks} bedDefault={/dormir|acostar/i.test(item.title) ? item.time : undefined} />}
           {m.type === 'youtube' && <YouTubeEditor m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'alimentacion' && <PlanLink kind="meals" weekdays={weekdays?.length ? weekdays : [item.weekday]} slot={slotFor(item.title)} />}
           {m.type === 'entrenamiento' && <PlanLink kind="workouts" weekdays={weekdays?.length ? weekdays : [item.weekday]} />}
@@ -129,40 +137,6 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
       <form className="mt-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !habits.includes(text.trim())) { patch({ habits: [...habits, text.trim()] }); setText(''); } }}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder={m.type === 'reglas' ? 'Agregar regla' : 'Agregar paso'} className={`${input} text-zinc-300`} />
       </form>
-    </>
-  );
-};
-
-const hours = (bed?: string, wake?: string) => {
-  if (!bed || !wake) return null;
-  const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-  return Math.round((((m(wake) - m(bed) + 1440) % 1440) / 60) * 10) / 10;
-};
-
-const Sleep: React.FC<{ item: Item; checks: Props['checks'] }> = ({ item, checks }) => {
-  const today = iso(new Date());
-  const ref = refOf(item.title);
-  const mine = checks.checks.filter((c) => c.ref === ref && c.value.bed && c.value.wake).sort((a, b) => a.day.localeCompare(b.day)).slice(-14);
-  const check = checks.checks.find((c) => c.ref === ref && c.day === today);
-  const set = (p: { bed?: string; wake?: string }) => checks.mark(item.title, today, check?.done ?? false, { ...check?.value, ...p });
-  const avg = mine.length ? Math.round((mine.reduce((s, c) => s + (hours(c.value.bed, c.value.wake) ?? 0), 0) / mine.length) * 10) / 10 : null;
-  return (
-    <>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-zinc-400">Me acosté<input type="time" value={check?.value.bed ?? ''} onChange={(e) => set({ bed: e.target.value })} className="mt-1 w-full rounded-lg bg-white/[0.05] px-2 py-1.5 text-sm text-white ring-1 ring-white/10" /></label>
-        <label className="text-xs text-zinc-400">Me levanté<input type="time" value={check?.value.wake ?? ''} onChange={(e) => set({ wake: e.target.value })} className="mt-1 w-full rounded-lg bg-white/[0.05] px-2 py-1.5 text-sm text-white ring-1 ring-white/10" /></label>
-      </div>
-      {mine.length > 0 && (
-        <>
-          <div className="mt-3 flex h-16 items-end gap-1" aria-label={`Promedio ${avg} horas`}>
-            {mine.map((c) => {
-              const h = hours(c.value.bed, c.value.wake) ?? 0;
-              return <span key={c.day} title={`${c.day}: ${h} h`} className="flex-1 rounded-t bg-sky-400/70" style={{ height: `${Math.min(100, (h / 10) * 100)}%` }} />;
-            })}
-          </div>
-          <p className="mt-1 text-xs text-zinc-500">Promedio: {avg} horas por noche</p>
-        </>
-      )}
     </>
   );
 };

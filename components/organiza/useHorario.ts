@@ -260,8 +260,10 @@ export function useHorario() {
     const have = items.filter((i) => i.schedule_id === id && i.block === 'sueno');
     for (const d of ALL_DAYS) {
       const it = have.find((i) => i.weekday === d);
-      if (it) await db.update('organiza_items', { id: it.id }, { time: sleep.bed, minutes });
-      else await db.insert('organiza_items', { schedule_id: id, weekday: d, sort: 0, time: sleep.bed, minutes, title: 'Dormir', icon: '😴', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [], flex: 'obligatorio', category: 'personal', priority: 1, block: 'sueno' });
+      // La tarea Dormir trae su registro del sueño (Daily dormir-detectado, 2026-11-12).
+      const sleepModule = { id: crypto.randomUUID(), type: 'sueno' as const, title: 'Mi sueño' };
+      if (it) await db.update('organiza_items', { id: it.id }, { time: sleep.bed, minutes, ...(it.modules?.some((m) => m.type === 'sueno') ? {} : { modules: [sleepModule, ...(it.modules ?? [])] }) });
+      else await db.insert('organiza_items', { schedule_id: id, weekday: d, sort: 0, time: sleep.bed, minutes, title: 'Dormir', icon: '😴', cover_url: null, stage: 'sin_empezar', progress: 0, label_id: null, description: '', alarm: 'no', alarm_before: 0, focus: false, modules: [sleepModule], flex: 'obligatorio', category: 'personal', priority: 1, block: 'sueno' });
     }
     await load();
   }, [db, items, load, patchSchedule]);
