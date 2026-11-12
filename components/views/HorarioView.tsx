@@ -10,6 +10,8 @@ import { addDays, colorOf, expand, fmtTime, KINDS, minutesOf, sameDay, startOfWe
 import { AlarmClock, Bell, BellRing, ChevronLeft, ChevronRight, Sparkles, Target, TriangleAlert, Zap, Undo2, Redo2, CalendarDays, PauseCircle, Check as CheckIcon, ChevronDown, Copy, FileUp, Focus, ImagePlus, Moon, LayoutGrid, List, Plus, Rows3, Send, Tags, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ColorMenu, tintCss } from '@/components/organiza/ColorMenu';
+import { useWeather } from '@/components/organiza/useWeather';
+import { hintFor, sceneOf, weatherEmoji, weatherLabel } from '@/utils/weather';
 import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
@@ -43,6 +45,8 @@ export const HorarioView: React.FC = () => {
   const [weekShift, setWeekShift] = useState(0);
   // Desplegable de acciones del horario (Emanuel, 2026-11-12).
   const [actionsOpen, setActionsOpen] = useState(false);
+  // 🌤️ Clima real: pastilla con los grados junto al nombre (abre Tiempo).
+  const wx = useWeather().here;
   const clockDay = iso(clock);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const weekStart = useMemo(() => addDays(startOfWeek(appNow()), weekShift * 7), [weekShift, clockDay]);
@@ -276,6 +280,13 @@ export const HorarioView: React.FC = () => {
           onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && h.patchSchedule(s.id, { name: e.target.value.trim() })}
           className="w-full min-w-0 rounded-lg bg-transparent font-display sm:w-auto sm:flex-1 text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
         />
+        {wx && (
+          <a href="#tiempo" data-help={`${weatherLabel(wx.now.code)} en ${wx.place.name} · sensación ${Math.round(wx.now.feels)}° · toca para ver el Tiempo`} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/[0.1]">
+            <span className="text-lg leading-none">{weatherEmoji(wx.now.code, wx.now.day)}</span>
+            <span className="tabular-nums">{Math.round(wx.now.temp)}°</span>
+            <span className="hidden text-xs font-normal text-zinc-400 sm:inline">{wx.place.name}</span>
+          </a>
+        )}
         {h.schedules.length > 1 && (
           <div className="relative">
             <select aria-label="Elegir horario" value={s.id} onChange={(e) => h.choose(e.target.value)} className="appearance-none rounded-xl bg-white/[0.05] py-2 pl-3 pr-8 text-sm text-zinc-200 ring-1 ring-white/10">
@@ -614,7 +625,7 @@ const StreakChip: React.FC<{ streak: Streak }> = ({ streak }) => {
   );
 };
 
-const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?: Streak; live?: Live | null; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; show?: Fields; onLabel?: (id: string) => void; onPatch?: (p: Partial<Item>) => void; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, crossed = [], streak, live, clash = [], warn, ownTime, mark, move, show = FIELDS_ALL, onLabel, onPatch, onOpen, draggable }) => {
+const Card: React.FC<{ item: Item; labels: Label[]; weather?: { emoji: string; text: string } | null; crossed?: string[]; streak?: Streak; live?: Live | null; clash?: Occurrence[]; warn?: string; ownTime?: boolean; mark?: string; move?: { time?: string; off?: boolean }; show?: Fields; onLabel?: (id: string) => void; onPatch?: (p: Partial<Item>) => void; onOpen: (id: string) => void; draggable?: boolean }> = ({ item, labels, weather, crossed = [], streak, live, clash = [], warn, ownTime, mark, move, show = FIELDS_ALL, onLabel, onPatch, onOpen, draggable }) => {
   const [menu, setMenu] = useState<{ kind: 'alarma' | 'categoria'; at: DOMRect } | null>(null);
   // 🎨 Pintar (Emanuel, 2026-11-12): clic derecho, o mantener 2 s en el celular.
   const [paint, setPaint] = useState<{ x: number; y: number } | null>(null);
@@ -678,6 +689,13 @@ const Card: React.FC<{ item: Item; labels: Label[]; crossed?: string[]; streak?:
             {item.alarm === 'notificacion' && <Chip color="#38bdf8" icon={Bell} help="Te llega una notificación">Aviso</Chip>}
             {item.alarm === 'no' && onPatch && <Ghost help="Ponerle aviso o alarma" onPick={(at) => setMenu({ kind: 'alarma', at })}>Alarma</Ghost>}
           </div>
+        )}
+        {weather && (
+          <span className="flex" data-help={`Clima a esa hora: ${weather.text}`}>
+            <Pill color="#38bdf8">
+              {weather.emoji} {weather.text}
+            </Pill>
+          </span>
         )}
         {(issues.length > 0 || ownTime || move?.off || moved) && (
           <div className="flex flex-col items-start gap-1.5">
@@ -837,6 +855,8 @@ const PartsForm: React.FC<{ value: Parts; onSave: (p: Parts) => void }> = ({ val
  * cada casilla lleva el degradado de esa hora y al fondo hay un sol, nubes o la luna según la hora.
  */
 const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; status?: (i: Item) => Status; weekStart?: Date; occ?: Occurrence[]; planOf?: (d: Date) => DayPlan | null; onApply?: (date: Date, p: { moves: Moves; extras?: Extra[] }) => void; onUndo?: () => void; markOf?: (id: string) => string | undefined; dayStart?: string; focusToday?: boolean; parts?: Parts; show?: Fields; onLabel?: (id: string) => void; onPatch?: (i: Item, p: Partial<Item>) => void; onAdd: (d: number, time?: string) => void; onMove: (id: string, d: number) => void }> = ({ items, labels, streak, status, weekStart, occ = [], planOf, onApply, onUndo, markOf, dayStart = 'h:00:00', focusToday = false, parts = PARTS_DEFAULT, show = FIELDS_ALL, onLabel, onPatch, onOpen, onAdd, onMove }) => {
+  // 🌤️ Aviso del clima por tarjeta (el pronóstico por hora alcanza 10 días).
+  const wxBoard = useWeather().here;
   // Franjas plegadas o abiertas a mano. Sin tocar: si la semana es esta, se pliega lo que ya pasó hoy.
   const [fold, setFold] = useState<Partial<Record<PartKey, boolean>>>({});
   // Una acción con hora distinta algunos días: esos días llevan «🕐 Hora propia» (la hora más común es la normal).
@@ -1033,7 +1053,7 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
                                       <div key={e.key} className={live?.label === '⏳ Atrasada' ? '' : x.tone(e)}>
                                         {e.kind === 'ev' ? evChip(e.o) : e.kind === 'extra' ? <ExtraCard x={e.x} /> : (() => {
                                           const i = e.i;
-                                          return <Card item={i} labels={labels} crossed={[...new Set(overlaps(dayItems.filter((y) => y.id !== i.id && !plan?.moves?.[y.id]?.off).map((y) => ({ ...y, time: plan?.moves?.[y.id]?.time ?? y.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((y) => y.title))]} streak={streak?.(i, x.date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((y) => y.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onPatch={onPatch ? (p) => onPatch(i, p) : undefined} onOpen={onOpen} draggable />;
+                                          return <Card item={i} labels={labels} weather={x.date ? hintFor(wxBoard, iso(x.date), plan?.moves?.[i.id]?.time ?? i.time) : null} crossed={[...new Set(overlaps(dayItems.filter((y) => y.id !== i.id && !plan?.moves?.[y.id]?.off).map((y) => ({ ...y, time: plan?.moves?.[y.id]?.time ?? y.time })), plan?.moves?.[i.id]?.time ?? i.time, i.minutes).map((y) => y.title))]} streak={streak?.(i, x.date ?? undefined)} live={live} clash={plan?.moves?.[i.id]?.off ? [] : clashes({ ...i, time: plan?.moves?.[i.id]?.time ?? i.time }, dayOcc)} move={plan?.moves?.[i.id]} ownTime={usual(i)} mark={markOf?.(i.id)} warn={morning?.items.some((y) => y.id === i.id) ? `Levántate antes: ${morning.event.ev.title} es a las ${fmtTime(morning.event.start)}` : undefined} show={show} onLabel={onLabel} onPatch={onPatch ? (p) => onPatch(i, p) : undefined} onOpen={onOpen} draggable />;
                                         })()}
                                       </div>
                                     );
@@ -1075,6 +1095,9 @@ const Board: React.FC<ViewProps & { streak?: (i: Item, date?: Date) => Streak; s
  * y las estrellas titilan.
  */
 const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
+  // Clima real (Emanuel, 2026-11-12): encima de la escena de la hora va el clima de verdad.
+  const wx = useWeather().here;
+  const scene = wx ? sceneOf(wx.now.code, wx.now.temp) : null;
   const n = useAppNow();
   const min = n.getHours() * 60 + n.getMinutes();
   const k = partOf(min, parts);
@@ -1107,6 +1130,8 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
           {/* Todo se desvanece hacia los bordes del dibujo: así nada queda cortado en una línea recta. */}
           <radialGradient id="hz-fade-g" cx="65%" cy="50%" r="62%"><stop offset="55%" stopColor="#fff" /><stop offset="100%" stopColor="#000" /></radialGradient>
           <mask id="hz-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="260"><rect width="400" height="260" fill="url(#hz-fade-g)" /></mask>
+          <radialGradient id="hz-calor" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#fde047" /><stop offset="40%" stopColor="#fb923c" stopOpacity=".55" /><stop offset="100%" stopColor="#f97316" stopOpacity="0" /></radialGradient>
+          <linearGradient id="hz-sol-calor" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fef08a" /><stop offset="100%" stopColor="#f59e0b" /></linearGradient>
         </defs>
 
         {/* 🌅 Amanecer: el sol saliendo por el horizonte, con rayos y nubecitas rosadas. */}
@@ -1159,6 +1184,61 @@ const SkyDecor: React.FC<{ parts: Parts }> = ({ parts }) => {
             <circle cx="292" cy="112" r="5" fill="#a5b4fc" />
             <circle cx="286" cy="84" r="3.5" fill="#a5b4fc" />
             {stars([[110, 40, 2.2], [150, 90, 1.4], [190, 30, 1.8], [210, 160, 1.5], [130, 170, 2], [350, 40, 1.6], [370, 150, 2.2], [330, 200, 1.4], [175, 210, 1.7], [90, 120, 1.5], [240, 220, 1.3], [380, 90, 1.5]], '#a5b4fc')}
+          </g>
+        )}
+        {/* 🌤️ El clima de ahora (Open-Meteo), encima de la escena de la hora. */}
+        {scene && (
+          <g mask="url(#hz-fade)">
+            {scene === 'calor' && k !== 'noche' && k !== 'madrugada' && (
+              <>
+                <circle className="hz-glow" cx="285" cy="95" r="150" fill="url(#hz-calor)" />
+                <g className="hz-rays" stroke="#fbbf24" strokeWidth="4" strokeLinecap="round" opacity=".85">
+                  {Array.from({ length: 12 }, (_, m) => {
+                    const a = (m * Math.PI) / 6;
+                    return <line key={m} x1={285 + Math.cos(a) * 58} y1={95 + Math.sin(a) * 58} x2={285 + Math.cos(a) * 86} y2={95 + Math.sin(a) * 86} />;
+                  })}
+                </g>
+                <circle cx="285" cy="95" r="46" fill="url(#hz-sol-calor)" />
+              </>
+            )}
+            {scene === 'parcial' && (
+              <>
+                {cloud(250, 120, 1.1, 0.85, '#f1f5f9')}
+                {cloud(330, 150, 0.8, 0.75, '#e2e8f0')}
+              </>
+            )}
+            {['nublado', 'llovizna', 'lluvia', 'tormenta', 'nieve'].includes(scene) && (
+              <>
+                <rect width="400" height="260" fill={scene === 'tormenta' ? '#1e1b4b' : '#64748b'} opacity={scene === 'tormenta' ? 0.35 : 0.18} />
+                {cloud(190, 95, 1.3, 0.9, scene === 'tormenta' ? '#475569' : '#94a3b8')}
+                {cloud(290, 75, 1.6, 0.92, scene === 'tormenta' ? '#334155' : '#cbd5e1')}
+                {cloud(360, 120, 1.1, 0.85, scene === 'tormenta' ? '#475569' : '#94a3b8')}
+              </>
+            )}
+            {['llovizna', 'lluvia', 'tormenta'].includes(scene) && (
+              <g className="hz-rain" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" opacity=".8">
+                {Array.from({ length: scene === 'llovizna' ? 10 : 18 }, (_, m) => {
+                  const x = 170 + ((m * 37) % 220);
+                  const y = 110 + ((m * 23) % 60);
+                  return <line key={m} x1={x} y1={y} x2={x - 4} y2={y + 14} style={{ animationDelay: `${(m * 0.13) % 0.9}s` }} />;
+                })}
+              </g>
+            )}
+            {scene === 'nieve' && (
+              <g className="hz-snow" fill="#f8fafc">
+                {Array.from({ length: 16 }, (_, m) => (
+                  <circle key={m} cx={170 + ((m * 41) % 220)} cy={115 + ((m * 19) % 60)} r={2 + (m % 3)} style={{ animationDelay: `${(m * 0.31) % 2.4}s` }} />
+                ))}
+              </g>
+            )}
+            {scene === 'tormenta' && <polyline className="hz-bolt" points="300,110 284,150 298,150 280,195" fill="none" stroke="#fde047" strokeWidth="5" strokeLinejoin="round" />}
+            {scene === 'niebla' && (
+              <g fill="#e2e8f0" opacity=".45">
+                <rect x="120" y="120" width="260" height="14" rx="7" />
+                <rect x="150" y="146" width="230" height="12" rx="6" />
+                <rect x="100" y="170" width="280" height="12" rx="6" />
+              </g>
+            )}
           </g>
         )}
       </svg>

@@ -741,4 +741,11 @@ select:not([multiple]):not([size]).rounded-full { background-position: right 1re
 @keyframes hz-star { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 .hz-rays { transform-box: view-box; transform-origin: 270px 205px; animation: hz-rays 6s ease-in-out infinite; }
 @keyframes hz-rays { 0%, 100% { opacity: .45; transform: scale(.95); } 50% { opacity: .9; transform: scale(1.05); } }
-@media (prefers-reduced-motion: reduce) { .hz-star, .hz-rays { animation: none; } }
+/* Clima real en el cielo del Horario (2026-11-12): lluvia, nieve y rayo. */
+.hz-rain line { animation: hz-rain .9s linear infinite; }
+@keyframes hz-rain { 0% { transform: translateY(-8px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(26px); opacity: 0; } }
+.hz-snow circle { animation: hz-snow 2.4s linear infinite; }
+@keyframes hz-snow { 0% { transform: translateY(-6px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(30px); opacity: 0; } }
+.hz-bolt { animation: hz-bolt 4s ease-in-out infinite; }
+@keyframes hz-bolt { 0%, 88%, 100% { opacity: 0; } 90%, 94% { opacity: 1; } 92% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .hz-star, .hz-rays, .hz-rain line, .hz-snow circle, .hz-bolt { animation: none; } }

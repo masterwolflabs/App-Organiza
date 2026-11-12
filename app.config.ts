@@ -2,7 +2,7 @@
  * ⚙️ CONFIGURACIÓN DE LA APP — lo primero que se cambia al crear una app nueva
  * desde la plantilla. Todo lo que dice "Mi App" sale de aquí.
  */
-import { Bell, CalendarDays, CalendarClock, CalendarRange, Database, Dumbbell, ListChecks, ListTodo, Plug, Sun, Trophy, Utensils } from 'lucide-react';
+import { Bell, CloudSun, CalendarDays, CalendarClock, CalendarRange, Database, Dumbbell, ListChecks, ListTodo, Plug, Sun, Trophy, Utensils } from 'lucide-react';
 import type { AccentId } from '@/utils/appearance';
 
 export const APP = {
@@ -33,6 +33,7 @@ export const SECTIONS = [
   { key: 'inicio', label: 'Hoy', icon: Sun, dock: true },
   { key: 'calendario', label: 'Calendario', icon: CalendarDays, dock: true },
   { key: 'horario', label: 'Horario', icon: CalendarClock, dock: true },
+  { key: 'tiempo', label: 'Tiempo', icon: CloudSun, dock: false },
   { key: 'daily', label: 'Daily', icon: ListTodo, dock: false },
   { key: 'alimentacion', label: 'Alimentación', icon: Utensils, dock: false },
   { key: 'entrenamiento', label: 'Entrenamiento', icon: Dumbbell, dock: false },

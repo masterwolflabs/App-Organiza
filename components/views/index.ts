@@ -18,6 +18,7 @@ import { ConexionesView } from '@/components/views/ConexionesView';
 import { ConceptosView } from '@/components/views/ConceptosView';
 import { AlimentacionView, EntrenamientoView } from '@/components/organiza/Planner';
 import { AvisosView } from '@/components/views/AvisosView';
+import { TiempoView } from '@/components/views/TiempoView';
 
 export type ViewProps = { onOpenSettings: () => void; onOpenCloud: () => void };
 
@@ -25,6 +26,7 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   inicio: HoyView,
   calendario: CalendarioView,
   horario: HorarioView,
+  tiempo: TiempoView,
   acomodar: AcomodarView,
   bases: BasesView,
   daily: DailyPage,

@@ -159,3 +159,9 @@ Clic derecho en una tarjeta del Tablero (o mantener 2 s en el celular) → `comp
 
 ## Autofocus: solo deja de abrirse si TÚ lo cierras (Emanuel, 2026-11-12)
 «No se activó el de la mañana» (Levantarse 09:00, «Abrirse solo»). Hueco: `AutoFocus.tsx` lo marcaba «abierto hoy» en localStorage al ABRIRSE; si la página se recargaba (actualización, Chrome) el focus desaparecía y no volvía. Ahora la marca `organiza-autofocus-closed:<acción>:<día>` se pone solo al cerrar / terminar / pasar a la siguiente acción; mientras está abierto, la pestaña que lo muestra deja un latido (`organiza-autofocus-open:…`, 40 s) para que otra pestaña no lo duplique. Sigue necesitando Organiza abierta y el equipo despierto: con el Mac dormido o Chrome cerrado no corre (lo cubre la app de Mac + la ⏰ alarma del sistema).
+
+## 🌤️ Clima real + pestaña Tiempo (Emanuel, 2026-11-12)
+- Datos: Open-Meteo (gratis, sin llave) en `utils/weather.ts`: actual, por hora y 10 días; caché 15 min (localStorage); códigos WMO → escena / emoji / texto; `hintFor` = aviso por hora (⛈️ tormenta, 🌂 lluvia ≥50 %, 🥵 ≥30°, 🧴 UV ≥7 de día, 🧥 ≤8°).
+- `components/organiza/useWeather.ts`: una sola carga compartida. Ubicación: GPS (permiso una vez) o ciudad de respaldo (por defecto Santiago); ciudades guardadas y respaldo en `organiza_prefs.weather` (SQL 40). Se refresca cada 15 min.
+- Horario: el cielo (`SkyDecor`) dibuja encima el clima de ahora (sol fuerte con calor, nubes, lluvia, nieve, rayo, niebla); pastilla «☀️ 31° Santiago» junto al nombre → `#tiempo`; cada tarjeta del Tablero lleva su aviso del clima a su hora.
+- Sección **Tiempo** (`TiempoView.tsx`): estructura de la app Tiempo de Apple con el diseño de Organiza — ciudad, temperatura gigante, estado, máx/mín, sensación; por hora (24 h); 10 días con barra de rango; «Hoy en tu horario» (avisos para lo que queda del día); salida/puesta del sol; varias ciudades (+ Ciudad, ✕), ciudad de respaldo y «Usar mi ubicación».
