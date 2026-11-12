@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import { McAvatar } from '@/components/calendar/McAvatar';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
 import { DailyBoard } from '@/components/daily/DailyBoard';
+import { BulkBar } from '@/components/daily/BulkBar';
 import { DailyManual } from '@/components/daily/DailyManual';
 import { DocStoreProvider, useDocStore } from '@/components/daily/docStore';
 import { useTableViewsStore } from '@/components/tables/viewsStore';
@@ -280,6 +281,11 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [writing, setWriting] = useState<string | null>(null);
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
+  // Acciones múltiples (Emanuel, 2026-11-12): marcar varias tareas y cambiarlas / archivarlas / borrarlas juntas.
+  const [sel, setSel] = useState<string[]>([]);
+  const toggleSel = (id: string) => setSel((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
+  const patchMany = (p: Partial<DailyTask> | ((t: DailyTask) => Partial<DailyTask>)) =>
+    save(fresh().tasks.map((t) => (sel.includes(t.id) ? { ...t, ...(typeof p === 'function' ? p(t) : p), by: null, byAt: null } : t)));
   const isNew = React.useCallback((t: DailyTask) => newIds.includes(t.id) || t.title === 'Nueva tarea', [newIds]);
   // A new task takes the filters on screen, so it appears right there (like Notion).
   const filters = React.useRef<Filter[]>([]);
@@ -408,6 +414,14 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
             setRowMenu({ x: e.clientX, y: e.clientY, t });
           }}
         >
+          <input
+            type="checkbox"
+            checked={sel.includes(t.id)}
+            onChange={() => toggleSel(t.id)}
+            aria-label="Seleccionar tarea"
+            data-help="Marca varias para cambiarlas, archivarlas o borrarlas juntas"
+            className={`mt-1 h-3.5 w-3.5 shrink-0 cursor-pointer accent-sky-500 ${sel.length || sel.includes(t.id) ? '' : 'opacity-0 group-hover/row:opacity-100 focus:opacity-100'}`}
+          />
           <Editable label="Nombre" value={t.title} noConfirm required autoEdit={writing === t.id} placeholder="Nueva tarea" onEditEnd={() => setWriting(null)} onSave={async (v) => patch(t.id, { title: String(v ?? '').trim() || t.title })}>
             <b className={`line-clamp-2 font-semibold text-white ${t.status === 'listo' ? 'line-through opacity-60' : ''}`}>{t.title}</b>
           </Editable>
@@ -535,6 +549,32 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
             { label: rowMenu.t.archived ? 'Desarchivar' : 'Archivar', icon: rowMenu.t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />, onClick: () => actions.onArchive(rowMenu.t) },
             { label: 'Borrar', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => actions.onDelete(rowMenu.t) },
           ]}
+        />
+      )}
+      {sel.length > 0 && (
+        <BulkBar
+          count={sel.length}
+          archivedView={showArchived}
+          statusOptions={statusOptions}
+          tagOptions={opt(TAG_INFO)}
+          appOptions={apps.map((a) => ({ value: a, label: a }))}
+          appLabel={labs ? 'Aplicación' : 'Área'}
+          entities={entities}
+          onCreatePerson={createPerson}
+          onClear={() => setSel([])}
+          onPatch={(p) => patchMany(p)}
+          onExecutor={(name, mode) => patchMany((t) => ({ executors: mode === 'reemplazar' ? [name] : t.executors.includes(name) ? t.executors : [...t.executors, name] }))}
+          onArchive={() => {
+            patchMany({ archived: !showArchived });
+            setSel([]);
+          }}
+          onDelete={async () => {
+            const n = sel.length;
+            if (!(await confirm({ title: `¿Borrar ${n} tarea${n === 1 ? '' : 's'}?`, message: 'Se quitan de la Daily para siempre. Si solo quieres sacarlas de la vista, mejor archívalas. Sus páginas quedan en Notas.', confirmLabel: 'Borrar', tone: 'danger' }))) return;
+            if (!(await confirm({ title: '¿Estás seguro?', message: 'No se puede deshacer.', confirmLabel: 'Sí, borrar', tone: 'danger' }))) return;
+            save(fresh().tasks.filter((x) => !sel.includes(x.id)));
+            setSel([]);
+          }}
         />
       )}
       {!showArchived && !compact && labs && <DailyManual entities={entities} photoOf={photoOf} onCreatePerson={createPerson} />}

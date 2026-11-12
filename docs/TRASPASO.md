@@ -147,3 +147,6 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 - Botón ✨ IA en Horario y Calendario → `components/organiza/AIPanel.tsx` (panel al lado; manda `screen` con fecha/hora local y horario abierto).
 - Nube `tools/organiza.ts`: `horario_crear_tareas`, `horario_editar_tareas`, `horario_borrar_tareas`, `dia_reacomodar`, `horarios_gestionar`, `get_calendario`, `calendario_guardar_evento`, `calendario_borrar_evento`. No escriben: dejan `metadata.actions`.
 - `components/organiza/aiExecutor.ts` ejecuta las acciones con `useHorario`/`useCalendar` (en vivo); todo va en `h.batch` = un solo ↶. Borrar pide confirmación.
+
+## Daily · Acciones múltiples (Emanuel, 2026-11-12)
+Casilla al pasar el mouse por el nombre de la tarea (queda visible mientras haya algo marcado). Con una o más marcadas aparece `components/daily/BulkBar.tsx` abajo al centro: Estado · Traspasar a (aplicación/área) · Etiqueta · Ejecutor (reemplaza) · + Ejecutor (suma) · Entrega · Archivar/Desarchivar · Borrar (dos confirmaciones) · ✕ quita la selección. Todo pasa por `patchMany` en `DailyView.tsx` (siempre sobre la lista más fresca; quita el 🤖).
