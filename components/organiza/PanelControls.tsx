@@ -260,6 +260,7 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
                 <span className="flex w-4 shrink-0 justify-center text-sky-400">{sel === s.id && <Check className="h-4 w-4" />}</span>
                 <span className="truncate">{s.label}</span>
                 {s.custom && <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 text-[10px] font-semibold text-sky-200">🎵 Tuyo</span>}
+                {s.team && <span className="shrink-0 rounded-full bg-violet-500/15 px-1.5 text-[10px] font-semibold text-violet-200" data-help="Sonido del equipo Master Wolf (Epidemic Sound)">🎧 Equipo</span>}
                 {s.id === factoryDefault && <span className="ml-auto shrink-0 text-xs text-zinc-500">Predeterminado</span>}
               </button>
               {manage && s.custom && (

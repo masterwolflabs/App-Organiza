@@ -150,3 +150,6 @@ Secciones `alimentacion` y `entrenamiento` (menú lateral): `components/organiza
 
 ## Daily · Acciones múltiples (Emanuel, 2026-11-12)
 Casilla al pasar el mouse por el nombre de la tarea (queda visible mientras haya algo marcado). Con una o más marcadas aparece `components/daily/BulkBar.tsx` abajo al centro: Estado · Traspasar a (aplicación/área) · Etiqueta · Ejecutor (reemplaza) · + Ejecutor (suma) · Entrega · Archivar/Desarchivar · Borrar (dos confirmaciones) · ✕ quita la selección. Todo pasa por `patchMany` en `DailyView.tsx` (siempre sobre la lista más fresca; quita el 🤖).
+
+## Sonidos del equipo · Epidemic (Emanuel, 2026-11-12)
+8 alarmas + 47 notificaciones que bajó Emanuel (Escritorio/MasterCloud/Organiza/Sonidos). NO están en el repo (es público y tienen licencia): bucket privado `organiza-sounds/equipo/<kind>/` + tabla `organiza_team_sounds` (SQL 37), lectura solo `is_mw_member()`. `customSounds.ts` → `registerTeam()` firma links por 1 día; `sounds.ts` → `setTeamSounds` (ids `e:<uuid>`, entre los propios y los de fábrica; solo el elegido se baja al tiro). En la lista llevan «🎧 Equipo»; se ocultan con ✕ como cualquiera. Nombres en español puestos por Claude (Logro 1, Correo nuevo 2…). Para agregar más: subir a `equipo/` + fila en la tabla (requiere llave de servicio o un botón de subida, pendiente).

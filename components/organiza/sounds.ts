@@ -5,7 +5,7 @@
  */
 type Note = [freq: number, seconds: number, wave?: OscillatorType];
 /** De fábrica (`phrase`, sintetizado aquí) o propio de la persona (`url`, archivo subido; id «u:<uuid>»). */
-export type Sound = { id: string; label: string; phrase: Note[]; gap: number; url?: string; custom?: boolean };
+export type Sound = { id: string; label: string; phrase: Note[]; gap: number; url?: string; custom?: boolean; /** Del equipo (Epidemic, bucket privado; id «e:<uuid>»). */ team?: boolean };
 
 export const ALARM_SOUNDS: Sound[] = [
   { id: 'amanecer', label: 'Amanecer', phrase: [[523, 0.18], [659, 0.18], [784, 0.18], [1046, 0.35]], gap: 0.5 },
@@ -34,6 +34,15 @@ export type SoundKind = 'alarma' | 'notificacion';
  * y quedan aquí registrados. Van arriba en la lista, antes que los de fábrica.
  */
 const custom: Record<SoundKind, Sound[]> = { alarma: [], notificacion: [] };
+/** Sonidos del equipo (Emanuel, 2026-11-12): Epidemic, solo cuentas Master Wolf (SQL 37). Van entre los propios y los de fábrica. */
+const team: Record<SoundKind, Sound[]> = { alarma: [], notificacion: [] };
+export function setTeamSounds(k: SoundKind, list: { id: string; label: string; url: string }[]) {
+  team[k] = list.map((x) => ({ id: x.id, label: x.label, url: x.url, phrase: [], gap: 0.4, team: true }));
+  // Solo el elegido se baja al tiro (para que la alarma suene sin espera); los demás, al probarlos.
+  const chosen = team[k].find((x) => x.id === getSound(k));
+  if (chosen) void bufferOf(chosen);
+  listeners.forEach((f) => f());
+}
 const listeners = new Set<() => void>();
 export function setCustomSounds(k: SoundKind, list: { id: string; label: string; url: string }[]) {
   custom[k] = list.map((x) => ({ id: x.id, label: x.label, url: x.url, phrase: [], gap: 0.4, custom: true }));
@@ -47,14 +56,14 @@ export function onCustomSounds(f: () => void) {
   return () => void listeners.delete(f);
 }
 export const factoryOf = (k: SoundKind) => (k === 'alarma' ? ALARM_SOUNDS : NOTIF_SOUNDS);
-export const soundsOf = (k: SoundKind): Sound[] => [...custom[k], ...factoryOf(k)];
+export const soundsOf = (k: SoundKind): Sound[] => [...custom[k], ...team[k], ...factoryOf(k)];
 const KEY = (k: SoundKind) => `organiza-sonido-${k}`;
 
 export function getSound(k: SoundKind): string {
   try {
     const v = localStorage.getItem(KEY(k));
     // Uno propio («u:…») vale aunque su lista todavía no termine de cargar.
-    if (v && (v.startsWith('u:') || soundsOf(k).some((s) => s.id === v))) return v;
+    if (v && (v.startsWith('u:') || v.startsWith('e:') || soundsOf(k).some((s) => s.id === v))) return v;
   } catch {
     /* modo privado */
   }

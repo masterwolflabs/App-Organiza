@@ -5,7 +5,7 @@
  * dispositivos. Se registran en `sounds.ts` y salen arriba en la lista.
  */
 import { supabase } from '@/lib/supabaseClient';
-import { getSound, setCustomSounds, setSound, type SoundKind } from '@/components/organiza/sounds';
+import { getSound, setCustomSounds, setSound, setTeamSounds, type SoundKind } from '@/components/organiza/sounds';
 
 const BUCKET = 'organiza-sounds';
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -27,7 +27,7 @@ export function loadCustomSounds(force = false): Promise<CustomSound[]> {
     if (error || !data) {
       rows = [];
     } else rows = data as CustomSound[];
-    await register();
+    await Promise.all([register(), registerTeam()]);
     return rows;
   })();
   return loaded;
@@ -45,6 +45,23 @@ async function register() {
       k,
       rows.filter((r) => r.kind === k && urls.has(r.path)).map((r) => ({ id: sid(r.id), label: r.name, url: urls.get(r.path)! })),
     ),
+  );
+}
+
+/**
+ * Sonidos del equipo (SQL 37): la tabla y la carpeta equipo/ solo las leen miembros de Master Wolf; para el
+ * resto la consulta vuelve vacía y no sale nada. No se bajan al tiro (son muchos): se bajan al elegirlos.
+ */
+async function registerTeam() {
+  const { data, error } = await supabase.from('organiza_team_sounds').select('id, kind, name, path').order('position');
+  const list = error || !data ? [] : (data as { id: string; kind: SoundKind; name: string; path: string }[]);
+  const urls = new Map<string, string>();
+  if (list.length) {
+    const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(list.map((r) => r.path), 86_400);
+    signed?.forEach((d) => d.path && d.signedUrl && urls.set(d.path, d.signedUrl));
+  }
+  (['notificacion', 'alarma'] as SoundKind[]).forEach((k) =>
+    setTeamSounds(k, list.filter((r) => r.kind === k && urls.has(r.path)).map((r) => ({ id: `e:${r.id}`, label: r.name, url: urls.get(r.path)! }))),
   );
 }
 
