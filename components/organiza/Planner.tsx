@@ -5,6 +5,7 @@ import { Copy, Plus, Target, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
+import { ShoppingButton } from '@/components/organiza/Shopping';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
 import { MEAL_SLOTS, MUSCLES, sum, usePlan, useNutrition, WORKOUT_SLOTS, type Exercise, type Goals, type Meal, type PlanKind, type Workout } from '@/components/organiza/plan';
 
@@ -289,7 +290,10 @@ export const PlanLink: React.FC<{ kind: PlanKind; weekdays: number[]; slot?: str
 
 export const AlimentacionView: React.FC = () => (
   <div className="mx-auto max-w-7xl">
-    <h1 className="font-display text-3xl font-semibold text-white">🍳 Alimentación</h1>
+    <div className="flex flex-wrap items-center gap-3">
+      <h1 className="flex-1 font-display text-3xl font-semibold text-white">🍳 Alimentación</h1>
+      <ShoppingButton />
+    </div>
     <p className="mb-5 mt-1 text-sm text-zinc-400">Tu semana de comidas: qué comes, cómo prepararlo y cuánto aporta.</p>
     <WeekPlanner kind="meals" />
   </div>

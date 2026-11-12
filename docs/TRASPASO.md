@@ -172,3 +172,6 @@ Clic derecho en una tarjeta del Tablero (o mantener 2 s en el celular) → `comp
 ## 🎨 Pintar en la Daily + borde por categoría en el Horario (2026-11-12)
 - Daily: clic derecho en el nombre → **Pintar** (o mantener 2 s en el celular) → `ColorMenu`: fondo (al 25 %) y borde (barra de 4 px a la izquierda). Se guarda en la tarea (`DailyTask.color / border`). `DataTable` tiene ahora `rowStyle` opcional.
 - Horario → Mostrar → **🎨 Borde por categoría**: cada acción toma el color de su categoría como borde, si no tiene uno propio.
+
+## 🛒 Lista de compras (Daily organizar-compras, paso 2 — 2026-11-12)
+`components/organiza/Shopping.tsx`, botón en Alimentación. Suma los ingredientes de las comidas de los días elegidos: junta repetidos sin importar mayúsculas, tildes ni plural («Huevos 3» + «huevo 2» = 5), suma cantidades con la misma unidad («1 taza» + «2 tazas» = 3 tazas) y deja lado a lado las que no se suman («200 g · media pechuga»). Marcar comprado (se recuerda por semana en el dispositivo), «Copiar para WhatsApp» con lo pendiente. Falta definir con Emanuel: lo que hay en el refri (pasos 1 y 3).
