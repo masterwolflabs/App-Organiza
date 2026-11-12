@@ -1,3 +1,4 @@
+import { desktop, isDesktop } from '@/lib/desktop';
 /**
  * Notificación del navegador para los avisos del Horario (Emanuel, 2026-11-10: «que en el navegador salga
  * la notificación»). Pide permiso solo cuando tú tocas algo (Aviso/Alarma, un sonido, el botón Activar):
@@ -29,6 +30,12 @@ async function registration() {
 }
 
 export async function notify(title: string, body: string, alarm = false) {
+  // Dentro de la app de Mac: aviso nativo del Mac (y la alarma trae la ventana al frente).
+  if (isDesktop()) {
+    await desktop.notify(title, body);
+    if (alarm) await desktop.front();
+    return;
+  }
   if (notifState() !== 'granted') return;
   const opts: NotificationOptions = { body, icon: '/icon-192.png', badge: '/icon-192.png', tag: title, requireInteraction: alarm };
   const reg = await registration();

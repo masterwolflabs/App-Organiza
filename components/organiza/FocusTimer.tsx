@@ -3,6 +3,7 @@
 import { ItemIcon } from '@/components/organiza/IconPicker';
 import React, { useEffect, useState } from 'react';
 import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucide-react';
+import { desktop } from '@/lib/desktop';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { YouTubeList } from '@/components/organiza/YouTubeList';
 import { coverCss, honesty, iso, refOf, type Item } from '@/components/organiza/model';
@@ -82,6 +83,11 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   // aunque su tiempo no haya llegado a cero (queda «en curso» si no lo marcaste hecho).
   const leaveRef = React.useRef(leave);
   leaveRef.current = leave;
+  // App de Mac: el focus trae la ventana al frente y la deja encima de todo mientras está abierto.
+  useEffect(() => {
+    void desktop.focusMode(true);
+    return () => void desktop.focusMode(false);
+  }, []);
   useEffect(() => {
     openFocus = item;
     const onSwitch = (e: Event) => {
