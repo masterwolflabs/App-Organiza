@@ -156,3 +156,6 @@ Casilla al pasar el mouse por el nombre de la tarea (queda visible mientras haya
 
 ## Horario · pintar acciones (Emanuel, 2026-11-12)
 Clic derecho en una tarjeta del Tablero (o mantener 2 s en el celular) → `components/organiza/ColorMenu.tsx`: **Fondo** y **Borde**, 9 colores de un toque + cualquier color (RGB, `<input type=color>`) + «Sin color». Se guarda en `organiza_items.bg_color / border_color` (SQL 39) en todas las repeticiones de la acción (`patchAction`). El fondo es el color al 28 % encima del gris (`tintCss`), se ve en tema claro y oscuro; también en Galería y Lista. Para marcar lo que está claro / no claro / no se aclara hoy.
+
+## Autofocus: solo deja de abrirse si TÚ lo cierras (Emanuel, 2026-11-12)
+«No se activó el de la mañana» (Levantarse 09:00, «Abrirse solo»). Hueco: `AutoFocus.tsx` lo marcaba «abierto hoy» en localStorage al ABRIRSE; si la página se recargaba (actualización, Chrome) el focus desaparecía y no volvía. Ahora la marca `organiza-autofocus-closed:<acción>:<día>` se pone solo al cerrar / terminar / pasar a la siguiente acción; mientras está abierto, la pestaña que lo muestra deja un latido (`organiza-autofocus-open:…`, 40 s) para que otra pestaña no lo duplique. Sigue necesitando Organiza abierta y el equipo despierto: con el Mac dormido o Chrome cerrado no corre (lo cubre la app de Mac + la ⏰ alarma del sistema).

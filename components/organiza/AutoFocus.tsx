@@ -13,12 +13,34 @@ import { notify } from '@/components/organiza/notify';
  * si ya la marcaste hecha. Si la pestaña o el equipo despiertan tarde, se abre igual mientras la acción siga
  * en su horario. Se cierra como siempre. Si a esa hora hay otro focus abierto, lo reemplaza
  * (el horario manda, aunque el tiempo del otro no haya llegado a cero).
+ *
+ * Arreglo (Emanuel, 2026-11-12: «no se activó el de la mañana»): antes quedaba marcado «abierto hoy» al ABRIRSE;
+ * si la página se recargaba (actualización, Chrome) el focus desaparecía y no volvía. Ahora solo deja de
+ * abrirse si la persona lo CIERRA o lo TERMINA (o el horario pasa a la siguiente acción). Mientras esté
+ * abierto, la pestaña que lo muestra deja un «latido» para que otra pestaña no lo abra encima.
  */
+const CLOSED = (key: string) => `organiza-autofocus-closed:${key}`;
+const BEAT = (key: string) => `organiza-autofocus-open:${key}`;
+const lsGet = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const lsSet = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* modo privado */
+  }
+};
 export const AutoFocus: React.FC = () => {
   const { published, itemsOn, activeItems } = useHorario();
   const c = useChecks();
-  const [open, setOpen] = useState<Item | null>(null);
-  const opened = useRef(new Set<string>());
+  const [open, setOpen] = useState<{ item: Item; key: string } | null>(null);
+  const openRef = useRef<{ item: Item; key: string } | null>(null);
+  openRef.current = open;
 
   useEffect(() => {
     const tick = () => {
@@ -38,7 +60,11 @@ export const AutoFocus: React.FC = () => {
       const i = now_[0];
       if (!i) return;
       const key = `${refOf(i.title)}:${iso(now)}`;
-      if (opened.current.has(key)) return;
+      // Ya lo cerraste o terminaste hoy: no insiste.
+      if (lsGet(CLOSED(key))) return;
+      // Esta pestaña ya lo muestra; u otra pestaña lo tiene abierto (latido de menos de 40 s).
+      if (openRef.current?.key === key) return lsSet(BEAT(key), String(Date.now()));
+      if (Date.now() - Number(lsGet(BEAT(key)) || 0) < 40_000) return;
       const cur = openFocus;
       if (cur?.id === i.id) return;
       const opens = opensAlone(i);
@@ -46,17 +72,10 @@ export const AutoFocus: React.FC = () => {
       // de sobra) y llegó la hora de esta (Levantarse), el focus cambia aunque el tiempo no llegó a cero.
       // Cambia si esta se abre sola, o si la abierta era de las que se abren solas (la sigue el horario).
       if (!opens && !cur?.auto_focus) return;
-      opened.current.add(key);
-      // Una vez por día y por acción, aunque recargues o abras otra pestaña (si la cierras, no vuelve).
-      try {
-        if (localStorage.getItem(`organiza-autofocus:${key}`)) return;
-        localStorage.setItem(`organiza-autofocus:${key}`, '1');
-      } catch {
-        /* modo privado */
-      }
       if (cur) window.dispatchEvent(new CustomEvent(FOCUS_SWITCH, { detail: i.id }));
       if (opens) {
-        setOpen(i);
+        lsSet(BEAT(key), String(Date.now()));
+        setOpen({ item: i, key });
         // Si no estás mirando, o el navegador no dejará sonar la música sin un toque, avisa igual con la
         // notificación del sistema (con su sonido): así despierta aunque la música quede muda.
         const noTouch = !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
@@ -79,5 +98,11 @@ export const AutoFocus: React.FC = () => {
   }, [published, itemsOn, activeItems, c.checks]);
 
   if (!open) return null;
-  return <FocusTimer key={open.id} item={open} checks={c} onClose={() => setOpen(null)} onDone={() => setOpen(null)} />;
+  // Cerrarlo, terminarlo o que el horario pase a la siguiente acción = no vuelve a abrirse hoy.
+  const close = () => {
+    lsSet(CLOSED(open.key), '1');
+    lsSet(BEAT(open.key), '0');
+    setOpen(null);
+  };
+  return <FocusTimer key={open.item.id} item={open.item} checks={c} onClose={close} onDone={close} />;
 };
