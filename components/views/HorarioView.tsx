@@ -40,6 +40,8 @@ export const HorarioView: React.FC = () => {
   const c = useChecks();
   // Esta semana con sus fechas, y lo que tienes en el calendario cada día (sin los bloques del propio horario).
   const [weekShift, setWeekShift] = useState(0);
+  // Desplegable de acciones del horario (Emanuel, 2026-11-12).
+  const [actionsOpen, setActionsOpen] = useState(false);
   const clockDay = iso(clock);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const weekStart = useMemo(() => addDays(startOfWeek(appNow()), weekShift * 7), [weekShift, clockDay]);
@@ -273,9 +275,6 @@ export const HorarioView: React.FC = () => {
           onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && h.patchSchedule(s.id, { name: e.target.value.trim() })}
           className="w-full min-w-0 rounded-lg bg-transparent font-display sm:w-auto sm:flex-1 text-3xl font-semibold text-white outline-none focus:bg-white/[0.04] sm:text-4xl"
         />
-        <span className={`inline-flex items-center rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}>
-          {s.status === 'publicado' ? '● Activo' : 'Borrador'}
-        </span>
         {h.schedules.length > 1 && (
           <div className="relative">
             <select aria-label="Elegir horario" value={s.id} onChange={(e) => h.choose(e.target.value)} className="appearance-none rounded-xl bg-white/[0.05] py-2 pl-3 pr-8 text-sm text-zinc-200 ring-1 ring-white/10">
@@ -284,18 +283,37 @@ export const HorarioView: React.FC = () => {
             <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-zinc-500" />
           </div>
         )}
-        <button type="button" onClick={() => setPanel('nuevo')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]">
-          <Plus className="h-4 w-4" /> Nuevo horario
-        </button>
-        {/* Pasar a borrador y Borrar, a la vista arriba (Emanuel, 2026-11-05): abajo quedaban lejos del contenido. */}
-        {s.status === 'publicado' && (
-          <button type="button" onClick={async () => { if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.09] hover:text-white">
-            <PauseCircle className="h-4 w-4" /> Pasar a borrador
+        {/* Estado + acciones en un desplegable que se abre al pasar el mouse (Emanuel, 2026-11-12): menos ruido arriba.
+            En el celular se abre tocando el estado. */}
+        <div className="relative" onMouseEnter={() => setActionsOpen(true)} onMouseLeave={() => setActionsOpen(false)}>
+          <button
+            type="button"
+            onClick={() => setActionsOpen((o) => !o)}
+            aria-expanded={actionsOpen}
+            aria-label="Acciones del horario"
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${s.status === 'publicado' ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' : 'bg-amber-500/15 text-amber-200 ring-amber-400/30'}`}
+          >
+            {s.status === 'publicado' ? '● Activo' : 'Borrador'}
+            <ChevronDown className={`h-4 w-4 opacity-70 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} />
           </button>
-        )}
-        <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); }} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-300 ring-1 ring-white/10 hover:bg-rose-500/15 hover:text-rose-300 hover:ring-rose-400/30">
-          <Trash2 className="h-4 w-4" /> Borrar este horario
-        </button>
+          {actionsOpen && (
+            <div className="absolute right-0 top-full z-30 pt-1.5">
+              <div className="w-56 rounded-xl bg-[#14171d]/95 p-1.5 shadow-2xl ring-1 ring-white/10 backdrop-blur">
+                <button type="button" onClick={() => { setActionsOpen(false); setPanel('nuevo'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-zinc-200 hover:bg-white/[0.08]">
+                  <Plus className="h-4 w-4" /> Nuevo horario
+                </button>
+                {s.status === 'publicado' && (
+                  <button type="button" onClick={async () => { setActionsOpen(false); if (await confirm({ title: `¿Pasar «${s.name}» a borrador?`, message: 'Deja de salir en Hoy y en el Calendario, y no te avisa. No se borra nada: lo vuelves a publicar cuando quieras.', confirmLabel: 'Pasar a borrador' })) h.unpublish(s.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-zinc-200 hover:bg-white/[0.08]">
+                    <PauseCircle className="h-4 w-4" /> Pasar a borrador
+                  </button>
+                )}
+                <button type="button" onClick={async () => { setActionsOpen(false); if (await confirm({ title: `¿Borrar “${s.name}”?`, message: 'Se borran sus tareas. Tu registro de lo cumplido queda guardado.', confirmLabel: 'Borrar', tone: 'danger' })) h.removeSchedule(s.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-zinc-200 hover:bg-white/[0.08] hover:!bg-rose-500/15 hover:text-rose-300">
+                  <Trash2 className="h-4 w-4" /> Borrar este horario
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <ModeBar key={s.id} s={s} h={h} />
