@@ -175,3 +175,8 @@ Clic derecho en una tarjeta del Tablero (o mantener 2 s en el celular) → `comp
 
 ## 🛒 Lista de compras (Daily organizar-compras, paso 2 — 2026-11-12)
 `components/organiza/Shopping.tsx`, botón en Alimentación. Suma los ingredientes de las comidas de los días elegidos: junta repetidos sin importar mayúsculas, tildes ni plural («Huevos 3» + «huevo 2» = 5), suma cantidades con la misma unidad («1 taza» + «2 tazas» = 3 tazas) y deja lado a lado las que no se suman («200 g · media pechuga»). Marcar comprado (se recuerda por semana en el dispositivo), «Copiar para WhatsApp» con lo pendiente. Falta definir con Emanuel: lo que hay en el refri (pasos 1 y 3).
+
+## ❓ Ayuda al mantener presionado 2 s (Daily ayuda-en-cada-campo, 2026-11-12) — RAMA `ayuda-mantener-presionado`, SIN PUBLICAR
+- `components/ui/HelpTips.tsx`: además de dejar el mouse quieto 2 s, ahora **mantener presionado 2 s** (dedo o mouse) sobre cualquier cosa con `data-help` muestra su ayuda; ese toque no activa el botón; en el celular se va sola a los 6 s. También en la Plantilla (rama del mismo nombre) para llevarlo a todas las apps con `update:template`.
+- Textos nuevos: cada sección del panel de un bloque (`PanelSection.help` → título del `Box`): ¿Lo hiciste hoy?, Cuándo, Importancia, Categoría, Aviso y sonido, Modo focus, Descripción y nota, Dentro de esta tarea; y cada opción de Importancia (No negociable / Modificable / Flexible) y de Aviso (Sin aviso / Notificación / Alarma).
+- Probado: el gesto (muestra la ayuda, no hace clic) con una página de prueba. Falta: textos del resto de pantallas, app por app, y publicarlo juntos.

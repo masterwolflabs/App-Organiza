@@ -127,7 +127,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
             </div>
 
             <PanelSections storage="organiza-panel" sections={[
-              { id: 'registro', tour: 'registro', title: '✅ ¿Lo hiciste hoy?', extra: <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300"><Flame className="h-4 w-4" /> {streak} {streak === 1 ? 'día' : 'días'}</span>, body: (<>
+              { id: 'registro', tour: 'registro', help: 'Marca si la hiciste hoy. Los cuadritos son los últimos 28 días: verde = hecha. Así ves tu racha.', title: '✅ ¿Lo hiciste hoy?', extra: <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300"><Flame className="h-4 w-4" /> {streak} {streak === 1 ? 'día' : 'días'}</span>, body: (<>
               <div className="flex gap-2">
                 <button type="button" aria-pressed={todayCheck?.done === true} onClick={async () => {
                   if (todayCheck?.done) {
@@ -149,7 +149,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               </div>
               <p className="mt-2 text-xs text-zinc-500">{scheduled ? `Cumpliste ${done} de ${scheduled} (${rate}%)` : 'Tu récord empieza con el primer día que marques.'}</p>
               </>) },
-              { id: 'cuando', tour: 'hab-cuando', title: '📅 Cuándo', body: (<>
+              { id: 'cuando', tour: 'hab-cuando', help: 'Qué días se repite, a qué hora empieza y cuánto dura. «Variante» = otra hora solo algunos días (ej.: el fin de semana más tarde).', title: '📅 Cuándo', body: (<>
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="mb-1 block text-xs font-medium text-zinc-400">📆 Elige tus días</span><DaysPicker days={weekdays} onToggle={async (d) => {
                   const on = !weekdays.includes(d);
@@ -207,10 +207,10 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
               )}
               {notice && <p className="rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-200 ring-1 ring-sky-400/25">{notice}</p>}
 </>) },
-              { id: 'importancia', tour: 'hab-importancia', title: '⚖️ Importancia', body: (<>
+              { id: 'importancia', tour: 'hab-importancia', help: 'Qué tan movible es. No negociable: no se mueve ni se salta. Modificable: se hace sí o sí, pero puede cambiar de hora. Flexible: si el día se complica, es lo primero que se suelta.', title: '⚖️ Importancia', body: (<>
               <Importance value={item.flex} onChange={(flex) => set({ flex, priority: LEVELS.findIndex((l) => l.id === flex) + 1 })} />
 </>) },
-              { id: 'categoria', tour: 'hab-categoria', title: '🏷️ Categoría', body: (<>
+              { id: 'categoria', tour: 'hab-categoria', help: 'El área de tu vida a la que pertenece (Salud, Trabajo, Personal…). Le da color en el horario y sirve para filtrar.', title: '🏷️ Categoría', body: (<>
               <Categories h={h} value={item.label_id} onChange={(label_id) => set({ label_id })} />
               {h.schedules.length > 1 && (
                 <Field label="Horario">
@@ -220,7 +220,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 </Field>
               )}
 </>) },
-              { id: 'aviso', tour: 'hab-aviso', title: '🔔 Aviso y sonido', body: (<>
+              { id: 'aviso', tour: 'hab-aviso', help: 'Cómo te avisa: nada, una notificación corta o una alarma que suena hasta que la cierras. «¿Cuánto antes?» = minutos antes de la hora.', title: '🔔 Aviso y sonido', body: (<>
               <AlarmPicker value={item.alarm} onChange={(alarm) => set({ alarm })} />
               {item.alarm !== 'no' && (
                 <>
@@ -239,7 +239,7 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 </>
               )}
 </>) },
-              { id: 'focus', tour: 'hab-focus', title: '🎯 Modo focus', body: (<>
+              { id: 'focus', tour: 'hab-focus', help: 'Pantalla completa con la cuenta regresiva, el paso a paso y tu música. «Abrirse solo» lo abre a su hora sin que lo toques.', title: '🎯 Modo focus', body: (<>
               <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
                 <span><b className="block text-sm font-semibold text-white">Modo focus</b><span className="text-xs text-zinc-400">Tiempo sin interrupciones: la tarea a pantalla completa con su cuenta regresiva</span></span>
                 <input type="checkbox" checked={item.focus} onChange={(e) => set({ focus: e.target.checked })} className="h-4 w-4 accent-sky-500" />
@@ -264,11 +264,11 @@ export const ItemPanel: React.FC<{ item: Item; h: ReturnType<typeof useHorario>;
                 </>
               )}
 </>) },
-              { id: 'nota', tour: 'hab-nota', title: '📝 Descripción y nota', body: (<>
+              { id: 'nota', tour: 'hab-nota', help: 'Qué es y cómo se hace esta tarea. La nota es tu página libre: texto, imágenes y archivos.', title: '📝 Descripción y nota', body: (<>
             <Field label="Descripción"><textarea key={`d${item.id}`} defaultValue={item.description} rows={3} onBlur={(e) => e.target.value !== item.description && set({ description: e.target.value })} className={field} /></Field>
             {note && <button type="button" onClick={note.open} className="inline-flex items-center gap-2 rounded-xl bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]"><FileText className="h-4 w-4" /> {note.exists ? 'Abrir su nota' : 'Crear su nota'}</button>}
 </>) },
-              { id: 'dentro', tour: 'mundo', title: '🧩 Dentro de esta tarea', extra: <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1 text-sm font-semibold text-sky-300 hover:text-sky-200"><Plus className="h-4 w-4" /> Agregar</button>, body: (<>
+              { id: 'dentro', tour: 'mundo', help: 'Lo que vive dentro de la tarea: hábitos, reglas, sueño, tabla, base de datos, música, comidas o entrenamiento. Se agregan, se ordenan y se pliegan.', title: '🧩 Dentro de esta tarea', extra: <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1 text-sm font-semibold text-sky-300 hover:text-sky-200"><Plus className="h-4 w-4" /> Agregar</button>, body: (<>
               {adding && (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {MODULE_CHOICES.map((m) => (

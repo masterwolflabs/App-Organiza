@@ -123,7 +123,7 @@ export const Importance: React.FC<{ value: Flex; onChange: (f: Flex) => void }> 
         {LEVELS.map((l, i) => {
           const I = l.icon;
           return (
-            <button key={l.id} type="button" aria-pressed={i === at} onClick={() => onChange(l.id)} className={`relative z-10 flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-sm font-semibold transition-colors ${i === at ? 'text-[#fff]' : 'text-zinc-400 hover:text-zinc-200'}`}>
+            <button key={l.id} type="button" aria-pressed={i === at} data-help={l.hint} onClick={() => onChange(l.id)} className={`relative z-10 flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-sm font-semibold transition-colors ${i === at ? 'text-[#fff]' : 'text-zinc-400 hover:text-zinc-200'}`}>
               <I className="h-4 w-4" style={i === at ? undefined : { color: l.color }} />
               {l.label}
             </button>
@@ -151,7 +151,7 @@ export const AlarmPicker: React.FC<{ value: AlarmKind; onChange: (v: AlarmKind) 
   <div>
     <div className="flex gap-1 rounded-xl bg-white/[0.05] p-1 ring-1 ring-white/10">
       {ALARMS.map((o) => (
-        <button key={o.id} type="button" aria-pressed={o.id === value} onPointerDown={() => o.id !== value && onChange(o.id)} onClick={() => o.id !== value && onChange(o.id)} className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-semibold ${o.id === value ? 'bg-white/[0.14] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}>{o.label}</button>
+        <button key={o.id} type="button" aria-pressed={o.id === value} data-help={o.hint} onPointerDown={() => o.id !== value && onChange(o.id)} onClick={() => o.id !== value && onChange(o.id)} className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-semibold ${o.id === value ? 'bg-white/[0.14] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}>{o.label}</button>
       ))}
     </div>
     <p className="mt-1.5 text-xs text-zinc-500">{ALARMS.find((o) => o.id === value)?.hint}</p>
