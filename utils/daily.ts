@@ -12,6 +12,8 @@ export type DailyTask = {
   id: string;
   title: string;
   executors: string[];
+  /** Cliente (2026-11-15): clientes de la nube (mc_clients) para los que es la tarea, por nombre. */
+  clients?: string[];
   status: DailyStatus;
   app: string;
   tag: DailyTag;
@@ -58,7 +60,8 @@ export const TAG_INFO: Record<DailyTag, { label: string; cls: string; rank: numb
 };
 export const DEFAULT_PEOPLE = ['Emanuel Miranda', 'Moisés Montano', 'Claude'];
 export const ECOSYSTEM = '🌐 Todo el ecosistema';
-export const DEFAULT_APPS = [ECOSYSTEM, 'Finanzas', 'Nube', 'Plantilla', 'Project'];
+export const CLIENT_APP = '👤 Cliente';
+export const DEFAULT_APPS = [ECOSYSTEM, 'Finanzas', 'Nube', 'Plantilla', 'Project', CLIENT_APP];
 
 /** "✨ En 2 d 2 h" · "😱 En 2 h 47 min" (less than a day) · "🔴 Atrasada · 10 h 13 min" · "✅ Lista". */
 export function priorityOf(t: Pick<DailyTask, 'due' | 'status'>, now = Date.now()): { text: string; tone: 'ok' | 'soon' | 'late' | 'done' | 'none'; ms: number } {

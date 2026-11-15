@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlignLeft, Archive, ArchiveRestore, Palette, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User } from 'lucide-react';
+import { AlignLeft, Archive, ArchiveRestore, Palette, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User, Users } from 'lucide-react';
 import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type Filter, type ViewDef } from '@/components/tables/table';
@@ -20,6 +20,7 @@ import { useNotesBridge } from '@/components/notes/NotesBridge';
 import { LABS_EMAIL, useSpace } from '@/components/organiza/space';
 import { HOW_KEY } from '@/utils/howWeWork';
 import {
+  CLIENT_APP,
   DEFAULT_APPS,
   ECOSYSTEM,
   DEFAULT_PEOPLE,
@@ -67,7 +68,8 @@ const HELP: Record<string, string> = {
   ejecutor: 'Quién la hace. Pueden ser varios.',
   prioridad: 'Cuánto falta para la entrega. ✨ más de un día · 😱 menos de un día · 🔴 atrasada.',
   estado: 'Sin empezar → En curso → En revisión → Por aprobar → Listo. ✅ Aprobada para Claude = Claude la hace sin preguntar · ⏳ Esperando = Claude espera algo de Emanuel o Moisés.',
-  app: 'Dónde se hace: 🌐 todo el ecosistema, Finanzas, la nube, la Plantilla o Project.',
+  app: 'Dónde se hace: 🌐 todo el ecosistema, Finanzas, la nube, la Plantilla, Project o 👤 Cliente (trabajo para un cliente; elige cuál en la columna Cliente).',
+  cliente: 'Para qué cliente es. Son los clientes de la nube: “+ Nuevo cliente” lo crea ahí mismo.',
   etiqueta: 'Qué va primero: 🔥 urgente e importante, ⭐ importante, ⚡ urgente o puede esperar.',
   empieza: 'Cuándo parte. Con la entrega arma la barra del cronograma.',
   entrega: 'Fecha de entrega (vence al final de ese día).',
@@ -80,7 +82,11 @@ const Pill: React.FC<{ cls: string; children: React.ReactNode }> = ({ cls, child
 
 /** Ejecutor: photo + bold name for each person; click opens THE people menu (EntityMenu — the same one
  * as Closers / Clientes: directory link, search, + Nuevo, photos, roles), several people allowed. */
-export const PeopleCell: React.FC<{ value: string[]; entities: Entity[]; photoOf: (name: string) => string | null; onChange: (v: string[]) => void; onCreate: (name: string) => Promise<string | null> }> = ({ value, entities, photoOf, onChange, onCreate }) => {
+type PeopleKind = { empty: string; newLabel: string; directory: { label: string; tab: string } };
+const EJECUTOR: PeopleKind = { empty: 'Sin ejecutor', newLabel: 'Nuevo ejecutor', directory: { label: 'Ejecutores', tab: 'personal' } };
+/** Cliente: la misma vista que Ejecutor, con los clientes de la nube (mc_clients). */
+export const CLIENTE: PeopleKind = { empty: 'Sin cliente', newLabel: 'Nuevo cliente', directory: { label: 'Clientes', tab: 'clientes' } };
+export const PeopleCell: React.FC<{ value: string[]; entities: Entity[]; photoOf: (name: string) => string | null; onChange: (v: string[]) => void; onCreate: (name: string) => Promise<string | null>; kind?: PeopleKind }> = ({ value, entities, photoOf, onChange, onCreate, kind = EJECUTOR }) => {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   return (
     <>
@@ -93,7 +99,7 @@ export const PeopleCell: React.FC<{ value: string[]; entities: Entity[]; photoOf
             </span>
           ))
         ) : (
-          <span className="text-zinc-500">Sin ejecutor</span>
+          <span className="text-zinc-500">{kind.empty}</span>
         )}
       </button>
       {anchor && (
@@ -102,9 +108,9 @@ export const PeopleCell: React.FC<{ value: string[]; entities: Entity[]; photoOf
           items={entities}
           value={null}
           values={value}
-          noneLabel="Sin ejecutor"
-          newLabel="Nuevo ejecutor"
-          directory={{ label: 'Ejecutores', tab: 'personal' }}
+          noneLabel={kind.empty}
+          newLabel={kind.newLabel}
+          directory={kind.directory}
           onCreate={onCreate}
           onPick={(id) => onChange(id === null ? [] : value.includes(id) ? value.filter((x) => x !== id) : [...value, id])}
           onClose={() => setAnchor(null)}
@@ -122,6 +128,9 @@ type PageData = {
   entities: Entity[];
   photoOf: (name: string) => string | null;
   createPerson: (name: string) => Promise<string | null>;
+  clientEntities: Entity[];
+  clientPhotoOf: (name: string) => string | null;
+  createClient: (name: string) => Promise<string | null>;
   statusOptions: { value: string; label: string }[];
   tagOptions: { value: string; label: string }[];
   appOptions: { value: string; label: string }[];
@@ -155,6 +164,7 @@ const TaskProperties: React.FC<{ id: string }> = ({ id }) => {
     ['Estado', Loader, <Editable key="st" label="Estado" value={t.status} kind="select" required options={d.statusOptions} noConfirm onSave={async (v) => d.patch(t.id, { status: (v as DailyStatus) || t.status })}><Pill cls={STATUS_INFO[t.status].cls}>{STATUS_INFO[t.status].label}</Pill></Editable>],
     ['Prioridad', Sigma, <div key="p" className={`font-semibold ${PRIORITY_TONE[p.tone]}`}>{p.text}</div>],
     ['Etiqueta', CircleDot, <Editable key="t" label="Etiqueta" value={t.tag} kind="select" required options={d.tagOptions} noConfirm onSave={async (v) => d.patch(t.id, { tag: (v as DailyTag) || t.tag })}><Pill cls={TAG_INFO[t.tag].cls}>{TAG_INFO[t.tag].label}</Pill></Editable>],
+    ['Cliente', Users, <PeopleCell key="c" kind={CLIENTE} value={t.clients ?? []} entities={d.clientEntities} photoOf={d.clientPhotoOf} onChange={(v) => d.patch(t.id, { clients: v })} onCreate={d.createClient} />],
     [d.appLabel, LayoutGrid, <Editable key="a" label={d.appLabel} value={t.app} kind="select" required options={d.appOptions} noConfirm onSave={async (v) => d.patch(t.id, { app: String(v || t.app) })}>{t.app || empty}</Editable>],
     ['Descripción', AlignLeft, <Editable key="n" label="Descripción" value={t.description} noConfirm onSave={async (v) => d.patch(t.id, { description: String(v ?? '') })}>{t.description || empty}</Editable>],
   ];
@@ -303,6 +313,10 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       if (f.col === 'estado') out.status = pick(STATUS_INFO, v) ?? out.status;
       if (f.col === 'etiqueta') out.tag = pick(TAG_INFO, v) ?? out.tag;
       if (f.col === 'app') out.app = apps.find((a) => lower(a) === v || lower(a).includes(v)) ?? out.app;
+      if (f.col === 'cliente') {
+        const c = clientEntities.find((e) => lower(e.name).includes(v))?.name;
+        if (c) out.clients = [c];
+      }
       if (f.col === 'ejecutor') {
         const who = entities.find((e) => lower(e.name).includes(v))?.name;
         if (who) out.executors = [who];
@@ -340,6 +354,16 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   useEffect(() => {
     loadStaff();
   }, [loadStaff]);
+  // Clientes = los de la nube de esta cuenta (mc_clients), con su foto; igual que Ejecutor.
+  const [clientRows, setClientRows] = useState<{ name: string; avatar_url: string | null }[]>([]);
+  const loadClients = React.useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase.from('mc_clients').select('name, avatar_url').eq('owner_scope', userId).is('archived_at', null).order('name');
+    setClientRows((data ?? []) as { name: string; avatar_url: string | null }[]);
+  }, [userId]);
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
   const cap = (r: string) => r.charAt(0).toUpperCase() + r.slice(1);
   const entities: Entity[] = [
     ...staff.map((x) => ({ id: x.name, name: x.name, avatar_url: x.avatar_url ?? photos[nameKey(x.name)] ?? null, sub: x.roles.map(cap).join(' · ') || null })),
@@ -354,6 +378,21 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     await loadStaff();
     return name;
   };
+  const clientEntities: Entity[] = [
+    ...clientRows.map((x) => ({ id: x.name, name: x.name, avatar_url: x.avatar_url, sub: 'Cliente' })),
+    ...Array.from(new Set(doc.tasks.flatMap((t) => t.clients ?? [])))
+      .filter((n) => !clientRows.some((x) => nameKey(x.name) === nameKey(n)))
+      .map((n) => ({ id: n, name: n, avatar_url: null, sub: null })),
+  ];
+  // "+ Nuevo cliente" = un cliente nuevo en la nube (mc_clients), el mismo que ven Finanzas y Project.
+  const createClient = async (name: string) => {
+    if (!userId) return null;
+    const { error } = await supabase.from('mc_clients').insert({ id: crypto.randomUUID(), owner_scope: userId, name });
+    if (error) return null;
+    await loadClients();
+    return name;
+  };
+  const clientPhotoOf = (name: string) => clientRows.find((x) => nameKey(x.name) === nameKey(name))?.avatar_url ?? null;
   const photoOf = (name: string) =>
     nameKey(name) === 'claude' ? '/people/claude.svg' : (staff.find((x) => nameKey(x.name) === nameKey(name))?.avatar_url ?? photos[nameKey(name)] ?? null);
   // One name: whichever side changed since the last match (what the link remembers) brings the other along.
@@ -400,7 +439,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const opt = <K extends string>(info: Record<K, { label: string }>) => (Object.keys(info) as K[]).map((k) => ({ value: k, label: info[k].label }));
   const statusOptions = opt(STATUS_INFO).filter((o) => labs || (o.value !== 'aprobada_claude' && o.value !== 'esperando'));
   useEffect(() => {
-    publishPage({ tasks: doc.tasks, now, patch, entities, photoOf, createPerson, statusOptions, tagOptions: opt(TAG_INFO), appOptions: apps.map((a) => ({ value: a, label: a })), appLabel: labs ? 'Aplicación' : 'Área', actions });
+    publishPage({ tasks: doc.tasks, now, patch, entities, photoOf, createPerson, clientEntities, clientPhotoOf, createClient, statusOptions, tagOptions: opt(TAG_INFO), appOptions: apps.map((a) => ({ value: a, label: a })), appLabel: labs ? 'Aplicación' : 'Área', actions });
   });
   useEffect(() => () => publishPage(null), []);
 
@@ -479,6 +518,12 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           <span className="whitespace-nowrap text-zinc-200">{t.app}</span>
         </Editable>
       ),
+    },
+    {
+      key: 'cliente',
+      label: 'Cliente',
+      noClamp: true,
+      cell: (t) => <PeopleCell kind={CLIENTE} value={t.clients ?? []} entities={clientEntities} photoOf={clientPhotoOf} onChange={(v) => patch(t.id, { clients: v, ...(labs && v.length && t.app === ECOSYSTEM ? { app: CLIENT_APP } : {}) })} onCreate={createClient} />,
     },
     {
       key: 'etiqueta',
