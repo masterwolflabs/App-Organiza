@@ -354,11 +354,11 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   useEffect(() => {
     loadStaff();
   }, [loadStaff]);
-  // Clientes = los de la nube de esta cuenta (mc_clients), con su foto; igual que Ejecutor.
+  // Clientes = los de la nube que esta cuenta ve (mc_clients: los suyos y, en el equipo, los de Master Wolf 'mw'), con su foto.
   const [clientRows, setClientRows] = useState<{ name: string; avatar_url: string | null }[]>([]);
   const loadClients = React.useCallback(async () => {
     if (!userId) return;
-    const { data } = await supabase.from('mc_clients').select('name, avatar_url').eq('owner_scope', userId).is('archived_at', null).order('name');
+    const { data } = await supabase.from('mc_clients').select('name, avatar_url').is('archived_at', null).order('name');
     setClientRows((data ?? []) as { name: string; avatar_url: string | null }[]);
   }, [userId]);
   useEffect(() => {
@@ -387,7 +387,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   // "+ Nuevo cliente" = un cliente nuevo en la nube (mc_clients), el mismo que ven Finanzas y Project.
   const createClient = async (name: string) => {
     if (!userId) return null;
-    const { error } = await supabase.from('mc_clients').insert({ id: crypto.randomUUID(), owner_scope: userId, name });
+    const { error } = await supabase.from('mc_clients').insert({ id: crypto.randomUUID(), owner_scope: labs ? 'mw' : userId, name });
     if (error) return null;
     await loadClients();
     return name;
