@@ -1,6 +1,6 @@
 [package]
 name = "organiza"
-version = "1.0.0"
+version = "1.0.1"
 description = "Organiza para Mac"
 edition = "2021"
 

@@ -40,7 +40,7 @@ Pendientes concretos:
 - La app ya está registrada en la nube (`docs/sql/26-registrar-organiza.sql`) y
   su dirección está autorizada en Supabase para entrar con Google. Si cambia la
   dirección, hay que actualizar ambas cosas.
-- `app-organiza.vercel.app` es de otra persona. No la uses como enlace.
+- `app-organiza.vercel.app` es de otra persona (una app «Plan.io»). No la uses como enlace. La app de Mac 1.0.0 la abría por error (corregido en 1.0.1, 2026-11-16; sus permisos nativos ahora solo aceptan app-organiza-six).
 - Quedan textos que dicen "Master Finanzas" en notas y compartir. Conviene
   corregirlos en la plantilla.
 

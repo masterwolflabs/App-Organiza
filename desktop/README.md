@@ -1,6 +1,6 @@
 # Organiza para Mac (Tauri)
 
-Una "cáscara" que abre la Organiza publicada (https://app-organiza.vercel.app). Todo lo de la web llega solo,
+Una "cáscara" que abre la Organiza publicada (https://app-organiza-six.vercel.app). Todo lo de la web llega solo,
 sin reinstalar. Aquí vive lo propio del Mac (ver `src-tauri/src/lib.rs`):
 
 - Ícono en la barra de arriba: Abrir · Hoy · Horario · Daily · Calendario · Abrir al prender el Mac · Buscar actualizaciones · Salir.
