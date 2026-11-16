@@ -969,8 +969,13 @@ export const Table: React.FC<{
       {/* Nested tables (in detail rows) don't carry this section's settings. */}
       <SectionCtx.Provider value={null}>
         <div>
-          {viewsBar}
-          {toolbar}
+          {/* Views + toolbar stay fixed on top while the table scrolls (Emanuel, 2026-11-16). */}
+          {(viewsBar || toolbar) && (
+            <div className="sticky top-0 z-20 -mx-2 rounded-xl bg-[#101218]/85 px-2 pt-1 backdrop-blur">
+              {viewsBar}
+              {toolbar}
+            </div>
+          )}
           {hl && <style>{hl}</style>}
           {fmtStyle && <style>{fmtStyle}</style>}
           {tip &&

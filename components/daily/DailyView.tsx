@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlignLeft, Archive, ArchiveRestore, Palette, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User, Users } from 'lucide-react';
+import { AlignLeft, Archive, ArchiveRestore, CheckSquare, X, Palette, ArrowUpRight, CalendarDays, CircleDot, LayoutGrid, Loader, PanelLeft, Plus, Sigma, Trash2, User, Users } from 'lucide-react';
 import { TASK_TEMPLATE, dailyPageHtml } from '@/utils/dailyPages';
 import { supabase } from '@/lib/supabaseClient';
 import { DataTable, type Col, type Filter, type ViewDef } from '@/components/tables/table';
@@ -29,6 +29,7 @@ import {
   TAG_INFO,
   newId,
   priorityOf,
+  moveToLane,
   showDate,
   starterDaily,
   todayISO,
@@ -471,6 +472,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
             checked={sel.includes(t.id)}
             onChange={() => toggleSel(t.id)}
             aria-label="Seleccionar tarea"
+            data-sel={t.id}
             data-help="Marca varias para cambiarlas, archivarlas o borrarlas juntas"
             className={`mt-1 h-3.5 w-3.5 shrink-0 cursor-pointer accent-sky-500 ${sel.length || sel.includes(t.id) ? '' : 'opacity-0 group-hover/row:opacity-100 focus:opacity-100'}`}
           />
@@ -566,15 +568,24 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
 
   const board = !showArchived && !compact && labs && (
     <DailyBoard
+      id={TABLE}
       tasks={rows}
       now={now}
       photoOf={photoOf}
+      statusOptions={statusOptions}
+      appOptions={apps.map((a) => ({ value: a, label: a }))}
+      selected={sel}
+      onToggle={toggleSel}
+      onSelect={setSel}
       onPatch={patch}
       onAdd={add}
       renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
     />
   );
-  const table = <DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} rowStyle={(t) => (t.color || t.border ? { ...(t.color ? { backgroundImage: `linear-gradient(${t.color}40, ${t.color}40)` } : {}), ...(t.border ? { boxShadow: `inset 4px 0 0 ${t.border}` } : {}) } : undefined)} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." />;
+  // "Seleccionar todas" in the table = the rows on screen right now (its view's filters + search).
+  const tableBox = React.useRef<HTMLDivElement>(null);
+  const tableIds = () => Array.from(tableBox.current?.querySelectorAll<HTMLInputElement>('input[data-sel]') ?? []).map((i) => i.dataset.sel!).filter(Boolean);
+  const table = <div ref={tableBox}><DataTable id={labs ? TABLE : `${TABLE}-${space}`} title="Daily - Pendientes" noTitle onFilters={(f) => (filters.current = f)} columns={columns} rows={rows} rowKey={(t) => t.id} rowStyle={(t) => (t.color || t.border ? { ...(t.color ? { backgroundImage: `linear-gradient(${t.color}40, ${t.color}40)` } : {}), ...(t.border ? { boxShadow: `inset 4px 0 0 ${t.border}` } : {}) } : undefined)} minWidth={1400} defaultViews={VIEWS} help={HELP} empty="No hay tareas. Toca “Nueva tarea”." /></div>;
 
   return (
     <div>
@@ -604,6 +615,9 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           y={rowMenu.y}
           onClose={() => setRowMenu(null)}
           items={[
+            { label: sel.includes(rowMenu.t.id) ? 'Quitar de la selección' : 'Seleccionar', icon: <CheckSquare className="h-3.5 w-3.5" />, onClick: () => toggleSel(rowMenu.t.id) },
+            { label: 'Seleccionar todas', icon: <CheckSquare className="h-3.5 w-3.5" />, onClick: () => setSel(tableIds()) },
+            ...(sel.length ? [{ label: 'Quitar la selección', icon: <X className="h-3.5 w-3.5" />, onClick: () => setSel([]) }] : []),
             { label: 'Pintar', icon: <Palette className="h-3.5 w-3.5" />, onClick: () => setPaint({ x: rowMenu.x, y: rowMenu.y, id: rowMenu.t.id }) },
             { label: rowMenu.t.archived ? 'Desarchivar' : 'Archivar', icon: rowMenu.t.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />, onClick: () => actions.onArchive(rowMenu.t) },
             { label: 'Borrar', icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => actions.onDelete(rowMenu.t) },
@@ -626,6 +640,7 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
           onCreatePerson={createPerson}
           onClear={() => setSel([])}
           onPatch={(p) => patchMany(p)}
+          onLane={labs ? (lane) => patchMany((t) => moveToLane(t, lane)) : undefined}
           onExecutor={(name, mode) => patchMany((t) => ({ executors: mode === 'reemplazar' ? [name] : t.executors.includes(name) ? t.executors : [...t.executors, name] }))}
           onArchive={() => {
             patchMany({ archived: !showArchived });

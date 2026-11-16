@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Archive, ArchiveRestore, CalendarDays, Trash2, User, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { EntityMenu, type Entity } from '@/components/calendar/EntityPicker';
-import type { DailyStatus, DailyTag, DailyTask } from '@/utils/daily';
+import { LANES, type DailyLane, type DailyStatus, type DailyTag, type DailyTask } from '@/utils/daily';
 
 /**
  * Acciones múltiples de la Daily (Emanuel, 2026-11-12): con una o más tareas marcadas aparece esta barra
@@ -27,10 +27,12 @@ export const BulkBar: React.FC<{
   onCreatePerson: (name: string) => Promise<string | null>;
   onClear: () => void;
   onPatch: (p: Partial<DailyTask>) => void;
+  /** Mover a una columna del Tablero (solo la Daily del equipo). */
+  onLane?: (lane: DailyLane) => void;
   onExecutor: (name: string, mode: 'agregar' | 'reemplazar') => void;
   onArchive: () => void;
   onDelete: () => void;
-}> = ({ count, archivedView, statusOptions, tagOptions, appOptions, appLabel, entities, onCreatePerson, onClear, onPatch, onExecutor, onArchive, onDelete }) => {
+}> = ({ count, archivedView, statusOptions, tagOptions, appOptions, appLabel, entities, onCreatePerson, onClear, onPatch, onLane, onExecutor, onArchive, onDelete }) => {
   const [who, setWho] = useState<{ anchor: DOMRect; mode: 'agregar' | 'reemplazar' } | null>(null);
   return (
     <BodyPortal lockScroll={false}>
@@ -38,6 +40,16 @@ export const BulkBar: React.FC<{
         <span className="whitespace-nowrap rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-bold text-[#fff]">
           {count} seleccionada{count === 1 ? '' : 's'}
         </span>
+        {onLane && (
+          <select value="" onChange={(e) => e.target.value && onLane(e.target.value as DailyLane)} className={sel} data-help="Mover todas a una columna del Tablero (ej. ✅ Completo)">
+            <option value="">Mover a…</option>
+            {LANES.filter((l) => l.id !== 'permiso').map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+        )}
         <select value="" onChange={(e) => e.target.value && onPatch({ status: e.target.value as DailyStatus })} className={sel} data-help="Cambiar el estado de todas">
           <option value="">Estado…</option>
           {statusOptions.map((o) => (
