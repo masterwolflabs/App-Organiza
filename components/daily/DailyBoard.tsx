@@ -87,7 +87,8 @@ export const DailyBoard: React.FC<{
   now: number;
   photoOf: (name: string) => string | null;
   onPatch: (id: string, p: Partial<DailyTask>) => void;
-  onAdd: (p: Partial<DailyTask>) => void;
+  /** New card in a column, with the board's filters (so it shows right there, like Notion). */
+  onAdd: (lane: DailyLane, filters: Filter[], extra?: Partial<DailyTask>) => void;
   renderOpen: (t: DailyTask, children: React.ReactNode) => React.ReactNode;
   selected: string[];
   onToggle: (id: string) => void;
@@ -132,9 +133,9 @@ export const DailyBoard: React.FC<{
     if (lane === 'permiso') {
       const permission = await askPermission();
       if (permission === null) return;
-      return onAdd({ executors: ['Claude'], permission });
+      return onAdd(lane, prefs.filters, { executors: ['Claude'], permission });
     }
-    onAdd(moveToLane({ executors: [] }, lane));
+    onAdd(lane, prefs.filters);
   };
 
   // Filter · search · sort (only the board's own; the table keeps its own).

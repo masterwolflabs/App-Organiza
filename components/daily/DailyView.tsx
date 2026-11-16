@@ -304,12 +304,21 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
   const isNew = React.useCallback((t: DailyTask) => newIds.includes(t.id) || t.title === 'Nueva tarea', [newIds]);
   // A new task takes the filters on screen, so it appears right there (like Notion).
   const filters = React.useRef<Filter[]>([]);
-  const fromFilters = () => {
+  // The table passes its own filters; the Tablero passes ITS filters (Emanuel, 2026-11-16).
+  const fromFilters = (list: Filter[] = filters.current) => {
     const out: Partial<DailyTask> = {};
     const lower = (t: string) => t.trim().toLowerCase();
     const pick = <K extends string>(info: Record<K, { label: string }>, v: string) => (Object.keys(info) as K[]).find((k) => lower(info[k].label) === v || lower(info[k].label).includes(v));
-    for (const f of filters.current) {
+    for (const f of list) {
+      if (f.op === 'igual' && f.value && (f.col === 'entrega' || f.col === 'empieza')) out[f.col === 'entrega' ? 'due' : 'start'] = f.value;
       const v = lower(f.op === 'en' ? f.value.split('|')[0] : f.value);
+      // "no es" / "no contiene": if the default would hide the new task, take the first value that passes.
+      if (v && (f.op === 'no_es' || f.op === 'no_contiene')) {
+        const ok = (label: string) => (f.op === 'no_es' ? lower(label) !== v : !lower(label).includes(v));
+        if (f.col === 'etiqueta' && !ok(TAG_INFO[out.tag ?? 'importante'].label)) out.tag = (Object.keys(TAG_INFO) as DailyTag[]).find((k) => ok(TAG_INFO[k].label)) ?? out.tag;
+        if (f.col === 'estado' && !ok(STATUS_INFO[out.status ?? 'sin_empezar'].label)) out.status = (Object.keys(STATUS_INFO) as DailyStatus[]).find((k) => ok(STATUS_INFO[k].label)) ?? out.status;
+        continue;
+      }
       if (!v || !['es', 'en', 'contiene'].includes(f.op)) continue;
       if (f.col === 'estado') out.status = pick(STATUS_INFO, v) ?? out.status;
       if (f.col === 'etiqueta') out.tag = pick(TAG_INFO, v) ?? out.tag;
@@ -325,10 +334,10 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
     }
     return out;
   };
-  const add = (p: Partial<DailyTask> = {}) => {
+  const add = (p: Partial<DailyTask> = {}, list?: Filter[]) => {
     const id = newId();
     setNewIds((l) => [...l, id]);
-    save([...fresh().tasks, { id, title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...fromFilters(), ...p }]);
+    save([...fresh().tasks, { id, title: 'Nueva tarea', executors: [], status: 'sin_empezar', app: labs ? ECOSYSTEM : (apps[0] ?? ''), tag: 'importante', start: todayISO(), due: null, description: '', order: Math.max(0, ...fresh().tasks.map((t) => t.order)) + 1, ...fromFilters(list), ...p }]);
     return id;
   };
   // Two confirmations: deleting is final (archiving is the soft option).
@@ -576,7 +585,11 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       onToggle={toggleSel}
       onSelect={setSel}
       onPatch={patch}
-      onAdd={add}
+      onAdd={(lane, list, extra) => {
+        // Like Notion: the new card takes the board's filters, and the column you clicked decides who does it.
+        const f = fromFilters(list);
+        add({ ...f, ...(extra ?? moveToLane({ executors: f.executors ?? [], status: f.status }, lane)) }, list);
+      }}
       renderOpen={(t, children) => <CardOpen t={t}>{children}</CardOpen>}
     />
   );
