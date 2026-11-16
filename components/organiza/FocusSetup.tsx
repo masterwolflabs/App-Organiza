@@ -147,12 +147,18 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     <button type="button" aria-label="Quitar" onClick={() => setVideos((l) => l.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   {p?.video && <EmbedCheck video={p.video} />}
+                  {p?.video && v.resume && (
+                    <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
+                      ⏭️ Cada día suenan {Math.round(((v.to ?? (v.from ?? 0) + 600) - (v.from ?? 0)) / 60)} min, desde donde quedaste la última vez (la primera vez, desde {fmtSeconds(v.from) || '0:00'}). Al terminarse el video, vuelve a empezar.
+                    </p>
+                  )}
                   {p?.video && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
                       <label className="flex items-center gap-1">Desde <input defaultValue={fmtSeconds(v.from) || '0:00'} onBlur={(e) => set(i, { from: toSeconds(e.target.value) || undefined })} className="w-14 rounded-md bg-white/[0.06] px-1.5 py-1 text-center text-zinc-100 outline-none ring-1 ring-white/10" /></label>
                       <label className="flex items-center gap-1">Hasta <input disabled={toEnd} key={toEnd ? 'fin' : 'corte'} defaultValue={toEnd ? '' : fmtSeconds(v.to)} placeholder="fin" onBlur={(e) => set(i, { to: toSeconds(e.target.value) })} className="w-14 rounded-md bg-white/[0.06] px-1.5 py-1 text-center text-zinc-100 outline-none ring-1 ring-white/10 disabled:opacity-40" /></label>
                       <button type="button" onClick={() => set(i, { to: toEnd ? (v.from ?? 0) + 300 : undefined })} className={`rounded-full px-2 py-1 font-semibold ring-1 ${toEnd ? 'bg-sky-600/30 text-sky-100 ring-sky-400/50' : 'text-zinc-400 ring-white/15'}`}>Hasta el final</button>
-                      <button type="button" onClick={() => set(i, { loop: !v.loop })} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ring-1 ${v.loop ? 'bg-violet-600/30 text-violet-100 ring-violet-400/50' : 'text-zinc-400 ring-white/15'}`}><Repeat className="h-3 w-3" /> En bucle</button>
+                      <button type="button" onClick={() => set(i, v.resume ? { resume: false } : { resume: true, loop: false, ...(toEnd ? { to: (v.from ?? 0) + 600 } : {}) })} data-help="Mentoría o audiolibro por partes: cada día suena lo que dura su desde–hasta, pero desde donde quedaste la última vez" className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ring-1 ${v.resume ? 'bg-emerald-600/30 text-emerald-100 ring-emerald-400/50' : 'text-zinc-400 ring-white/15'}`}>⏭️ Seguir donde quedé</button>
+                      <button type="button" onClick={() => set(i, { loop: !v.loop, ...(v.loop ? {} : { resume: false }) })} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ring-1 ${v.loop ? 'bg-violet-600/30 text-violet-100 ring-violet-400/50' : 'text-zinc-400 ring-white/15'}`}><Repeat className="h-3 w-3" /> En bucle</button>
                     </div>
                   )}
                 </li>

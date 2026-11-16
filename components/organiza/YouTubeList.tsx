@@ -203,7 +203,9 @@ type Slot = { player: YTPlayer | null; index: number; ready: boolean; state?: nu
 
 /** Reproductor chico que avanza solo por la lista, con crossfade entre canciones. */
 /** `volume` (0–100): el volumen propio de este focus (2026-11-11), el máximo al que sube cada canción y el crossfade. */
-export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number }; volume?: number }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek, volume = 100 }) => {
+export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAll?: boolean; paused?: boolean; seek?: { t: number; n: number }; volume?: number; /** Dónde va la que suena (índice, segundo, largo del video), varias veces por segundo. */ onProgress?: (index: number, sec: number, duration: number) => void }> = ({ videos, crossfade = 0, loopAll = false, paused = false, seek, volume = 100, onProgress }) => {
+  const progress = useRef(onProgress);
+  progress.current = onProgress;
   const top = useRef(volume);
   top.current = Math.max(0, Math.min(100, Math.round(volume)));
   const boxes = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
@@ -504,7 +506,10 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       }
       if (!parseYouTube(v.url)?.video) return;
       const now = cur.player.getCurrentTime?.() ?? 0;
-      const end = v.to ?? cur.player.getDuration?.() ?? 0;
+      const dur = cur.player.getDuration?.() ?? 0;
+      if (cur.state === 1) progress.current?.(cur.index, now, dur);
+      // A «hasta» past the real end (e.g. «Seguir donde quedé» near the end) ends with the video.
+      const end = v.to !== undefined && dur ? Math.min(v.to, dur) : v.to ?? dur;
       if (!end) return;
       const lead = v.loop ? 0.3 : Math.max(0.3, crossfade);
       if (now >= end - lead) return advance();

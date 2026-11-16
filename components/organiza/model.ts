@@ -10,7 +10,9 @@ export type Space = 'persona' | 'empresa';
 export type AlarmKind = 'no' | 'notificacion' | 'alarma';
 export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'youtube' | 'alimentacion' | 'entrenamiento';
 /** Un video de la lista de YouTube de una acción: desde/hasta en segundos (vacío = completo). */
-export type Video = { url: string; from?: number; to?: number; loop?: boolean };
+/** `resume` = «Seguir donde quedé» (Emanuel, 2026-11-16): cada día suena lo que dura su desde–hasta, pero desde donde
+ * quedaste la última vez (mentoría / audiolibro por partes). Dónde quedó se guarda en el registro del día (`Check.value.music`). */
+export type Video = { url: string; from?: number; to?: number; loop?: boolean; resume?: boolean };
 
 export type Module = {
   id: string;
@@ -81,7 +83,7 @@ export type Item = {
   bg_color?: string | null;
   border_color?: string | null;
 };
-export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; started?: boolean; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada'; /** Sueño (2026-11-12): lo que soñé, calidad 1-5, horas bien dormidas, despertares (horas). */ dream?: string; quality?: number; good?: number; wakeups?: string[] } };
+export type Check = { id?: string; ref: string; title: string; day: string; done: boolean; done_at?: string; value: { habits?: string[]; rules?: string[]; started?: boolean; bed?: string; wake?: string; state?: 'reprogramada' | 'cancelada'; /** Sueño (2026-11-12): lo que soñé, calidad 1-5, horas bien dormidas, despertares (horas). */ dream?: string; quality?: number; good?: number; wakeups?: string[]; /** Música «Seguir donde quedé»: segundo donde quedó cada video (por id de YouTube). */ music?: Record<string, number> } };
 export type DayClose = { day: string; space: Space; done: number; total: number; note: string; closed_at: string };
 
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];

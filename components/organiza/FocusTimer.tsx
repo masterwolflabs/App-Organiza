@@ -6,7 +6,7 @@ import { Check, FastForward, Pause, Play, Rewind, TriangleAlert, X } from 'lucid
 import { desktop } from '@/lib/desktop';
 import { SleepLog } from '@/components/organiza/SleepLog';
 import { BodyPortal } from '@/components/ui/BodyPortal';
-import { YouTubeList } from '@/components/organiza/YouTubeList';
+import { YouTubeList, parseYouTube } from '@/components/organiza/YouTubeList';
 import { coverCss, honesty, iso, refOf, stepPlan, type Item } from '@/components/organiza/model';
 import { useConfirm } from '@/components/ui/confirm';
 import type { useChecks } from '@/components/organiza/useHorario';
@@ -58,6 +58,33 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   const done = check?.value.habits ?? [];
   const music = item.modules.find((m) => m.type === 'youtube');
   const videos = item.modules.filter((m) => m.type === 'youtube').flatMap((m) => m.videos ?? []);
+  // ⏭️ «Seguir donde quedé» (Emanuel, 2026-11-16): esos videos suenan hoy lo que dura su desde–hasta, desde
+  // donde quedaste la última vez (el registro más reciente de esta acción). Se arma una vez al abrir el focus.
+  const ytId = (url: string) => parseYouTube(url)?.video ?? null;
+  const [playlist] = useState(() =>
+    videos.map((v) => {
+      const key = v.resume ? ytId(v.url) : null;
+      if (!key) return v;
+      const base = v.from ?? 0;
+      const span = Math.max(30, (v.to ?? base + 600) - base);
+      const last = checks.checks
+        .filter((c) => c.ref === refOf(item.title) && typeof c.value.music?.[key] === 'number')
+        .sort((a, b) => b.day.localeCompare(a.day))[0]?.value.music?.[key];
+      const start = last ?? base;
+      return { ...v, from: start, to: start + span };
+    }),
+  );
+  // Dónde va cada uno ahora (lo que suena manda, aunque hayas adelantado o retrocedido).
+  const pos = React.useRef<Record<string, number>>({});
+  const onProgress = (i: number, sec: number, dur: number) => {
+    const v = videos[i];
+    const key = v?.resume ? ytId(v.url) : null;
+    if (!key) return;
+    // Llegó al final del video: mañana parte otra vez desde el inicio.
+    pos.current[key] = dur && sec >= dur - 3 ? (v.from ?? 0) : Math.floor(sec);
+  };
+  const withMusic = (value: Record<string, unknown> = {}) =>
+    Object.keys(pos.current).length ? { ...value, music: { ...((value.music as Record<string, number>) ?? {}), ...pos.current } } : value;
   const current = steps.findIndex((s) => !done.includes(s));
   const allDone = steps.length > 0 && current === -1;
 
@@ -67,18 +94,29 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   const mark = (s: string) => {
     const next = done.includes(s) ? done.filter((x) => x !== s) : [...done, s];
     const complete = steps.length > 0 && steps.every((x) => next.includes(x));
-    checks.mark(item.title, today, complete || (check?.done ?? false), { ...check?.value, started: true, habits: next });
+    checks.mark(item.title, today, complete || (check?.done ?? false), withMusic({ ...check?.value, started: true, habits: next }));
   };
   const confirm = useConfirm();
+  // Cada 30 s queda guardado dónde va la mentoría (si se cierra la pestaña, mañana sigue casi desde ahí).
+  const saveRef = React.useRef<() => void>(() => {});
+  saveRef.current = () => {
+    if (!Object.keys(pos.current).length) return;
+    const c = checks.checks.find((x) => x.ref === refOf(item.title) && x.day === today);
+    void checks.mark(item.title, today, c?.done ?? false, withMusic({ ...c?.value, started: true }));
+  };
+  useEffect(() => {
+    const t = setInterval(() => saveRef.current(), 30_000);
+    return () => clearInterval(t);
+  }, []);
   // Salir sin terminar deja la acción «en curso» (si no estaba hecha).
   const leave = () => {
-    if (!check?.done) checks.mark(item.title, today, false, { ...check?.value, started: true });
+    if (!check?.done || Object.keys(pos.current).length) checks.mark(item.title, today, check?.done ?? false, withMusic({ ...check?.value, started: true }));
     onClose();
   };
   // «Terminé»: con todo el paso a paso hecho, directo; si faltan pasos, pide honestidad.
   const finish = async () => {
     if (!allDone && !check?.done && !(await confirm({ title: '¿Seguro que lo terminaste?', message: honesty(), confirmLabel: 'Sí, lo hice' }))) return;
-    checks.mark(item.title, today, true, { ...check?.value, started: true });
+    checks.mark(item.title, today, true, withMusic({ ...check?.value, started: true }));
     onDone();
   };
 
@@ -170,7 +208,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
           </div>
           {videos.length > 0 && (
             <div className="relative mx-auto mt-5 max-w-md">
-              <YouTubeList videos={videos} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} volume={music?.volume ?? 100} />
+              <YouTubeList videos={playlist} onProgress={onProgress} crossfade={music?.crossfade ?? 0} loopAll={music?.loopAll ?? false} paused={!running} seek={seek} volume={music?.volume ?? 100} />
             </div>
           )}
           {/* 😴 «¿Cómo dormiste?» en el focus de la mañana (Daily dormir-detectado): queda en la tarea Dormir. */}
