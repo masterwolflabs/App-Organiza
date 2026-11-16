@@ -80,8 +80,8 @@ async fn check_update(app: AppHandle, manual: bool) {
         Ok(Some(update)) => {
             let ok = app
                 .dialog()
-                .message(format!("Hay una versión nueva de Organiza para Mac ({}). ¿Actualizar ahora? Tarda unos segundos.", update.version))
-                .title("Organiza")
+                .message(format!("Hay una versión nueva de Master Planner para Mac ({}). ¿Actualizar ahora? Tarda unos segundos.", update.version))
+                .title("Master Planner")
                 .buttons(MessageDialogButtons::OkCancelCustom("Actualizar".into(), "Después".into()))
                 .blocking_show();
             if ok && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
@@ -90,12 +90,12 @@ async fn check_update(app: AppHandle, manual: bool) {
         }
         Ok(None) => {
             if manual {
-                app.dialog().message("Ya tienes la última versión de Organiza para Mac.").title("Organiza").blocking_show();
+                app.dialog().message("Ya tienes la última versión de Master Planner para Mac.").title("Master Planner").blocking_show();
             }
         }
         Err(e) => {
             if manual {
-                app.dialog().message(format!("No se pudo buscar actualizaciones: {e}")).title("Organiza").blocking_show();
+                app.dialog().message(format!("No se pudo buscar actualizaciones: {e}")).title("Master Planner").blocking_show();
             }
         }
     }
@@ -106,7 +106,7 @@ async fn check_update(app: AppHandle, manual: bool) {
 fn keep_awake() {
     use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
     let info = NSProcessInfo::processInfo();
-    let reason = NSString::from_str("Organiza: avisos, alarmas y focus a su hora");
+    let reason = NSString::from_str("Master Planner: avisos, alarmas y focus a su hora");
     let token = info.beginActivityWithOptions_reason(NSActivityOptions::UserInitiatedAllowingIdleSystemSleep, &reason);
     std::mem::forget(token);
 }
@@ -153,21 +153,21 @@ pub fn run() {
             let on_login = autostart.is_enabled().unwrap_or(false);
 
             // Menú del ícono de arriba.
-            let open = MenuItem::with_id(app, "abrir", "Abrir Organiza   ⌥ Espacio", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "abrir", "Abrir Master Planner   ⌥ Espacio", true, None::<&str>)?;
             let hoy = MenuItem::with_id(app, "inicio", "Hoy", true, None::<&str>)?;
             let horario = MenuItem::with_id(app, "horario", "Horario", true, None::<&str>)?;
             let daily = MenuItem::with_id(app, "daily", "Daily", true, None::<&str>)?;
             let cal = MenuItem::with_id(app, "calendario", "Calendario", true, None::<&str>)?;
             let login = CheckMenuItem::with_id(app, "login", "Abrir al prender el Mac", true, on_login, None::<&str>)?;
             let upd = MenuItem::with_id(app, "update", "Buscar actualizaciones…", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "salir", "Salir de Organiza", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "salir", "Salir de Master Planner", true, None::<&str>)?;
             let sep = || PredefinedMenuItem::separator(app);
             let menu = Menu::with_items(app, &[&open, &sep()?, &hoy, &horario, &daily, &cal, &sep()?, &login, &upd, &sep()?, &quit])?;
             let login_item = login.clone();
             TrayIconBuilder::with_id("organiza")
                 .icon(app.default_window_icon().cloned().expect("ícono"))
                 .icon_as_template(false)
-                .tooltip("Organiza")
+                .tooltip("Master Planner")
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(move |app, ev| match ev.id().as_ref() {
@@ -212,7 +212,7 @@ pub fn run() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("no se pudo abrir Organiza");
+        .expect("no se pudo abrir Master Planner");
 
     app.run(|app, ev| {
         // Clic en el ícono del Dock con la ventana escondida: la muestra.

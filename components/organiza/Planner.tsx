@@ -61,7 +61,7 @@ export const WeekPlanner: React.FC<{ kind: PlanKind }> = ({ kind }) => {
       {kind === 'meals' && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
           <button type="button" onClick={() => setGoalsOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-3 py-1.5 font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.09]"><Target className="h-3.5 w-3.5" /> Metas del día{nutrition.goals.kcal ? `: ${nutrition.goals.kcal} kcal` : ''}{nutrition.goals.protein ? ` · ${nutrition.goals.protein} g prot.` : ''}</button>
-          <span>Organiza no da pautas: tú decides qué comer, aquí lo organizas.</span>
+          <span>Master Planner no da pautas: tú decides qué comer, aquí lo organizas.</span>
         </div>
       )}
       {goalsOpen && <GoalsForm goals={nutrition.goals} onSave={(g) => { nutrition.save(g); setGoalsOpen(false); }} />}

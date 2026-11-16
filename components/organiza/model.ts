@@ -235,7 +235,7 @@ export const RANKS = [
   { name: 'Disciplinado', min: 1200, reward: 'Portada Fuego' },
   { name: 'Estratega', min: 2500, reward: 'Portada Aurora' },
   { name: 'Alfa', min: 5000, reward: 'Portada Oro' },
-  { name: 'Master Wolf', min: 10000, reward: 'El rango más alto de Organiza' },
+  { name: 'Master Wolf', min: 10000, reward: 'El rango más alto de Master Planner' },
 ];
 export function xpOf(checks: Check[], days: DayClose[]) {
   const done = checks.filter((c) => c.done).length;

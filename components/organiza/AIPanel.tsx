@@ -83,7 +83,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     const now = new Date();
     const screen = [
       `Ahora es ${now.toLocaleString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Hoy es ${now.toLocaleDateString('sv-SE')}.`,
-      `La persona está en Organiza viendo el Horario «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
+      `La persona está en Master Planner viendo el Horario «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
       'Si cuenta algo grande que cambia sus días (viaje, enfermedad, un familiar enfermo, mudanza, una catástrofe) o que su semana se está moviendo mucho, ofrécele dos caminos simples: cambiar su horario de verdad (horario_editar_tareas) o un horario provisorio por unos días (horarios_gestionar con accion «provisorio», dias y motivo: copia el horario solo para esos días y después vuelve solo el normal). Pregunta cuál prefiere antes de hacerlo.',
       'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en vivo en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
     ].join('\n');
@@ -119,11 +119,11 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
 
   return (
     <BodyPortal>
-      <aside role="dialog" aria-label="IA de Organiza" className="fixed inset-y-0 right-0 z-[90] flex w-full flex-col border-l border-white/10 bg-[#111317]/95 shadow-2xl backdrop-blur-xl sm:w-[400px]">
+      <aside role="dialog" aria-label="IA de Master Planner" className="fixed inset-y-0 right-0 z-[90] flex w-full flex-col border-l border-white/10 bg-[#111317]/95 shadow-2xl backdrop-blur-xl sm:w-[400px]">
         <header className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600"><Sparkles className="h-4 w-4 text-[#fff]" /></span>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-white">IA de Organiza</p>
+            <p className="font-semibold text-white">IA de Master Planner</p>
             <p className="text-xs text-zinc-400">Lo que pidas se hace en vivo · ↶ para deshacer</p>
           </div>
           <button type="button" onClick={fresh} data-help="Conversación nueva" aria-label="Conversación nueva" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /></button>

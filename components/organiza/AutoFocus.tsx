@@ -79,7 +79,7 @@ export const AutoFocus: React.FC = () => {
         // Si no estás mirando, o el navegador no dejará sonar la música sin un toque, avisa igual con la
         // notificación del sistema (con su sonido): así despierta aunque la música quede muda.
         const noTouch = !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
-        if (document.visibilityState !== 'visible' || noTouch) void notify(`⏰ ${i.title}`, 'Se abrió tu modo focus. Toca para volver a Organiza y que suene la música.', true);
+        if (document.visibilityState !== 'visible' || noTouch) void notify(`⏰ ${i.title}`, 'Se abrió tu modo focus. Toca para volver a Master Planner y que suene la música.', true);
       }
     };
     tick();

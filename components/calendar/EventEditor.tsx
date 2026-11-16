@@ -366,7 +366,7 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
               <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                 <label className="flex cursor-pointer items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-white">🧭 Antes y después</span>
-                  <input type="checkbox" checked={prepOn} disabled={readOnly} onChange={(e) => setPrepOn(e.target.checked)} className="h-4 w-4 accent-sky-500" data-help="Arma en tu Horario la ducha, el arreglarte y el trayecto (ida y vuelta). Solo en Organiza: no se mandan a Google." />
+                  <input type="checkbox" checked={prepOn} disabled={readOnly} onChange={(e) => setPrepOn(e.target.checked)} className="h-4 w-4 accent-sky-500" data-help="Arma en tu Horario la ducha, el arreglarte y el trayecto (ida y vuelta). Solo en Master Planner: no se mandan a Google." />
                 </label>
                 {!prepOn && <p className="mt-1 text-xs text-white/40">¿Te arreglas, te duchas, cuánto te demoras en llegar? Actívalo y lo agendo en tu Horario.</p>}
                 {prepOn && (

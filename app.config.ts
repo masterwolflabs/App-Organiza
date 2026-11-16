@@ -9,10 +9,12 @@ export const APP = {
   /** Identificador en la nube: el `slug` de la fila de esta app en hub_apps. */
   slug: 'organiza',
   /** Nombre visible (barra superior, menú, pestaña del navegador). */
-  name: 'Organiza',
+  name: 'Master Planner',
   /** Línea bajo el nombre en el logo ("MASTER WOLF" / "Finance"). */
-  brandTop: 'MASTER WOLF',
-  brandBottom: 'Organiza',
+  brandTop: 'MASTER',
+  brandBottom: 'Planner',
+  /** Logo propio (Master Planner, 2026-11-16): reemplaza al lobo en la barra y el menú. */
+  logo: '/brand-mark.png',
   description: 'Tu calendario y tu horario hablando el mismo idioma.',
   /** Color de acento por defecto. Cada usuario lo puede cambiar en Configuración. */
   accent: 'amber' as AccentId,

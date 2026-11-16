@@ -283,7 +283,7 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
           )}
           <li className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
             Los que más usas salen primero. La elección se guarda en este dispositivo; tu lista y tus sonidos subidos, en tu cuenta.
-            {manage && ' Con Organiza cerrada, la notificación del sistema suena con el sonido del teléfono o del computador: los tuyos suenan con Organiza abierta.'}
+            {manage && ' Con Master Planner cerrada, la notificación del sistema suena con el sonido del teléfono o del computador: los tuyos suenan con Master Planner abierta.'}
           </li>
         </ul>
       )}
@@ -294,7 +294,7 @@ export const SoundList: React.FC<{ kind: SoundKind; manage?: boolean; startOpen?
         </button>
       )}
       {perm === 'denied' && (
-        <p className="border-t border-white/10 px-3 py-2.5 text-xs text-amber-300">🔕 El navegador tiene bloqueadas las notificaciones de Organiza. Toca el 🔒 junto a la dirección (arriba) → Notificaciones → Permitir.</p>
+        <p className="border-t border-white/10 px-3 py-2.5 text-xs text-amber-300">🔕 El navegador tiene bloqueadas las notificaciones de Master Planner. Toca el 🔒 junto a la dirección (arriba) → Notificaciones → Permitir.</p>
       )}
     </div>
   );

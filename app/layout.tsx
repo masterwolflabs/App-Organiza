@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: APP.name,
   description: APP.description,
   appleWebApp: { capable: true, title: APP.name, statusBarStyle: 'black-translucent' },
-  icons: { apple: '/apple-touch-icon.png' },
+  icons: { icon: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/apple-touch-icon.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

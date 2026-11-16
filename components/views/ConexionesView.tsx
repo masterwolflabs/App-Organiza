@@ -98,13 +98,13 @@ export const ConexionesView: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-4" data-tour="conexiones">
       <header className="mb-6">
         <h1 className="font-display text-4xl font-semibold text-white sm:text-5xl">Conexiones</h1>
-        <p className="mt-2 text-zinc-400">Une Organiza con los calendarios y notas que ya usas.</p>
+        <p className="mt-2 text-zinc-400">Une Master Planner con los calendarios y notas que ya usas.</p>
       </header>
       {msg && <p role="status" className="rounded-xl bg-sky-500/10 px-3 py-2 text-sm text-sky-200 ring-1 ring-sky-400/20">{msg}</p>}
 
       <section className={panel}>
         <h2 className="font-semibold text-white">Avisos en este dispositivo</h2>
-        <p className="mt-1 text-sm text-zinc-400">Recibe tus alarmas aunque Organiza esté cerrada. En iPhone, primero agrégala a tu pantalla de inicio desde Safari.</p>
+        <p className="mt-1 text-sm text-zinc-400">Recibe tus alarmas aunque Master Planner esté cerrada. En iPhone, primero agrégala a tu pantalla de inicio desde Safari.</p>
         <button type="button" onClick={enablePush} disabled={push === 'on'} className={`${main} mt-3`}>{push === 'on' ? <Check className="h-4 w-4" /> : <BellRing className="h-4 w-4" />} {push === 'on' ? 'Avisos activados' : 'Activar avisos'}</button>
         {push === 'no' && <p className="mt-2 text-sm text-rose-300">Este dispositivo no pudo activar los avisos. Revisa el permiso de notificaciones.</p>}
       </section>
@@ -126,9 +126,9 @@ export const ConexionesView: React.FC = () => {
       <section className={panel}>
         <h2 className="font-semibold text-white">Calendario de Apple</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          La forma completa: en tu iPhone entra a Ajustes, Calendario, Cuentas, y agrega tu cuenta de Google. Así todo lo de Organiza llega a tu Calendario.
+          La forma completa: en tu iPhone entra a Ajustes, Calendario, Cuentas, y agrega tu cuenta de Google. Así todo lo de Master Planner llega a tu Calendario.
         </p>
-        <p className="mt-2 text-sm text-zinc-400">Si no usas Google, suscríbete a tu calendario de Organiza (solo se lee):</p>
+        <p className="mt-2 text-sm text-zinc-400">Si no usas Google, suscríbete a tu calendario de Master Planner (solo se lee):</p>
         {feed ? (
           <div className="mt-3 flex flex-wrap gap-2">
             <a href={https.replace(/^https?:/, 'webcal:')} className={main}>Suscribirme en Apple</a>
@@ -150,7 +150,7 @@ export const ConexionesView: React.FC = () => {
                   <button type="button" disabled={busy === d.id} onClick={() => importDb(d.id, d.title)} className={soft}>{busy === d.id ? 'Trayendo…' : 'Traer'}</button>
                 </li>
               ))}
-              {!dbs.length && <li className="py-2 text-sm text-zinc-500">No hay bases compartidas con Organiza todavía.</li>}
+              {!dbs.length && <li className="py-2 text-sm text-zinc-500">No hay bases compartidas con Master Planner todavía.</li>}
             </ul>
             <button type="button" onClick={() => disconnect('notion')} className="mt-2 text-sm font-semibold text-zinc-400 hover:text-white">Desconectar</button>
           </>

@@ -14,8 +14,8 @@ export interface TourScriptStep {
 }
 
 export const TOUR_SCRIPT: TourScriptStep[] = [
-  { id: 'intro', title: 'Bienvenido a Organiza', body: 'En un par de minutos te muestro cómo ordenar tu tiempo acá. Puedes retroceder, saltarte el tutorial o acelerar mi voz cuando quieras.', section: 'inicio' },
-  { id: 'espacio', title: 'Persona y Empresa', body: 'Organiza tiene dos bases. Persona es para tu vida, y Empresa es para tu trabajo. Cambias de una a otra aquí arriba, y cada una guarda lo suyo.', section: 'inicio', target: 'espacio' },
+  { id: 'intro', title: 'Bienvenido a Master Planner', body: 'En un par de minutos te muestro cómo ordenar tu tiempo acá. Puedes retroceder, saltarte el tutorial o acelerar mi voz cuando quieras.', section: 'inicio' },
+  { id: 'espacio', title: 'Persona y Empresa', body: 'Master Planner tiene dos bases. Persona es para tu vida, y Empresa es para tu trabajo. Cambias de una a otra aquí arriba, y cada una guarda lo suyo.', section: 'inicio', target: 'espacio' },
   { id: 'daily', title: 'Tus pendientes, primero', body: 'Esta es tu Daily. Lo primero que ves al entrar es lo que tienes pendiente, con su prioridad y su entrega. Es tuya: cambia lo que quieras.', section: 'inicio', target: 'daily' },
   { id: 'horario', title: 'Tu horario', body: 'Aquí armas tu semana. Puedes partir desde una plantilla o en blanco, y verla como tablero, semana, galería o lista.', section: 'horario', target: 'horario' },
   { id: 'mundo', title: 'Cada tarea es un mundo', body: 'Toca una tarea y se abre. Puedes darle portada, color, nota y alarma, marcar si la hiciste, ver tu racha, y agregarle microhábitos, tu sueño o un plan de entrenamiento o de comidas.', section: 'horario' },
@@ -23,7 +23,7 @@ export const TOUR_SCRIPT: TourScriptStep[] = [
   { id: 'checklist', title: 'Cierra tu día', body: 'Al final del día repasas todo lo que tocaba: esto lo hice, esto no. Así mañana sabes exactamente en qué mejorar.', section: 'checklist', target: 'checklist' },
   { id: 'ruta', title: 'Tu Ruta', body: 'Cada cosa que cumples te da experiencia. Subes de rango y desbloqueas beneficios, como portadas nuevas.', section: 'ruta', target: 'ruta' },
   { id: 'ia', title: 'Tu asistente', body: 'En IA tienes un chat abierto para hablar de orden y planificación. Pídele ayuda para armar tu semana, o un dato curioso sobre hábitos.', section: 'ia' },
-  { id: 'conexiones', title: 'Conecta tus calendarios', body: 'En Conexiones unes Organiza con Google Calendar, con el calendario de tu iPhone y con Notion.', section: 'conexiones' },
+  { id: 'conexiones', title: 'Conecta tus calendarios', body: 'En Conexiones unes Master Planner con Google Calendar, con el calendario de tu iPhone y con Notion.', section: 'conexiones' },
   { id: 'fin', title: 'Listo, a ordenarse', body: 'Ya conoces lo importante. Empieza publicando tu primer horario. Puedes volver a ver este tutorial desde el menú de tu perfil.', section: 'inicio' },
 ];
 

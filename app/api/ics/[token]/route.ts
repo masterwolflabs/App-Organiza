@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
   const { data } = await db.from('calendar_events').select('*').eq('owner_id', feed.owner_id).eq('app', 'organiza').neq('status', 'cancelado').limit(2000);
   const { data: items } = await db.from('organiza_items').select('id, alarm, alarm_before').eq('owner_id', feed.owner_id);
   const alarmOf = new Map((items ?? []).map((i) => [i.id as string, i]));
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Master Wolf Labs//Organiza//ES', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Organiza', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Master Wolf Labs//Master Planner//ES', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Master Planner', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H'];
   for (const e of data ?? []) {
     lines.push('BEGIN:VEVENT', `UID:${e.id}@organiza`, `DTSTAMP:${stamp(new Date().toISOString())}`, `SUMMARY:${esc(e.title || 'Sin título')}`);
     if (e.all_day) lines.push(`DTSTART;VALUE=DATE:${e.starts_at.slice(0, 10).replace(/-/g, '')}`);
@@ -25,7 +25,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
     for (const d of e.exdates ?? []) lines.push(`EXDATE;VALUE=DATE:${d.replace(/-/g, '')}`);
     if (e.description) lines.push(`DESCRIPTION:${esc(e.description)}`);
     const a = alarmOf.get(e.source_ref);
-    if (a && a.alarm !== 'no') lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(e.title || 'Organiza')}`, `TRIGGER:-PT${a.alarm_before}M`, 'END:VALARM');
+    if (a && a.alarm !== 'no') lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(e.title || 'Master Planner')}`, `TRIGGER:-PT${a.alarm_before}M`, 'END:VALARM');
     lines.push('END:VEVENT');
   }
   lines.push('END:VCALENDAR');
