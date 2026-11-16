@@ -7,7 +7,7 @@ import { desktop } from '@/lib/desktop';
 import { SleepLog } from '@/components/organiza/SleepLog';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { YouTubeList } from '@/components/organiza/YouTubeList';
-import { coverCss, honesty, iso, refOf, type Item } from '@/components/organiza/model';
+import { coverCss, honesty, iso, refOf, stepPlan, type Item } from '@/components/organiza/model';
 import { useConfirm } from '@/components/ui/confirm';
 import type { useChecks } from '@/components/organiza/useHorario';
 
@@ -33,7 +33,6 @@ export const FOCUS_SWITCH = 'organiza:focus-switch';
  * que queda, y si te atrasas sale «¡Apúrate!». Si tiene Lista de YouTube, suena sola.
  */
 export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChecks>; onDone: () => void; onClose: () => void }> = ({ item, checks, onDone, onClose }) => {
-  const total = item.minutes * 60;
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(true);
   // Adelantar / retroceder (para probar): el reloj salta y la música lo sigue.
@@ -51,16 +50,19 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
 
   const today = iso(new Date());
   const check = checks.checks.find((c) => c.ref === refOf(item.title) && c.day === today);
-  const steps = item.modules.find((m) => m.type === 'habitos')?.habits ?? [];
+  const stepsModule = item.modules.find((m) => m.type === 'habitos');
+  const steps = stepsModule?.habits ?? [];
+  // Cada paso con su tiempo (Emanuel, 2026-11-16); los sin tiempo se reparten lo que queda.
+  const { secs, total } = stepPlan(steps, stepsModule?.stepMinutes, item.minutes * 60);
+  const ends = secs.reduce<number[]>((a, x) => [...a, (a[a.length - 1] ?? 0) + x], []);
   const done = check?.value.habits ?? [];
   const music = item.modules.find((m) => m.type === 'youtube');
   const videos = item.modules.filter((m) => m.type === 'youtube').flatMap((m) => m.videos ?? []);
   const current = steps.findIndex((s) => !done.includes(s));
   const allDone = steps.length > 0 && current === -1;
-  const per = steps.length ? total / steps.length : total;
 
   const left = total - elapsed;
-  const late = left < 0 || (current >= 0 && elapsed > (current + 1) * per);
+  const late = left < 0 || (current >= 0 && elapsed > (ends[current] ?? total));
   // Al marcar el último paso, la acción queda hecha sola (sin preguntar: si hiciste todo, lo hiciste).
   const mark = (s: string) => {
     const next = done.includes(s) ? done.filter((x) => x !== s) : [...done, s];
@@ -116,7 +118,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
           <div className="mt-5">
             <div className="relative h-2 overflow-hidden rounded-full bg-white/10">
               <div className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${late ? 'bg-rose-500' : 'bg-emerald-400'}`} style={{ width: `${Math.min(100, (elapsed / total) * 100)}%` }} />
-              {steps.slice(0, -1).map((_, i) => <span key={i} className="absolute inset-y-0 w-px bg-white/30" style={{ left: `${((i + 1) / steps.length) * 100}%` }} />)}
+              {ends.slice(0, -1).map((at, i) => <span key={i} className="absolute inset-y-0 w-px bg-white/30" style={{ left: `${(at / total) * 100}%` }} />)}
             </div>
             <div className="mt-1.5 flex justify-between text-xs tabular-nums text-zinc-400">
               <span>Llevas {mmss(elapsed)}</span>
@@ -147,7 +149,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
                   >
                     <span className={`flex shrink-0 items-center justify-center rounded-full ring-2 ${isNow ? 'h-8 w-8 ring-white' : 'h-6 w-6 ring-white/40'} ${isDone ? 'bg-emerald-500 ring-emerald-400' : ''}`}>{isDone && <Check className="h-4 w-4 text-[#fff]" />}</span>
                     <span className={`min-w-0 flex-1 ${isNow ? 'text-lg font-semibold text-[#fff]' : 'text-sm text-zinc-300'} ${isDone ? 'line-through' : ''}`}>{s}</span>
-                    <span className="text-xs tabular-nums text-zinc-400">{mmss(Math.round(per))}</span>
+                    <span className="text-xs tabular-nums text-zinc-400">{mmss(Math.round(secs[i] ?? 0))}</span>
                   </button>
                 );
               })}

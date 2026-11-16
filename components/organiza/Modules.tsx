@@ -7,7 +7,7 @@ import { useDatabaseStore } from '@/utils/useDatabases';
 import { createFromTemplate } from '@/components/databases/DatabasesView';
 import { DB_TEMPLATES } from '@/utils/databases';
 import type { UserDatabase } from '@/utils/databases';
-import { iso, refOf, type Item, type Module } from '@/components/organiza/model';
+import { iso, refOf, stepPlan, type Item, type Module } from '@/components/organiza/model';
 import { Box, moveItem, useDragList } from '@/components/organiza/PanelSections';
 import { PlanLink } from '@/components/organiza/Planner';
 import { slotFor } from '@/components/organiza/plan';
@@ -91,7 +91,11 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
   const rename = (from: string, to: string) => {
     const t = to.trim();
     if (!t || t === from || habits.includes(t)) return;
-    patch({ habits: habits.map((x) => (x === from ? t : x)) });
+    const mins = m.stepMinutes?.[from];
+    const stepMinutes = { ...(m.stepMinutes ?? {}) };
+    delete stepMinutes[from];
+    if (mins) stepMinutes[t] = mins;
+    patch({ habits: habits.map((x) => (x === from ? t : x)), ...(m.stepMinutes ? { stepMinutes } : {}) });
     if (doneList.includes(from)) checks.mark(item.title, today, check?.done ?? false, { ...check?.value, [key]: doneList.map((x) => (x === from ? t : x)) });
   };
   // Mover: se arrastra desde la manija ⋮⋮ (mouse o dedo) y se suelta en su nuevo lugar.
@@ -121,6 +125,17 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+  // ⏱️ Minutos por paso (solo Paso a paso): vacío = automático (se reparte lo que queda de la acción).
+  const timed = m.type === 'habitos';
+  const plan = stepPlan(habits, m.stepMinutes, item.minutes * 60);
+  const setMinutes = (h: string, v: string) => {
+    const n = Math.max(0, Math.min(600, Math.round(Number(v.replace(',', '.')) || 0)));
+    const next = { ...(m.stepMinutes ?? {}) };
+    if (n) next[h] = n;
+    else delete next[h];
+    patch({ stepMinutes: next });
+  };
+  const fixedSum = habits.reduce((a, h) => a + (m.stepMinutes?.[h] ?? 0), 0);
   const shown = drag ? (() => { const n = [...habits]; const [it] = n.splice(drag.from, 1); n.splice(drag.to, 0, it); return n; })() : habits;
   return (
     <>
@@ -130,10 +145,34 @@ const Habits: React.FC<{ item: Item; m: Module; checks: Props['checks']; patch: 
             <button type="button" aria-label={`Mover ${h}`} data-help="Arrastra para mover" onPointerDown={(e) => startDrag(e, habits.indexOf(h))} className="cursor-grab touch-none p-0.5 text-zinc-600 opacity-60 hover:text-zinc-300 group-hover/step:opacity-100 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button>
             <button type="button" role="checkbox" aria-checked={doneList.includes(h)} aria-label={h} onClick={() => toggle(h)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ring-1 ${doneList.includes(h) ? 'bg-emerald-500 text-[#fff] ring-emerald-400' : 'ring-white/20'}`}>{doneList.includes(h) && <Check className="h-3.5 w-3.5" />}</button>
             <input key={h} defaultValue={h} aria-label="Editar paso" onBlur={(e) => rename(h, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = h; e.currentTarget.blur(); } }} className={`${input} text-zinc-200`} />
-            <button type="button" aria-label={`Quitar ${h}`} onClick={() => patch({ habits: habits.filter((x) => x !== h) })} className="p-1 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+            {timed && (
+              <label className="flex shrink-0 items-center gap-1 rounded-md px-1 text-xs text-zinc-500 focus-within:bg-white/[0.06]" data-help="Minutos de este paso en el focus. Vacío = automático: se reparte lo que queda de la acción.">
+                <input
+                  key={`${h}:${m.stepMinutes?.[h] ?? ''}`}
+                  type="number"
+                  min={0}
+                  max={600}
+                  inputMode="numeric"
+                  defaultValue={m.stepMinutes?.[h] ?? ''}
+                  placeholder={String(Number(((plan.secs[habits.indexOf(h)] ?? 0) / 60).toFixed(1)) || '–').replace('.', ',')}
+                  aria-label={`Minutos de ${h}`}
+                  onBlur={(e) => setMinutes(h, e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                  className={`w-10 bg-transparent py-1 text-right tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none ${m.stepMinutes?.[h] ? 'font-semibold text-white' : 'text-zinc-500 placeholder:text-zinc-500'}`}
+                />
+                min
+              </label>
+            )}
+            <button type="button" aria-label={`Quitar ${h}`} onClick={() => { const sm = { ...(m.stepMinutes ?? {}) }; delete sm[h]; patch({ habits: habits.filter((x) => x !== h), ...(m.stepMinutes ? { stepMinutes: sm } : {}) }); }} className="p-1 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
           </li>
         ))}
       </ul>
+      {timed && habits.length > 0 && (
+        <p className="mt-2 px-1 text-[11px] text-zinc-500">
+          ⏱️ {fixedSum ? `Pusiste ${fixedSum} de ${item.minutes} min` : `${item.minutes} min repartidos en partes iguales`}
+          {fixedSum > item.minutes ? ` · el focus durará ${fixedSum} min` : fixedSum && habits.some((h) => !m.stepMinutes?.[h]) ? ' · los pasos sin tiempo se reparten lo que queda' : ''}
+        </p>
+      )}
       <form className="mt-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !habits.includes(text.trim())) { patch({ habits: [...habits, text.trim()] }); setText(''); } }}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder={m.type === 'reglas' ? 'Agregar regla' : 'Agregar paso'} className={`${input} text-zinc-300`} />
       </form>

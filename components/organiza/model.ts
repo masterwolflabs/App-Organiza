@@ -17,6 +17,8 @@ export type Module = {
   type: ModuleType;
   title: string;
   habits?: string[];
+  /** Paso a paso: minutos de cada paso, por su texto (Emanuel, 2026-11-16). Sin minutos = se reparte lo que sobra. */
+  stepMinutes?: Record<string, number>;
   columns?: string[];
   rows?: string[][];
   databaseId?: string;
@@ -290,3 +292,17 @@ export const HONESTY = [
   'Sé honesto: es tu vida la que estás ordenando.',
 ];
 export const honesty = () => HONESTY[Math.floor(Math.random() * HONESTY.length)];
+
+/**
+ * Tiempos del Paso a paso (Emanuel, 2026-11-16): cada paso con minutos usa los suyos; los que no tienen
+ * se reparten en partes iguales lo que sobra de la acción. Si los pasos suman más que la acción, el focus
+ * dura lo que suman. Devuelve segundos por paso y el total del focus.
+ */
+export function stepPlan(steps: string[], stepMinutes: Record<string, number> | undefined, totalSec: number): { secs: number[]; total: number } {
+  const set = steps.map((s) => (stepMinutes?.[s] && stepMinutes[s] > 0 ? stepMinutes[s] * 60 : null));
+  const fixed = set.reduce<number>((a, x) => a + (x ?? 0), 0);
+  const free = set.filter((x) => x === null).length;
+  const rest = Math.max(0, totalSec - fixed);
+  const secs = set.map((x) => x ?? (free ? rest / free : 0));
+  return { secs, total: Math.max(totalSec, fixed + (free ? rest : 0)) };
+}
