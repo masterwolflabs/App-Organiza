@@ -84,10 +84,10 @@ function cellValue(text: string): number | null {
   return m[1] ? -n : n;
 }
 
-type FilterOp = 'contiene' | 'no_contiene' | 'es' | 'no_es' | 'en' | 'igual' | 'mayor' | 'menor' | 'antes' | 'despues' | 'vacio' | 'no_vacio';
+export type FilterOp = 'contiene' | 'no_contiene' | 'es' | 'no_es' | 'en' | 'igual' | 'mayor' | 'menor' | 'antes' | 'despues' | 'vacio' | 'no_vacio';
 /** Like Notion: each column filters by its kind (read from its cells). */
-type ColKind = 'text' | 'select' | 'number' | 'date';
-const OP_LABEL: Record<FilterOp, string> = {
+export type ColKind = 'text' | 'select' | 'number' | 'date';
+export const OP_LABEL: Record<FilterOp, string> = {
   contiene: 'contiene',
   no_contiene: 'no contiene',
   es: 'es',
@@ -101,7 +101,7 @@ const OP_LABEL: Record<FilterOp, string> = {
   vacio: 'está vacío',
   no_vacio: 'no está vacío',
 };
-const KIND_OPS: Record<ColKind, FilterOp[]> = {
+export const KIND_OPS: Record<ColKind, FilterOp[]> = {
   text: ['contiene', 'no_contiene', 'es', 'no_es', 'vacio', 'no_vacio'],
   select: ['es', 'no_es', 'en', 'contiene', 'vacio', 'no_vacio'],
   number: ['igual', 'mayor', 'menor', 'vacio', 'no_vacio'],
@@ -121,7 +121,7 @@ function kindOf(values: string[]): { kind: ColKind; options: string[] } {
 export type Filter = { col: string; op: FilterOp; value: string };
 export type Sort = { col: string; dir: 'asc' | 'desc' };
 
-function passes(text: string, f: Filter) {
+export function passes(text: string, f: Filter) {
   const t = norm(text);
   const v = norm(f.value);
   const empty = t === '' || t === '—' || t === '-';

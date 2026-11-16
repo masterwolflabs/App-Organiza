@@ -572,8 +572,6 @@ const Board: React.FC<DailyMode> = ({ docKey: KEY, labs, compact }) => {
       tasks={rows}
       now={now}
       photoOf={photoOf}
-      statusOptions={statusOptions}
-      appOptions={apps.map((a) => ({ value: a, label: a }))}
       selected={sel}
       onToggle={toggleSel}
       onSelect={setSel}
