@@ -686,3 +686,23 @@ export const Section: React.FC<{ n: number; title: string; description?: string;
     </section>
   );
 };
+
+/**
+ * Sticky toolbars (Emanuel, 2026-11-16): at rest they keep the section's own look (no strip of another color);
+ * only while stuck on top during a scroll do they get a backdrop, so the rows don't show through.
+ * Put `ref` on a 1px sentinel right before the sticky bar.
+ */
+export function useStuck<T extends HTMLElement>(remount?: unknown): [React.RefObject<T | null>, boolean] {
+  const ref = React.useRef<T | null>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let root: HTMLElement | null = el.parentElement;
+    while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < (e.rootBounds?.top ?? 0)), { root, threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [remount]);
+  return [ref, stuck];
+}

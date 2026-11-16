@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { ArrowDownUp, CheckSquare, Eye, EyeOff, KeyRound, ListFilter, Maximize2, Minimize2, Plus, Search, SlidersHorizontal, Square, X } from 'lucide-react';
 import { McAvatar } from '@/components/calendar/McAvatar';
 import { useAsk } from '@/components/ui/confirm';
-import { FloatingPanel, NameMenu, SectionCtx, SectionSettings } from '@/components/tables/section';
+import { FloatingPanel, NameMenu, SectionCtx, SectionSettings, useStuck } from '@/components/tables/section';
 import { LANES, STATUS_INFO, TAG_INFO, laneOf, moveToLane, priorityOf, type DailyLane, type DailyTask } from '@/utils/daily';
 
 /**
@@ -74,6 +74,7 @@ export const DailyBoard: React.FC<{
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
+  const [stuckRef, stuck] = useStuck<HTMLDivElement>(fullscreen);
   const [menu, setMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
   useEffect(() => {
     if (!fullscreen) return;
@@ -138,7 +139,7 @@ export const DailyBoard: React.FC<{
   };
 
   const toolbar = (
-    <div className="sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center justify-end gap-1 rounded-xl bg-[#101218]/85 px-2 py-1 backdrop-blur">
+    <div className={`sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center justify-end gap-1 rounded-xl px-2 py-1 transition-colors ${stuck ? 'bg-[#101218]/85 backdrop-blur' : ''}`}>
       <p className="mr-auto text-xs text-zinc-500">
         {nFilters || q ? `${shown.length} de ${tasks.filter((t) => !t.archived).length} · ` : ''}Arrastra una tarjeta para cambiar quién la hace · clic para abrir · clic derecho para seleccionar.
       </p>
@@ -253,6 +254,7 @@ export const DailyBoard: React.FC<{
 
   const board = (
     <section>
+      <div ref={stuckRef} className="h-px" aria-hidden />
       {toolbar}
       <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
         {lanes.map((lane) => {

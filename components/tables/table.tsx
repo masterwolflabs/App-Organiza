@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChartGantt, Copy, LayoutDashboard, Newspaper, GripVertical, LayoutGrid, Table2, ListFilter, Lock, LockOpen, Maximize2, Minimize2, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { formatCLP } from '@/utils/formatters';
 import { amountsHidden } from '@/utils/privacy';
-import { FloatingPanel, NameMenu, SectionCtx, SectionSettings } from '@/components/tables/section';
+import { FloatingPanel, NameMenu, SectionCtx, SectionSettings, useStuck } from '@/components/tables/section';
 import { useTableViewsStore } from '@/components/tables/viewsStore';
 import { CellMenu, EMPTY_FMT, fmtCss, type Fmt, type MenuTarget } from '@/components/tables/cellMenu';
 import { CF_PREFIX, CustomCell, CustomFieldMenu, builtinValue, useCustomFields, type Builtin } from '@/components/tables/customFields';
@@ -900,6 +900,7 @@ export const Table: React.FC<{
     </FloatingPanel>
   );
 
+  const [stuckRef, stuck] = useStuck<HTMLDivElement>(fullscreen);
   const toolbar = id && (
     <div className="mb-2 flex flex-wrap items-center justify-end gap-1">
       {active && (
@@ -970,8 +971,9 @@ export const Table: React.FC<{
       <SectionCtx.Provider value={null}>
         <div>
           {/* Views + toolbar stay fixed on top while the table scrolls (Emanuel, 2026-11-16). */}
+          {(viewsBar || toolbar) && <div ref={stuckRef} className="h-px" aria-hidden />}
           {(viewsBar || toolbar) && (
-            <div className="sticky top-0 z-20 -mx-2 rounded-xl bg-[#101218]/85 px-2 pt-1 backdrop-blur">
+            <div className={`sticky top-0 z-20 -mx-2 rounded-xl px-2 pt-1 transition-colors ${stuck ? 'bg-[#101218]/85 backdrop-blur' : ''}`}>
               {viewsBar}
               {toolbar}
             </div>
