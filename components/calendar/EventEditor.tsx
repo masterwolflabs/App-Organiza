@@ -59,8 +59,17 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
   const [t1, setT1] = useState(toTimeInput(draft.start));
   const [endDate, setEndDate] = useState(toDateInput(draft.end));
   const [t2, setT2] = useState(toTimeInput(draft.end));
+  // Días (Daily «MODIFICACIÓN 01», 2026-11-16): one row of 7 day buttons replaces «Día» + «Se repite».
+  // None = only that date · some = every week on those days · all 7 = every day. «Más opciones»: each month / year.
   const [repeat, setRepeat] = useState<RepeatPreset>(rruleToPreset(draft.rrule ?? null));
-  const [days, setDays] = useState<string[]>(rruleDays(draft.rrule));
+  const [days, setDays] = useState<string[]>(() => {
+    const p = rruleToPreset(draft.rrule ?? null);
+    const all = WEEK.map(([id]) => id as string);
+    return p === 'daily' ? all : p === 'weekdays' ? all.slice(0, 5) : p === 'weekly' ? rruleDays(draft.rrule) : [];
+  });
+  // An existing rule (e.g. from Google, every 2 weeks) stays exactly as it was until the days are touched.
+  const [touched, setTouched] = useState(false);
+  const [moreRepeat, setMoreRepeat] = useState(repeat === 'monthly' || repeat === 'yearly');
   const [mode, setMode] = useState<EventMode | null>(draft.mode ?? null);
   const [location, setLocation] = useState(draft.location ?? '');
   const [meetingUrl, setMeetingUrl] = useState(draft.meeting_url ?? '');
@@ -103,11 +112,14 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
   const start = allDay ? fromInputs(date, '00:00') : fromInputs(date, t1);
   const end = allDay ? fromInputs(endDate, '23:59') : fromInputs(endDate, t2);
   const valid = end >= start;
-  const weekDays = days.length ? days : [BYDAY[start.getDay()]];
-  const toggleDay = (d: string) => {
-    const next = weekDays.includes(d) ? weekDays.filter((x) => x !== d) : [...weekDays, d];
-    if (next.length) setDays(WEEK.map(([id]) => id).filter((id) => next.includes(id)));
+  const byMonthYear = repeat === 'monthly' || repeat === 'yearly';
+  const pickDays = (next: string[]) => {
+    setTouched(true);
+    if (byMonthYear) setRepeat('');
+    setDays(WEEK.map(([id]) => id as string).filter((id) => next.includes(id)));
   };
+  const toggleDay = (d: string) => pickDays(days.includes(d) && !byMonthYear ? days.filter((x) => x !== d) : [...(byMonthYear ? [] : days), d]);
+  const rrule = !touched && draft.rrule ? draft.rrule : byMonthYear ? presetToRrule(repeat, start) : days.length === 7 ? 'FREQ=DAILY' : days.length ? `FREQ=WEEKLY;BYDAY=${days.join(',')}` : null;
 
   const warnings = useMemo(
     () => (valid ? logistics({ id: draft.id, start, end, mode, location, all_day: allDay }, around(start, end)) : []),
@@ -143,7 +155,7 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
       all_day: allDay,
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
-      rrule: presetToRrule(repeat, start, weekDays),
+      rrule,
       mode,
       location: mode === 'presencial' ? location.trim() || null : null,
       meeting_url: mode === 'online' ? meetingUrl.trim() || null : null,
@@ -273,17 +285,33 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/70">
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /> Todo el día</label>
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={tentative} onChange={(e) => setTentative(e.target.checked)} /> Por confirmar</label>
-              {!draft.series_id && (
-                <select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatPreset)} aria-label="Repetición" className={`${field} w-auto flex-1`}>
-                  {REPEATS.map((r) => <option key={r.id} value={r.id}>{r.label(start)}</option>)}
-                </select>
-              )}
             </div>
-            {repeat === 'weekly' && (
-              <div className="flex gap-1.5">
-                {WEEK.map(([id, l]) => (
-                  <button key={id} type="button" onClick={() => toggleDay(id)} aria-pressed={weekDays.includes(id)} aria-label={`Repetir ${id}`} className={`h-8 w-8 rounded-full text-xs font-medium transition ${weekDays.includes(id) ? 'bg-sky-500 text-black' : 'bg-white/[0.06] text-white/55 hover:bg-white/10'}`}>{l}</button>
-                ))}
+            {!draft.series_id && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-white/50">{byMonthYear ? 'Se repite ' + (repeat === 'monthly' ? `cada mes el día ${start.getDate()}` : 'cada año') : days.length === 7 ? 'Todos los días' : days.length ? 'Se repite esos días, cada semana' : 'Días · sin marcar = solo esta fecha'}</span>
+                  <button type="button" onClick={() => pickDays(days.length === 7 && !byMonthYear ? [] : WEEK.map(([id]) => id as string))} className="rounded-md px-1.5 py-0.5 text-xs text-sky-300 hover:bg-sky-400/10">
+                    {days.length === 7 && !byMonthYear ? 'Ninguno' : 'Todos'}
+                  </button>
+                </div>
+                <div className="flex gap-1.5">
+                  {WEEK.map(([id, l]) => {
+                    const on = !byMonthYear && days.includes(id);
+                    return (
+                      <button key={id} type="button" onClick={() => toggleDay(id)} aria-pressed={on} aria-label={`Repetir ${id}`} className={`h-8 w-8 rounded-full text-xs font-medium transition ${on ? 'bg-sky-500 text-black' : 'bg-white/[0.06] text-white/55 hover:bg-white/10'}`}>
+                        {l}
+                      </button>
+                    );
+                  })}
+                </div>
+                {moreRepeat ? (
+                  <select value={byMonthYear ? repeat : ''} onChange={(e) => { setTouched(true); setRepeat(e.target.value as RepeatPreset); }} aria-label="Más opciones de repetición" className={`${field} w-auto`}>
+                    <option value="">Los días de arriba</option>
+                    {REPEATS.filter((r) => r.id === 'monthly' || r.id === 'yearly').map((r) => <option key={r.id} value={r.id}>{r.label(start)}</option>)}
+                  </select>
+                ) : (
+                  <button type="button" onClick={() => setMoreRepeat(true)} className="text-[11px] text-white/40 hover:text-white/70">Más opciones (cada mes, cada año)</button>
+                )}
               </div>
             )}
             {draft.rrule && !isNew && <p className="text-[11px] text-white/40">Se repite: los cambios aplican a toda la serie.</p>}
@@ -371,7 +399,7 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
                       🏠 Agendar también la vuelta (mismo trayecto, al terminar)
                     </label>
                     {summary && <p className="rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-100">{summary}</p>}
-                    <p className="text-[11px] text-white/35">Se agenda en tu Horario solo para el día de este evento{repeat ? ' (no en cada repetición)' : ''}. No se manda a Google.</p>
+                    <p className="text-[11px] text-white/35">Se agenda en tu Horario solo para el día de este evento{rrule ? ' (no en cada repetición)' : ''}. No se manda a Google.</p>
                   </div>
                 )}
               </div>
