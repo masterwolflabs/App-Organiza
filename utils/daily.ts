@@ -109,10 +109,12 @@ export const newId = () => Math.random().toString(36).slice(2, 10);
  * executors (+ `permission`), so the table and the board can never disagree; dragging a card just
  * changes the executors.
  */
-export type DailyLane = 'juntos' | 'humanos' | 'claude' | 'permiso' | 'revision' | 'listo';
+export type DailyLane = 'juntos' | 'emanuel' | 'moises' | 'claude' | 'permiso' | 'revision' | 'listo';
 export const LANES: { id: DailyLane; title: string; hint: string; dot: string; col: string; head: string }[] = [
   { id: 'juntos', title: '🤝 Juntos', hint: 'Emanuel o Moisés con Claude', dot: 'bg-violet-400', col: 'bg-violet-500/[0.06] ring-violet-400/15', head: 'bg-violet-500/15 text-violet-200' },
-  { id: 'humanos', title: '🙋 Emanuel / Moisés', hint: 'Solo personas del equipo', dot: 'bg-sky-400', col: 'bg-sky-500/[0.06] ring-sky-400/15', head: 'bg-sky-500/15 text-sky-200' },
+  // Separated (Emanuel, 2026-11-16): one column each. A task of both (without Claude) shows in both, like Notion grouping by person.
+  { id: 'emanuel', title: '🙋 Emanuel', hint: 'Solo Emanuel (sin Claude)', dot: 'bg-sky-400', col: 'bg-sky-500/[0.06] ring-sky-400/15', head: 'bg-sky-500/15 text-sky-200' },
+  { id: 'moises', title: '🙋 Moisés', hint: 'Solo Moisés (sin Claude)', dot: 'bg-teal-400', col: 'bg-teal-500/[0.06] ring-teal-400/15', head: 'bg-teal-500/15 text-teal-200' },
   { id: 'claude', title: '🤖 Claude Work', hint: 'Claude la hace solo', dot: 'bg-orange-400', col: 'bg-orange-500/[0.06] ring-orange-400/15', head: 'bg-orange-500/15 text-orange-200' },
   { id: 'permiso', title: '🔑 Faltan Permisos', hint: 'Claude ya casi termina: solo espera tu OK', dot: 'bg-amber-400', col: 'bg-amber-500/[0.07] ring-amber-400/20', head: 'bg-amber-500/15 text-amber-200' },
   { id: 'revision', title: '🔍 En Revisión', hint: 'Claude dice que la terminó: te toca revisarla (si está bien, pásala a Completo)', dot: 'bg-fuchsia-400', col: 'bg-fuchsia-500/[0.06] ring-fuchsia-400/15', head: 'bg-fuchsia-500/15 text-fuchsia-200' },
@@ -120,13 +122,24 @@ export const LANES: { id: DailyLane; title: string; hint: string; dot: string; c
 ];
 export const isClaude = (name: string) => name.trim().toLowerCase() === 'claude';
 
+const first = (n: string) => n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().split(/\s+/)[0];
+const isEmanuel = (ps: string[]) => ps.some((p) => first(p) === 'emanuel');
+const isMoises = (ps: string[]) => ps.some((p) => first(p) === 'moises');
+export const EMANUEL = 'Emanuel Miranda';
+export const MOISES = 'Moisés Montano';
+/** Every column a card shows in: a task of Emanuel AND Moisés (no Claude) is in both. */
+export function lanesOf(t: Pick<DailyTask, 'executors' | 'permission'> & { status?: DailyStatus }): DailyLane[] {
+  const lane = laneOf(t);
+  return lane === 'emanuel' && isMoises(t.executors) ? ['emanuel', 'moises'] : [lane];
+}
+
 export function laneOf(t: Pick<DailyTask, 'executors' | 'permission'> & { status?: DailyStatus }): DailyLane {
   if (t.status === 'listo') return 'listo';
   // Done but not yet approved by Emanuel / Moisés (Emanuel, 2026-10-29).
   if (t.status === 'en_revision' || t.status === 'por_aprobar') return 'revision';
   const claude = t.executors.some(isClaude);
   if (claude && t.permission?.trim()) return 'permiso';
-  if (!claude) return 'humanos';
+  if (!claude) return isMoises(t.executors) && !isEmanuel(t.executors) ? 'moises' : 'emanuel';
   return t.executors.some((p) => !isClaude(p)) ? 'juntos' : 'claude';
 }
 
@@ -140,7 +153,8 @@ export function moveToLane(t: Pick<DailyTask, 'executors'> & { status?: DailySta
 /** The executors (and permission) of each "who does it" column. */
 function whoFor(t: Pick<DailyTask, 'executors'>, lane: DailyLane, me: string): { executors: string[]; permission: string | null } {
   const humans = t.executors.filter((p) => !isClaude(p));
-  if (lane === 'humanos') return { executors: humans.length ? humans : [me], permission: null };
+  if (lane === 'emanuel') return { executors: [EMANUEL], permission: null };
+  if (lane === 'moises') return { executors: [MOISES], permission: null };
   if (lane === 'juntos') return { executors: [...(humans.length ? humans : [me]), 'Claude'], permission: null };
   return { executors: ['Claude'], permission: null };
 }

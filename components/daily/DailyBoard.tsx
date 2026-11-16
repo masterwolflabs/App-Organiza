@@ -7,7 +7,7 @@ import { McAvatar } from '@/components/calendar/McAvatar';
 import { useAsk } from '@/components/ui/confirm';
 import { FloatingPanel, NameMenu, SectionCtx, SectionSettings, useStuck } from '@/components/tables/section';
 import { KIND_OPS, OP_LABEL, passes, type ColKind, type Filter, type FilterOp } from '@/components/tables/table';
-import { LANES, STATUS_INFO, TAG_INFO, laneOf, moveToLane, priorityOf, showDate, type DailyLane, type DailyTask } from '@/utils/daily';
+import { LANES, STATUS_INFO, TAG_INFO, laneOf, lanesOf, moveToLane, priorityOf, showDate, type DailyLane, type DailyTask } from '@/utils/daily';
 
 /**
  * Tablero de la Daily (Emanuel, 2026-10-28) — under the table, like Notion's "Tablero": one column per
@@ -103,7 +103,7 @@ export const DailyBoard: React.FC<{
   const [query, setQuery] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
   const [stuckRef, stuck] = useStuck<HTMLDivElement>(fullscreen);
-  const [menu, setMenu] = useState<{ x: number; y: number; t: DailyTask } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; t: DailyTask; lane: DailyLane } | null>(null);
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !panel && setFullscreen(false);
@@ -121,7 +121,7 @@ export const DailyBoard: React.FC<{
 
   const drop = async (lane: DailyLane, id: string) => {
     const t = tasks.find((x) => x.id === id);
-    if (!t || laneOf(t) === lane) return;
+    if (!t || lanesOf(t).includes(lane)) return;
     if (lane === 'permiso') {
       const permission = await askPermission(t.permission);
       if (permission === null) return;
@@ -147,10 +147,10 @@ export const DailyBoard: React.FC<{
   if (prefs.sort === 'nombre') open = [...open].sort((a, b) => a.title.localeCompare(b.title, 'es'));
   if (prefs.sort === 'reciente') open = [...open].sort((a, b) => b.order - a.order);
   const lanes = LANES.filter((l) => !prefs.hidden.includes(l.id));
-  const shown = open.filter((t) => lanes.some((l) => l.id === laneOf(t)));
+  const shown = open.filter((t) => lanes.some((l) => lanesOf(t).includes(l.id)));
   const nFilters = filters.length;
   const selecting = selected.length > 0;
-  const laneIds = (lane: DailyLane) => shown.filter((t) => laneOf(t) === lane).map((t) => t.id);
+  const laneIds = (lane: DailyLane) => shown.filter((t) => lanesOf(t).includes(lane)).map((t) => t.id);
   const toggleMany = (ids: string[]) => {
     const all = ids.length > 0 && ids.every((x) => selected.includes(x));
     onSelect(all ? selected.filter((x) => !ids.includes(x)) : Array.from(new Set([...selected, ...ids])));
@@ -325,7 +325,7 @@ export const DailyBoard: React.FC<{
       {toolbar}
       <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
         {lanes.map((lane) => {
-          const cards = open.filter((t) => laneOf(t) === lane.id);
+          const cards = open.filter((t) => lanesOf(t).includes(lane.id));
           const ids = cards.map((t) => t.id);
           const allSel = ids.length > 0 && ids.every((x) => selected.includes(x));
           return (
@@ -407,7 +407,7 @@ export const DailyBoard: React.FC<{
                     onDragEnd={() => setDragging(null)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      setMenu({ x: e.clientX, y: e.clientY, t });
+                      setMenu({ x: e.clientX, y: e.clientY, t, lane: lane.id });
                     }}
                     className={`group/card relative cursor-grab rounded-xl border bg-[#15171c] shadow-sm transition active:cursor-grabbing ${on ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-white/10 hover:border-white/25'} ${dragging === t.id ? 'opacity-40' : lane.id === 'listo' && !on ? 'opacity-70 hover:opacity-100' : ''}`}
                   >
@@ -444,7 +444,7 @@ export const DailyBoard: React.FC<{
         })}
       </div>
       {menu && (() => {
-        const lane = laneOf(menu.t);
+        const lane = menu.lane;
         const col = laneIds(lane);
         const title = LANES.find((l) => l.id === lane)?.title ?? '';
         return (
