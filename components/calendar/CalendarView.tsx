@@ -440,7 +440,7 @@ export function CalendarView({ lockApp, source, horario }: { lockApp?: string; /
           around={around}
           onSave={async (patch) => {
             if (detaching && !(await cal.skipOne(detaching))) return false;
-            return !!(await cal.save(patch));
+            return await cal.save(patch);
           }}
           onDelete={async (id) => {
             if (!window.confirm('¿Eliminar este evento? Si se repite, se borra toda la serie.')) return;

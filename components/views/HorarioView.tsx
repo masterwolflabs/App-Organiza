@@ -1,6 +1,7 @@
 'use client';
 
 import { AIPanel } from '@/components/organiza/AIPanel';
+import { ScheduleHint } from '@/components/organiza/ScheduleHint';
 import { MARK_COLORS, setMarks, useAIMarks, type AIChange, type AIMarks } from '@/components/organiza/aiMarks';
 import { IconPicker, ItemIcon, iconText } from '@/components/organiza/IconPicker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -201,6 +202,9 @@ export const HorarioView: React.FC = () => {
   // Deshacer / Rehacer: botones ↶ ↷ y Cmd+Z / Cmd+Shift+Z (fuera de los campos de texto, que tienen el suyo).
   const [undone, setUndone] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  // The schedule hint opens the AI with the situation already told (Emanuel, 2026-11-16).
+  const [aiAsk, setAiAsk] = useState<string | null>(null);
+  const [hintNow] = useState(() => new Date());
   const step = async (kind: 'undo' | 'redo') => {
     const label = await (kind === 'undo' ? h.undo() : h.redo());
     if (label) setUndone(`${kind === 'undo' ? 'Deshecho' : 'Rehecho'}: ${label}`);
@@ -353,7 +357,7 @@ export const HorarioView: React.FC = () => {
           <button type="button" onClick={() => step('redo')} disabled={!h.canRedo} aria-label="Rehacer" data-help={h.redoLabel ? `Rehacer: ${h.redoLabel} (⌘⇧Z)` : 'Nada que rehacer'} className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"><Redo2 className="h-4 w-4" /></button>
         </div>
         <button type="button" onClick={() => setAiOpen(true)} data-help="Pídele a la IA cambios en tu horario o calendario: los hace en vivo" className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 px-3 py-1.5 text-sm font-semibold text-[#fff] shadow-lg shadow-fuchsia-500/20 hover:brightness-110"><Sparkles className="h-4 w-4" /> IA</button>
-        {aiOpen && <AIPanel h={h} cal={cal} onClose={() => setAiOpen(false)} />}
+        {aiOpen && <AIPanel h={h} cal={cal} initial={aiAsk} onClose={() => { setAiOpen(false); setAiAsk(null); }} />}
         {undone && <span role="status" className="rounded-lg bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-200 ring-1 ring-sky-400/30">{undone}</span>}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* Categorías (Emanuel, 2026-11-04): a la vista solo las 2 que más usas (y la que estés filtrando). */}
@@ -372,6 +376,7 @@ export const HorarioView: React.FC = () => {
       </div>
 
       <div className="mt-5">
+        <ScheduleHint h={h} checks={c.checks} now={hintNow} onAsk={(t) => { setAiAsk(t); setAiOpen(true); }} />
         {aiMarks && (
           <AIMarksBar marks={aiMarks} present={h.activeItems.filter((i) => aiMarks.ids.includes(i.id)).length} onApply={applyAI} />
         )}

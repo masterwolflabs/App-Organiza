@@ -170,7 +170,7 @@ export const AcomodarView: React.FC = () => {
           isMw={cal.isMw}
           readOnly={false}
           around={(s, e) => expand(cal.events, addDays(startOfDay(s), -1), addDays(startOfDay(e), 2))}
-          onSave={async (patch) => !!(await cal.save(patch))}
+          onSave={(patch) => cal.save(patch)}
           onDelete={() => undefined}
           onClose={() => { setDraft(null); setSuggested(null); }}
         />

@@ -5,6 +5,7 @@ import type { useHorario } from '@/components/organiza/useHorario';
 import type { useCalendar } from '@/components/calendar/useCalendar';
 import { BYDAY, type CalEvent } from '@/components/calendar/model';
 import { APP } from '@/app.config';
+import { makeProvisional } from '@/components/organiza/scheduleHints';
 
 /**
  * La IA de Organiza hace cosas en vivo (Emanuel, 2026-11-04). La nube devuelve acciones en la respuesta
@@ -82,6 +83,13 @@ export async function runAIActions(actions: unknown, ctx: { h: H; cal: Cal; conf
           const op = String(a.op);
           const sch = scheduleByName(a.schedule) ?? h.active;
           const name = typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined;
+          if (op === 'provisorio') {
+            const days = Math.max(1, Math.min(60, Math.round(Number(a.days) || 7)));
+            const from = typeof a.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.from) ? new Date(`${a.from}T00:00`) : new Date();
+            const r = await makeProvisional(h, days, typeof a.reason === 'string' ? a.reason.slice(0, 40) : null, from);
+            lines.push(r ? `🧳 Armé «${r.name}»: rige ${days} ${days === 1 ? 'día' : 'días'} y después vuelve solo tu horario normal` : '⚠️ No encontré un horario para copiar.');
+            continue;
+          }
           if (op === 'crear') { await h.createFrom('blanco', name); lines.push(`🆕 Creé el horario «${name ?? 'Mi horario'}» (en borrador)`); }
           else if (!sch) lines.push('⚠️ No encontré ese horario.');
           else if (op === 'duplicar') { await h.duplicate(sch.id, name ? { name } : {}); lines.push(`📄 Dupliqué «${sch.name}»`); }

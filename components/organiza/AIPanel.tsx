@@ -25,7 +25,7 @@ const IDEAS = [
   'Agenda una cena el viernes de 21:00 a 22:00',
 ];
 
-export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<ReturnType<typeof useCalendar>, 'save' | 'remove' | 'events'>; onClose: () => void }> = ({ h, cal, onClose }) => {
+export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<ReturnType<typeof useCalendar>, 'save' | 'remove' | 'events'>; /** A message to send as soon as it opens (the schedule hint). */ initial?: string | null; onClose: () => void }> = ({ h, cal, initial, onClose }) => {
   const [convId, setConvId] = useState<string | null>(() => {
     try {
       return localStorage.getItem(CONV_KEY);
@@ -54,6 +54,13 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const sentInitial = useRef(false);
+  useEffect(() => {
+    if (!initial || sentInitial.current) return;
+    sentInitial.current = true;
+    send(initial);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fresh = () => {
     setConvId(null);
     setMessages([]);
@@ -77,6 +84,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     const screen = [
       `Ahora es ${now.toLocaleString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Hoy es ${now.toLocaleDateString('sv-SE')}.`,
       `La persona está en Organiza viendo el Horario «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
+      'Si cuenta algo grande que cambia sus días (viaje, enfermedad, un familiar enfermo, mudanza, una catástrofe) o que su semana se está moviendo mucho, ofrécele dos caminos simples: cambiar su horario de verdad (horario_editar_tareas) o un horario provisorio por unos días (horarios_gestionar con accion «provisorio», dias y motivo: copia el horario solo para esos días y después vuelve solo el normal). Pregunta cuál prefiere antes de hacerlo.',
       'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en vivo en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
     ].join('\n');
     try {

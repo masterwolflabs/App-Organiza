@@ -279,6 +279,12 @@ export function useHorario() {
     record(`Reacomodar el ${day.slice(8)}/${day.slice(5, 7)}`, `p:${day}`, put(base), put(next));
     await put(next)();
   }, [db, plans, record, space]);
+  // The calendar's «antes y después» writes day plans from outside: bring them in so nothing stale overwrites them.
+  useEffect(() => {
+    const pull = async () => setPlans(await db.select<DayPlan>('organiza_day_plans', { space }));
+    window.addEventListener('organiza:plans-changed', pull);
+    return () => window.removeEventListener('organiza:plans-changed', pull);
+  }, [db, space]);
   const planOf = useCallback((date: Date) => plans.find((x) => x.day === iso(date)) ?? null, [plans]);
   const itemsOn = useCallback((date: Date) => {
     const s = scheduleFor(date, schedules, planOf(date));

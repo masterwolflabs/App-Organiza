@@ -12,6 +12,9 @@ import {
 } from './model';
 import type { Area } from './organiza';
 import type { Directory } from './useCalendar';
+import { useDb } from '@/components/organiza/db';
+import { useSpace } from '@/components/organiza/space';
+import { DEFAULT_PREP, TRAVEL, dayKey, loadPrep, mapsUrl, prepBlocks, prepSummary, savePrep, type Prep } from './eventPrep';
 
 export type Draft = Partial<CalEvent> & { start: Date; end: Date };
 
@@ -27,7 +30,8 @@ type Props = {
   readOnly: boolean;
   /** Occurrences around the event's day (for the logistics warnings). */
   around: (start: Date, end: Date) => Occurrence[];
-  onSave: (patch: Partial<CalEvent> & { id?: string }) => Promise<boolean>;
+  /** true / the saved event (with its id, needed for the «antes y después» of a new one) = saved. */
+  onSave: (patch: Partial<CalEvent> & { id?: string }) => Promise<boolean | { id: string } | null>;
   onDelete: (id: string) => void;
   onClose: () => void;
 };
@@ -75,6 +79,22 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  // «Antes y después» (Emanuel, 2026-11-16): bloques de preparación y viaje, solo en Organiza.
+  const db = useDb();
+  const { space } = useSpace();
+  const [prepOn, setPrepOn] = useState(false);
+  const [prep, setPrep] = useState<Prep>(DEFAULT_PREP);
+  const hadPrep = useRef(false);
+  const oldDays = [dayKey(new Date(draft.start.getTime() - 86400000)), dayKey(draft.start), dayKey(draft.end)];
+  useEffect(() => {
+    if (!draft.id || draft.id.startsWith('new:')) return;
+    loadPrep(db, space, draft.id, oldDays).then((p) => {
+      if (!p) return;
+      hadPrep.current = true;
+      setPrep(p);
+      setPrepOn(true);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isNew) titleRef.current?.focus();
@@ -141,6 +161,12 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
       ...(draft.series_id ? { series_id: draft.series_id } : {}),
       ...(isNew ? { source: draft.source ?? 'manual', time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone } : {}),
     });
+    if (ok) {
+      const id = typeof ok === 'object' ? ok.id : draft.id;
+      const want = prepOn && mode === 'presencial' && !allDay;
+      if (id && !id.startsWith('new:') && (want || hadPrep.current))
+        await savePrep(db, space, id, want ? prepBlocks(id, title, start, end, prep) : [], [...oldDays, dayKey(new Date(start.getTime() - 86400000)), dayKey(start), dayKey(end)]).catch(() => {});
+    }
     setBusy(false);
     if (!ok) setError('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');
     else onClose();
@@ -294,6 +320,63 @@ export function EventEditor({ draft, lockApp, areas = [], dir, userId, isMw, rea
               </div>
             )}
           </div>
+
+          {mode === 'presencial' && !allDay && (() => {
+            const chip = (on: boolean) => `rounded-lg px-2 py-1 text-xs ${on ? 'bg-sky-400/15 text-sky-200 ring-1 ring-sky-400/40' : 'bg-white/[0.04] text-white/55 hover:bg-white/10'}`;
+            const row = (lbl: string, values: [number, string][], key: 'arreglarse' | 'ducha' | 'margen') => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="w-24 shrink-0 text-xs text-white/60">{lbl}</span>
+                {values.map(([v, l]) => (
+                  <button key={v} type="button" disabled={readOnly} onClick={() => setPrep({ ...prep, [key]: v })} className={chip(prep[key] === v)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            );
+            const summary = prepSummary(start, prep);
+            return (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <label className="flex cursor-pointer items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-white">🧭 Antes y después</span>
+                  <input type="checkbox" checked={prepOn} disabled={readOnly} onChange={(e) => setPrepOn(e.target.checked)} className="h-4 w-4 accent-sky-500" data-help="Arma en tu Horario la ducha, el arreglarte y el trayecto (ida y vuelta). Solo en Organiza: no se mandan a Google." />
+                </label>
+                {!prepOn && <p className="mt-1 text-xs text-white/40">¿Te arreglas, te duchas, cuánto te demoras en llegar? Actívalo y lo agendo en tu Horario.</p>}
+                {prepOn && (
+                  <div className="mt-3 space-y-2">
+                    {row('💄 Arreglarme', [[0, 'No'], [15, '15 min'], [30, '30 min'], [45, '45 min'], [60, '1 h']], 'arreglarse')}
+                    {row('🚿 Ducha', [[0, 'Ya me duché'], [10, '10 min'], [15, '15 min'], [20, '20 min']], 'ducha')}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="w-24 shrink-0 text-xs text-white/60">Cómo voy</span>
+                      {TRAVEL.map((t) => (
+                        <button key={t.id} type="button" disabled={readOnly} onClick={() => setPrep({ ...prep, medio: t.id })} className={chip(prep.medio === t.id)}>
+                          {t.emoji} {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="w-24 shrink-0 text-xs text-white/60">🗺️ Trayecto</span>
+                      <input type="number" min={0} max={600} inputMode="numeric" disabled={readOnly} value={prep.trayecto || ''} onChange={(e) => setPrep({ ...prep, trayecto: Math.max(0, Math.min(600, Math.round(Number(e.target.value) || 0))) })} placeholder="0" className={`${field.replace('w-full', 'w-20')}`} />
+                      <span className="text-xs text-white/50">min</span>
+                      {location.trim() ? (
+                        <a href={mapsUrl(location.trim(), prep.medio)} target="_blank" rel="noreferrer" className="rounded-lg bg-sky-500/20 px-2.5 py-1 text-xs font-semibold text-sky-100 hover:bg-sky-500/30" data-help="Abre Google Maps con la ruta desde donde estás; mira los minutos y escríbelos aquí">
+                          Ver en Google Maps ↗
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-white/35">Escribe la dirección arriba para ver la ruta en Google Maps.</span>
+                      )}
+                    </div>
+                    {row('⏱️ Margen', [[0, 'Sin margen'], [10, '10 min'], [15, '15 min'], [30, '30 min']], 'margen')}
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-white/70">
+                      <input type="checkbox" checked={prep.vuelta} disabled={readOnly} onChange={(e) => setPrep({ ...prep, vuelta: e.target.checked })} className="h-3.5 w-3.5 accent-sky-500" />
+                      🏠 Agendar también la vuelta (mismo trayecto, al terminar)
+                    </label>
+                    {summary && <p className="rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-100">{summary}</p>}
+                    <p className="text-[11px] text-white/35">Se agenda en tu Horario solo para el día de este evento{repeat ? ' (no en cada repetición)' : ''}. No se manda a Google.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="space-y-3">
             <span className={`${label} flex items-center gap-1`}><Users className="h-3 w-3" /> Invitados</span>
