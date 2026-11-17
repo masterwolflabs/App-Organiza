@@ -387,7 +387,7 @@ const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
               <li key={s.id} className="flex items-center gap-2"><span className="flex-1">{s.name} <span className="text-zinc-500">· {s.dose}</span></span><button type="button" onClick={() => api.patchSupplement(s.id, { buy: false })} className="text-[11px] text-emerald-300 hover:text-emerald-200">✓ Ya lo compré</button></li>
             ))}
           </ul>
-          <p className="mt-1 text-[10px] text-zinc-500">Cuando exista Master Compras, esta lista pasa sola allá.</p>
+          <p className="mt-1 text-[10px] text-zinc-500">También sale en 🛒 Master Compras.</p>
         </div>
       )}
       {editingRow && <SupplementEditor s={editingRow} api={api} onClose={() => setEditing(null)} />}
