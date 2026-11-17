@@ -5,6 +5,7 @@ import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX
 import type { Video } from '@/components/organiza/model';
 import { audioNames, forgetAudio, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
+import { access as spotifyAccess, parseSpotify, spotifyApi, spotifyMeta } from '@/lib/spotify';
 
 /**
  * Música del modo focus (Emanuel, 2026-11-03): la lista de YouTube de una acción suena sola, cada
@@ -76,7 +77,7 @@ function loadYT(): Promise<YTNamespace> {
   return loading;
 }
 
-type PlayerEvents = { onReady?: (e: { target: YTPlayer }) => void; onStateChange?: (e: { data: number; target: YTPlayer }) => void; onError?: (e?: { data?: number }) => void };
+type PlayerEvents = { onReady?: (e: { target: YTPlayer }) => void; onStateChange?: (e: { data: number; target: YTPlayer }) => void; onError?: (e?: { data?: number; target?: YTPlayer }) => void };
 
 /**
  * 🎵 Reproductor del audio propio (2026-11-17): un `<audio>` que habla igual que el de YouTube (mismos
@@ -281,9 +282,199 @@ function macPlayer(video: string, start: number, events: PlayerEvents): YTPlayer
   return p;
 }
 
+/* ── 🎧 Canciones de Spotify (2026-11-18, Daily focus-spotify-en-lista) ─────────────────────────────
+ * En el navegador, Master Planner es un parlante de Spotify (Web Playback SDK, requiere Premium): la canción
+ * suena aquí con su desde/hasta, volumen y crossfade. Donde el SDK no corre (app de Mac, Safari de iPhone)
+ * controla tu Spotify abierto (Spotify Connect). Un solo parlante: dos de Spotify seguidas se cortan, no se funden.
+ */
+type SdkState = { paused: boolean; loading?: boolean; position: number; duration: number; track_window?: { current_track?: { id?: string; uri?: string; linked_from?: { id?: string | null } } } };
+type SdkPlayer = { connect(): Promise<boolean>; addListener(ev: string, cb: (x: never) => void): boolean; setVolume(v: number): Promise<void>; pause(): Promise<void>; resume(): Promise<void>; seek(ms: number): Promise<void>; activateElement?(): Promise<void> };
+type SpotifyDevice = { player: SdkPlayer; deviceId: string } | null;
+let sdkDevice: Promise<SpotifyDevice> | null = null;
+const sdkListeners = new Set<(s: SdkState | null) => void>();
+let spotifyOwner: object | null = null;
+function spotifyDevice(): Promise<SpotifyDevice> {
+  if (sdkDevice) return sdkDevice;
+  sdkDevice = new Promise<SpotifyDevice>((ok) => {
+    // La app de Mac (WebKit sin Widevine) no puede ser parlante: ahí se controla tu Spotify abierto.
+    if (isDesktop()) return ok(null);
+    const w = window as unknown as { Spotify?: { Player: new (o: Record<string, unknown>) => SdkPlayer }; onSpotifyWebPlaybackSDKReady?: () => void };
+    let done = false;
+    const fin = (d: SpotifyDevice) => {
+      if (done) return;
+      done = true;
+      if (!d) sdkDevice = null; // se puede volver a intentar (ej. reconectaste Spotify)
+      ok(d);
+    };
+    const start = () => {
+      const player = new w.Spotify!.Player({ name: 'Master Planner', volume: 1, getOAuthToken: (cb: (t: string) => void) => void spotifyAccess().then((t) => cb(t ?? '')) });
+      player.addListener('ready', ((x: { device_id: string }) => fin({ player, deviceId: x.device_id })) as (x: never) => void);
+      for (const ev of ['initialization_error', 'authentication_error', 'account_error']) player.addListener(ev, (() => fin(null)) as (x: never) => void);
+      player.addListener('player_state_changed', ((st: SdkState | null) => sdkListeners.forEach((f) => f(st))) as (x: never) => void);
+      void player.connect().then((c) => !c && fin(null));
+    };
+    setTimeout(() => fin(null), 15000);
+    if (w.Spotify) return start();
+    w.onSpotifyWebPlaybackSDKReady = start;
+    const sc = document.createElement('script');
+    sc.src = 'https://sdk.scdn.co/spotify-player.js';
+    sc.async = true;
+    sc.onerror = () => fin(null);
+    document.head.appendChild(sc);
+  });
+  return sdkDevice;
+}
+
+function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlayer & { lazy: true; slow: true } {
+  const uri = `spotify:track:${id}`;
+  let gone = false;
+  let started = false;
+  let ready = false;
+  let t = start;
+  let at = Date.now();
+  let state = -1;
+  let dur = 0;
+  let vol = 100;
+  let muted = false;
+  let title = 'Canción de Spotify';
+  let dev: SpotifyDevice = null;
+  let poll: ReturnType<typeof setInterval> | undefined;
+  let volAt = 0;
+  let volTimer: ReturnType<typeof setTimeout> | undefined;
+  const mine = () => spotifyOwner === p;
+  const emit = (n: number) => {
+    if (n === state) return;
+    state = n;
+    if (!gone) events.onStateChange?.({ data: n, target: p });
+  };
+  const sendVol = () => {
+    if (!mine() || gone) return;
+    const v = muted ? 0 : vol;
+    if (dev) return void dev.player.setVolume(v / 100);
+    // Spotify Connect: la API no aguanta cambios cada 100 ms (crossfade): máximo uno cada 0,7 s.
+    clearTimeout(volTimer);
+    const wait = Math.max(0, 700 - (Date.now() - volAt));
+    volTimer = setTimeout(() => {
+      volAt = Date.now();
+      void spotifyApi(`/volume?volume_percent=${Math.round(muted ? 0 : vol)}`, 'PUT');
+    }, wait);
+  };
+  const onSdk = (st: SdkState | null) => {
+    if (!st || !mine() || gone) return;
+    const cur = st.track_window?.current_track;
+    if (cur && cur.id !== id && cur.linked_from?.id !== id && cur.uri !== uri) return;
+    t = st.position / 1000;
+    at = Date.now();
+    if (st.duration) dur = st.duration / 1000;
+    if (st.paused && started && st.position === 0 && state === 1) return emit(0);
+    emit(st.paused ? 2 : st.loading ? 3 : 1);
+  };
+  const pollConnect = () => {
+    clearInterval(poll);
+    poll = setInterval(async () => {
+      if (!mine() || gone) return;
+      const r = await spotifyApi('', 'GET');
+      if (!r || r.status === 204 || !r.ok) return;
+      const j = (await r.json().catch(() => null)) as { is_playing?: boolean; progress_ms?: number; item?: { id?: string; duration_ms?: number } } | null;
+      if (!j || gone) return;
+      if (j.item?.id !== id) return state === 1 ? emit(0) : undefined;
+      t = (j.progress_ms ?? 0) / 1000;
+      at = Date.now();
+      if (j.item?.duration_ms) dur = j.item.duration_ms / 1000;
+      emit(j.is_playing ? 1 : 2);
+    }, 1000);
+  };
+  const play = async () => {
+    if (gone) return;
+    if (mine() && started) {
+      if (dev) return void dev.player.resume();
+      return void spotifyApi('/play', 'PUT');
+    }
+    spotifyOwner = p;
+    started = true;
+    emit(3);
+    await dev?.player.activateElement?.().catch(() => {});
+    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', { uris: [uri], position_ms: Math.round(t * 1000) });
+    if (gone) return;
+    if (!r || !r.ok) {
+      // Sin parlante aquí y sin Spotify abierto en ningún equipo (404), o sin Premium (403).
+      spotifyOwner = null;
+      started = false;
+      return events.onError?.({ data: r?.status ?? 0, target: p });
+    }
+    sendVol();
+    if (!dev) pollConnect();
+  };
+  const p: YTPlayer & { lazy: true; slow: true } = {
+    lazy: true,
+    slow: true,
+    destroy: () => {
+      gone = true;
+      sdkListeners.delete(onSdk);
+      clearInterval(poll);
+      clearTimeout(volTimer);
+      if (mine()) {
+        spotifyOwner = null;
+        if (dev) void dev.player.pause();
+        else void spotifyApi('/pause', 'PUT');
+      }
+    },
+    playVideo: () => void play(),
+    pauseVideo: () => {
+      if (!mine()) return;
+      if (dev) void dev.player.pause();
+      else void spotifyApi('/pause', 'PUT');
+    },
+    seekTo: (sec: number) => {
+      t = Math.max(0, sec);
+      at = Date.now();
+      if (!mine() || !started) return;
+      if (dev) void dev.player.seek(Math.round(t * 1000));
+      else void spotifyApi(`/seek?position_ms=${Math.round(t * 1000)}`, 'PUT');
+    },
+    setVolume: (v: number) => {
+      vol = Math.max(0, Math.min(100, v));
+      sendVol();
+    },
+    getCurrentTime: () => (state === 1 ? t + (Date.now() - at) / 1000 : t),
+    getDuration: () => dur,
+    getVideoData: () => ({ title }),
+    mute: () => {
+      muted = true;
+      sendVol();
+    },
+    unMute: () => {
+      muted = false;
+      sendVol();
+    },
+  };
+  sdkListeners.add(onSdk);
+  // Listo cuando hay parlante (o Spotify Connect) y se sabe cuánto dura la canción.
+  void (async () => {
+    const token = await spotifyAccess();
+    if (gone) return;
+    if (!token) return events.onError?.({ data: 401, target: p });
+    const [d, info, m] = await Promise.all([
+      spotifyDevice(),
+      fetch(`https://api.spotify.com/v1/tracks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ duration_ms?: number; name?: string; artists?: { name: string }[] } | null>,
+      spotifyMeta(id),
+    ]);
+    if (gone) return;
+    dev = d;
+    if (info?.duration_ms) dur = info.duration_ms / 1000;
+    title = info?.name ? `${info.name}${info.artists?.length ? ` · ${info.artists.map((a) => a.name).join(', ')}` : ''}` : m?.title || title;
+    ready = true;
+    events.onReady?.({ target: p });
+  })();
+  void ready;
+  return p;
+}
+
 /** El reproductor de una canción: su audio propio si tiene; bloqueada en la app de Mac, la ventanita; si no, YouTube. */
 function makePlayer(YT: YTNamespace, host: HTMLElement, v: Video, opts: { videoId?: string; playerVars: Record<string, unknown>; events: PlayerEvents }): YTPlayer {
   if (v.audio) return audioPlayer(host, v.audio, v.audioName || 'Mi audio', Number(opts.playerVars.start) || 0, opts.events);
+  const sp = parseSpotify(v.url);
+  if (sp) return spotifyPlayer(sp, Number(opts.playerVars.start) || 0, opts.events);
   if (opts.videoId && isDesktop() && blockedVideos.has(opts.videoId)) return macPlayer(opts.videoId, Number(opts.playerVars.start) || 0, opts.events);
   return new YT.Player(host, { width: 200, height: 112, videoId: opts.videoId, playerVars: opts.playerVars, events: opts.events });
 }
@@ -382,15 +573,15 @@ export function previewVolume(v: Video, volume: number, ms = 6000): () => void {
     }
     host.remove();
   };
-  if (!parsed && !v.audio) {
+  if (!parsed && !v.audio && !parseSpotify(v.url)) {
     stop();
     return stop;
   }
   loadYT().then((YT) => {
     if (done) return;
     const vars: Record<string, unknown> = { autoplay: 1, playsinline: 1, rel: 0 };
-    if ((v.audio || parsed?.video) && v.from) vars.start = Math.floor(v.from);
-    if (!v.audio && !parsed?.video) Object.assign(vars, { listType: 'playlist', list: parsed?.list });
+    if ((v.audio || parseSpotify(v.url) || parsed?.video) && v.from) vars.start = Math.floor(v.from);
+    if (!v.audio && !parseSpotify(v.url) && !parsed?.video) Object.assign(vars, { listType: 'playlist', list: parsed?.list });
     p = makePlayer(YT, host, v, {
       videoId: parsed?.video,
       playerVars: vars,
@@ -464,9 +655,10 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const v = list.current[index];
     const parsed = v && parseYouTube(v.url);
     const box = boxes[slot].current;
-    if (!v || (!parsed && !v.audio) || !box) return false;
-    // Con audio propio se toca ese archivo (como un video suelto, nunca como playlist).
-    const single = !!v.audio || !!parsed?.video;
+    const spotify = v ? parseSpotify(v.url) : null;
+    if (!v || (!parsed && !v.audio && !spotify) || !box) return false;
+    // Con audio propio o una de Spotify se toca esa canción (como un video suelto, nunca como playlist).
+    const single = !!v.audio || !!spotify || !!parsed?.video;
     slots.current[slot].player?.destroy();
     slots.current[slot] = { player: null, index, ready: false, loadedAt: Date.now(), preload };
     const host = document.createElement('div');
@@ -492,7 +684,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           if (startAt !== undefined && single) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
           if (mutedRef.current) e.target.mute?.();
-          if (preload) {
+          if (preload && 'lazy' in e.target) {
+            // Spotify: un solo parlante; precargar sería quitarle el parlante a la que suena. Queda lista, sin sonar.
+          } else if (preload) {
             // Precarga: suena en silencio unos segundos para llenar bien el búfer y queda lista en su inicio.
             e.target.setVolume(0);
             e.target.playVideo();
@@ -531,7 +725,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           }
         },
         // Video que no se puede reproducir fuera de YouTube: se salta, aunque pase en pleno crossfade.
-        onError: (e?: { data?: number }) => {
+        onError: (e?: { data?: number; target?: YTPlayer }) => {
+          // Un reproductor viejo de este canal (ya reemplazado) no cuenta como saltada.
+          if (e?.target && slots.current[slot].player && slots.current[slot].player !== e.target) return;
           // App de Mac: la que YouTube no deja sonar aquí (101/150) se vuelve a cargar en la ventanita escondida.
           if (isDesktop() && parsed?.video && !v.audio && (e?.data === 101 || e?.data === 150) && !blockedVideos.has(parsed.video)) {
             blockedVideos.add(parsed.video);
@@ -726,7 +922,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       if ((cur.state === 2 || cur.state === 5 || cur.state === -1) && since > 1500) {
         cur.stateAt = Date.now();
         cur.player.playVideo();
-      } else if (cur.state === 3 && since > 5000 && !('show' in cur.player)) {
+      } else if (cur.state === 3 && since > 5000 && !('show' in cur.player) && !('lazy' in cur.player)) {
         // (En la ventanita del Mac «cargando» puede ser un anuncio de YouTube: se espera, no se recarga.)
         cur.stateAt = Date.now();
         cur.nudges = (cur.nudges ?? 0) + 1;
@@ -738,7 +934,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         cur.player.seekTo(t0, true);
         cur.player.playVideo();
       }
-      if (!v.audio && !parseYouTube(v.url)?.video) return;
+      if (!v.audio && !parseSpotify(v.url) && !parseYouTube(v.url)?.video) return;
       const now = cur.player.getCurrentTime?.() ?? 0;
       const dur = cur.player.getDuration?.() ?? 0;
       if (cur.state === 1) progress.current?.(cur.index, now, dur);
@@ -806,7 +1002,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       )}
       {blockedSong !== null && videos[blockedSong] && (
         <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
-          {videos[blockedSong].audio ? (
+          {parseSpotify(videos[blockedSong].url) ? (
+            <>⚠️ No pude tocar la canción {blockedSong + 1} de Spotify. Conéctalo en ⚙️ Configurar (Spotify Premium) o abre Spotify en tu computador o teléfono.{' '}</>
+          ) : videos[blockedSong].audio ? (
             <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox: en ⚙️ Configurar bórrala y vuelve a pegar el link (ahora se guarda en tu cuenta y suena siempre), o usa 🎵 Subir archivo.{' '}</>
           ) : (
             <>⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube. Para que suene aquí: ⚙️ Configurar → 🎵 Usar mi audio.{' '}</>
@@ -825,7 +1023,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={`https://i.ytimg.com/vi/${id}/default.jpg`} alt="" className="h-7 w-10 rounded object-cover" />
                   ) : (
-                    <span className="flex h-7 w-10 items-center justify-center rounded bg-white/10 text-[9px]">{x.audio ? '🎵' : 'Lista'}</span>
+                    <span className="flex h-7 w-10 items-center justify-center rounded bg-white/10 text-[9px]">{parseSpotify(x.url) ? '🎧' : x.audio ? '🎵' : 'Lista'}</span>
                   )}
                   <span className="flex-1">Canción {i + 1}{x.audio && !id ? ` · ${x.audioName || 'Mi audio'}` : ''}{x.to !== undefined ? ` · hasta ${fmtSeconds(x.to)}` : ''}</span>
                   {i === at && <span>▶</span>}

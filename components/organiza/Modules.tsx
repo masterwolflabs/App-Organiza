@@ -1,6 +1,7 @@
 'use client';
 
 import { audioFromLink, isAudioLink } from '@/components/organiza/musicAudio';
+import { parseSpotify } from '@/lib/spotify';
 import { WorkoutOfDay } from '@/components/organiza/WorkoutPro';
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react';
@@ -259,11 +260,11 @@ const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`https://i.ytimg.com/vi/${p.video}/default.jpg`} alt="" className="h-9 w-12 shrink-0 rounded object-cover" />
             ) : (
-              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-white/[0.06] text-[10px] text-zinc-400">{v.audio ? '🎵' : 'Lista'}</span>
+              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-white/[0.06] text-[10px] text-zinc-400">{parseSpotify(v.url) ? '🎧' : v.audio ? '🎵' : 'Lista'}</span>
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-xs text-zinc-300">{i + 1}. {p ? v.url.replace(/^https?:\/\/(www\.)?/, '') : v.audioName || 'Mi audio'}</span>
-              {(p?.video || v.audio) && (
+              {(p?.video || v.audio || parseSpotify(v.url)) && (
                 <span className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-500">
                   desde <input defaultValue={fmtSeconds(v.from)} placeholder="0:00" onBlur={(e) => set(i, { from: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
                   hasta <input defaultValue={fmtSeconds(v.to)} placeholder="fin" onBlur={(e) => set(i, { to: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
@@ -274,8 +275,8 @@ const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }
           </div>
         );
       })}
-      <form className="flex gap-1.5" onSubmit={async (e) => { e.preventDefault(); if (!parseYouTube(url) && isAudioLink(url)) { setError('Guardando tu audio…'); const r = await audioFromLink(url); if ('error' in r) return setError(r.error); setError(''); patch({ videos: [...videos, { url: '', audio: r.audio, audioName: r.name }] }); return setUrl(''); } if (!parseYouTube(url)) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Google Drive, Dropbox o MP3" className={`${input} text-zinc-300`} />
+      <form className="flex gap-1.5" onSubmit={async (e) => { e.preventDefault(); const sp = parseSpotify(url); if (sp) { setError(''); patch({ videos: [...videos, { url: `https://open.spotify.com/track/${sp}` }] }); return setUrl(''); } if (!parseYouTube(url) && isAudioLink(url)) { setError('Guardando tu audio…'); const r = await audioFromLink(url); if ('error' in r) return setError(r.error); setError(''); patch({ videos: [...videos, { url: '', audio: r.audio, audioName: r.name }] }); return setUrl(''); } if (!parseYouTube(url)) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Spotify, Google Drive, Dropbox o MP3" className={`${input} text-zinc-300`} />
         <button type="submit" className="rounded-md px-2 text-sm font-semibold text-sky-300 hover:bg-white/[0.06]"><Plus className="h-4 w-4" /></button>
       </form>
       {error && <p className="text-xs text-rose-300">{error}</p>}

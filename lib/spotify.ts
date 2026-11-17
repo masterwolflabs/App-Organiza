@@ -11,8 +11,9 @@ export const SPOTIFY_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? '';
 const KEY = 'mp-spotify';
 const VERIFIER = 'mp-spotify-verifier';
 const BACK = 'mp-spotify-back';
-const SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing';
-type Tokens = { access: string; refresh: string; expires: number };
+// `streaming` + email/private: que Master Planner sea un parlante de Spotify (canciones de Spotify en el focus, 2026-11-18).
+const SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing streaming user-read-email user-read-private';
+type Tokens = { access: string; refresh: string; expires: number; scope?: string };
 
 const redirectUri = () => `${window.location.origin}/spotify`;
 const read = (): Tokens | null => {
@@ -29,6 +30,8 @@ const write = (t: Tokens | null) => {
   } catch {}
 };
 export const spotifyConnected = () => !!read();
+/** ¿La conexión trae el permiso para sonar DENTRO de Master Planner? (las de antes del 18 nov no). */
+export const spotifyCanStream = () => /(^|\s)streaming(\s|$)/.test(read()?.scope ?? '');
 export const spotifyDisconnect = () => write(null);
 
 const b64url = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -48,7 +51,7 @@ async function token(body: Record<string, string>): Promise<Tokens | null> {
   if (!res.ok) return null;
   const j = await res.json();
   const prev = read();
-  const t = { access: j.access_token, refresh: j.refresh_token ?? prev?.refresh ?? '', expires: Date.now() + (j.expires_in - 60) * 1000 };
+  const t = { access: j.access_token, refresh: j.refresh_token ?? prev?.refresh ?? '', expires: Date.now() + (j.expires_in - 60) * 1000, scope: j.scope ?? prev?.scope ?? '' };
   write(t);
   return t;
 }
@@ -61,7 +64,7 @@ export async function spotifyFinish(code: string): Promise<string> {
   return localStorage.getItem(BACK) ?? '#alimentacion';
 }
 
-async function access(): Promise<string | null> {
+export async function access(): Promise<string | null> {
   const t = read();
   if (!t) return null;
   if (Date.now() < t.expires) return t.access;
@@ -96,3 +99,37 @@ export const spotifyPause = () => api('/pause', 'PUT');
 export const spotifyNext = () => api('/next', 'POST');
 export const spotifyPrev = () => api('/previous', 'POST');
 export const spotifyVolume = (v: number) => api(`/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(v)))}`, 'PUT');
+
+/* ── Canciones de Spotify en el focus (2026-11-18, Daily focus-spotify-en-lista) ─────────────────── */
+
+/** Link de canción de Spotify → su id (open.spotify.com/track/… o spotify:track:…). */
+export function parseSpotify(link: string): string | null {
+  const t = link.trim();
+  const uri = t.match(/^spotify:track:([A-Za-z0-9]{22})$/)?.[1];
+  if (uri) return uri;
+  try {
+    const u = new URL(t);
+    if (!/(^|\.)spotify\.com$/.test(u.hostname) && u.hostname !== 'spotify.link') return null;
+    return u.pathname.match(/\/track\/([A-Za-z0-9]{22})/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Nombre y carátula de una canción (oEmbed de Spotify: no necesita conexión). */
+const meta = new Map<string, Promise<{ title: string; thumb: string | null } | null>>();
+export function spotifyMeta(id: string) {
+  if (!meta.has(id))
+    meta.set(id, fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${id}`)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { title?: string; thumbnail_url?: string } | null) => (j ? { title: j.title ?? '', thumb: j.thumbnail_url ?? null } : null))
+      .catch(() => null));
+  return meta.get(id)!;
+}
+
+/** Llamada a la API del reproductor con cuerpo (play con canción y segundo). */
+export async function spotifyApi(path: string, method: string, body?: unknown): Promise<Response | null> {
+  const a = await access();
+  if (!a) return null;
+  return fetch(`https://api.spotify.com/v1/me/player${path}`, { method, headers: { Authorization: `Bearer ${a}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }).catch(() => null);
+}

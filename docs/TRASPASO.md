@@ -208,6 +208,11 @@ La sección `alimentacion` se llama **Nutrition Pro** (`AlimentacionView` en Pla
 - **Spotify** (`lib/spotify.ts` + página `/spotify`): PKCE sin secreto, controla lo que suena (anterior, pausa/play, siguiente, volumen). Necesita `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` en Vercel (app en developer.spotify.com, Redirect URI `https://app-organiza-six.vercel.app/spotify`); sin él, solo «Abrir Spotify».
 - **Recetas de Emanuel (2026-11-16, Daily nutrition-recetas-emanuel)**: las de fábrica ahora son las suyas (Desayuno A huevos duros + jugo + café + fruta; huevo frito con tostadas con queso; perico con marraqueta y café helado; onces/cenas: panes con atún, doble jamón y queso, panqueques, shawarma, asadito, completos; meriendas; almuerzos: arroz con pollo completo, fettuccine con champiñones, chuleta) + 5 almuerzos de la IA (⚡ prácticos / ✨ especiales). **A elección** (`RecipeIngredient.choices`, 🎲 en el editor): `choiceFor` sugiere una opción distinta cada día de la semana (y «↻ No tengo, otra» en el modo cocina); `mealFromRecipe(r, weekday)` la deja decidida en el plato, así la lista de compras reparte la fruta en la semana. **Por tandas** (`RecipeStep.repeat`, «× tandas» en el editor): el timer se repite y suena en cada una («Tanda 3 de 8 lista»); `stepSpan` = minutos × tandas.
 
+## 🎵 Música del focus (18 nov 2026)
+- **Drive/Dropbox:** al pegar el link, `/api/music/import` lo baja una vez a `organiza-music/<uid>/drive-<id>.mp3` (≤ 50 MB, SQL 48) y el servidor firma la dirección (`{path}`); el navegador recuerda dónde está y el permiso (localStorage `mp-music-*`). Los audios propios quedan cargados de antemano (pool en `YouTubeList.tsx`), por eso ⏭ es instantáneo.
+- **Spotify en la lista:** link de canción (`open.spotify.com/track/…`). En el navegador Master Planner es parlante (Web Playback SDK, Premium, scope `streaming`); en la app de Mac controla tu Spotify abierto (Connect). Un solo parlante: dos de Spotify seguidas se cortan, no se funden. Client ID en Vercel (`NEXT_PUBLIC_SPOTIFY_CLIENT_ID`). Las conexiones anteriores se reconectan una vez (botón en ⚙️ Configurar).
+- Focus: «el horario manda» solo por una acción que empieza DESPUÉS de abrirlo; fondo fijo al bajar.
+
 ## 🌙 Jornada del 17 nov 2026 (hecha, todo publicado y en 🔍 En revisión)
 
 **🔎 Revisión de Claude (misma noche, Daily `revision-jornada-17nov`)** — afinado y publicado:

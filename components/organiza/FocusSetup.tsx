@@ -10,8 +10,46 @@ import type { Item, Module, Video } from '@/components/organiza/model';
 import { audioFromLink, isAudioLink, isCloudLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
 import { authFetch } from '@/lib/authFetch';
+import { parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyMeta } from '@/lib/spotify';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
+/** Link de Spotify en su forma limpia (sin ?si=… de compartir). */
+const spotifyUrl = (id: string) => `https://open.spotify.com/track/${id}`;
+
+/** 🎧 Nombre y carátula de una canción de Spotify (2026-11-18). */
+function useSpotifyMeta(id: string | null) {
+  const [m, setM] = useState<{ title: string; thumb: string | null } | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    void spotifyMeta(id).then((x) => alive && setM(x));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return m;
+}
+const SpotifyCover: React.FC<{ id: string }> = ({ id }) => {
+  const m = useSpotifyMeta(id);
+  // eslint-disable-next-line @next/next/no-img-element
+  return m?.thumb ? <img src={m.thumb} alt="" className="h-11 w-20 shrink-0 rounded-md object-cover" /> : <span className="flex h-11 w-20 shrink-0 items-center justify-center rounded-md bg-[#1ed760]/15 text-lg">🎧</span>;
+};
+const SpotifyTitle: React.FC<{ id: string }> = ({ id }) => {
+  const m = useSpotifyMeta(id);
+  return <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300"><span className="font-semibold text-[#1ed760]">Spotify</span> · {m?.title || 'Canción de Spotify'}</span>;
+};
+/** ¿Puede sonar? Conectar Spotify (una vez, con Premium) para que suene dentro de Master Planner. */
+const SpotifyStatus: React.FC = () => {
+  if (!SPOTIFY_ID) return <p className="mt-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-200">🔑 Spotify todavía no está activado en Master Planner.</p>;
+  const ok = spotifyConnected() && spotifyCanStream();
+  if (ok) return <p className="mt-2 text-[11px] font-semibold text-[#1ed760]">✓ Spotify conectado: {isDesktop() ? 'en la app de Mac suena en tu Spotify abierto (computador o teléfono).' : 'suena dentro de Master Planner.'}</p>;
+  return (
+    <div className="mt-2 rounded-lg bg-[#1ed760]/10 px-2 py-1.5 text-[11px] text-emerald-100 ring-1 ring-[#1ed760]/30">
+      <p>Para que las canciones de Spotify suenen aquí, conecta Spotify una vez (Premium). <b>Guarda antes</b>: vas a Spotify y vuelves.</p>
+      <button type="button" onClick={() => void spotifyConnect()} className="mt-1.5 rounded-lg bg-[#1ed760] px-2.5 py-1 text-xs font-bold text-[#09090b] hover:brightness-110">{spotifyConnected() ? 'Reconectar Spotify (permiso para sonar aquí)' : 'Conectar Spotify'}</button>
+    </div>
+  );
+};
 
 /** Aviso si quien subió el video no deja reproducirlo fuera de YouTube. `children` = el botón «🎵 Usar mi audio». */
 const EmbedCheck: React.FC<{ video: string; children?: React.ReactNode }> = ({ video, children }) => {
@@ -180,7 +218,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [draft, setDraft] = useState('');
 
   // Un link pegado sin tocar «Agregar» también se guarda.
-  const pending: Video[] = parseYouTube(url) ? (!parseYouTube(url)?.list ? [{ url: url.trim() }] : []) : url.trim() && isAudioLink(url) && !isCloudLink(url) ? [{ url: '', audio: url.trim(), audioName: linkName(url) }] : [];
+  const pending: Video[] = parseSpotify(url) ? [{ url: spotifyUrl(parseSpotify(url)!) }] : parseYouTube(url) ? (!parseYouTube(url)?.list ? [{ url: url.trim() }] : []) : url.trim() && isAudioLink(url) && !isCloudLink(url) ? [{ url: '', audio: url.trim(), audioName: linkName(url) }] : [];
   const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll, volume }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false, volume: current?.volume ?? 100 });
   const save = () => {
     const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll, volume };
@@ -198,6 +236,13 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   const add = async () => {
+    // 🎧 Canción de Spotify: entra como una más (antes que «audio», porque también es un link http).
+    const sp = parseSpotify(url);
+    if (sp) {
+      setError('');
+      setVideos((l) => [...l, { url: spotifyUrl(sp) }]);
+      return setUrl('');
+    }
     const p = parseYouTube(url);
     // 🎵 Link de Google Drive, Dropbox o un MP3: entra igual que una de YouTube. Drive y Dropbox se traen a
     // tu cuenta una vez (así suenan en cualquier navegador y en la app de Mac).
@@ -210,7 +255,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
       setVideos((l) => [...l, { url: '', audio: r.audio, audioName: r.name }]);
       return setUrl('');
     }
-    if (!p) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.');
+    if (!p) return setError('Ese link no es de YouTube, Spotify, Google Drive, Dropbox ni de un MP3.');
     setError('');
     if (p.list) return setAskList({ list: p.list, video: p.video });
     setVideos((l) => [...l, { url: url.trim() }]);
@@ -244,30 +289,33 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
             <h2 className="flex items-center gap-2 font-semibold text-white"><Music className="h-4 w-4 text-sky-300" /> Música del focus · <ItemIcon value={item.icon} /> {item.title}</h2>
             <button type="button" aria-label="Cerrar" onClick={close} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
-          <p className="mt-1 text-xs text-zinc-400">Pega tus canciones en orden (YouTube, Google Drive, Dropbox o MP3) o sube el archivo. Cada una suena desde y hasta donde digas, y se funden una con otra.</p>
+          <p className="mt-1 text-xs text-zinc-400">Pega tus canciones en orden (YouTube, Spotify, Google Drive, Dropbox o MP3) o sube el archivo. Cada una suena desde y hasta donde digas, y se funden una con otra.</p>
 
           <ol className="mt-4 space-y-2">
             {videos.map((v, i) => {
               const p = parseYouTube(v.url);
+              const sp = parseSpotify(v.url);
               const toEnd = v.to === undefined;
               return (
                 <li key={`${i}-${v.url}`} className="rounded-xl bg-white/[0.04] p-2.5 ring-1 ring-white/10">
                   <div className="flex items-center gap-2.5">
-                    {p?.video ? (
+                    {sp ? (
+                      <SpotifyCover id={sp} />
+                    ) : p?.video ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`https://i.ytimg.com/vi/${p.video}/mqdefault.jpg`} alt="" className="h-11 w-20 shrink-0 rounded-md object-cover" />
                     ) : (
                       <span className="flex h-11 w-20 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-xs text-zinc-400">{v.audio ? '🎵' : 'Playlist'}</span>
                     )}
                     {editing === i ? (
-                      <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={async (e) => { e.preventDefault(); const p2 = parseYouTube(draft); if (!p2 && isAudioLink(draft)) { setError(''); setImporting(true); const r = await audioFromLink(draft); setImporting(false); if ('error' in r) return setError(r.error); set(i, { audio: r.audio, audioName: r.name }); return setEditing(null); } if (!p2 || p2.list && !p2.video) return setError('Pega el link de una canción de YouTube, Google Drive, Dropbox o un MP3.'); setError(''); set(i, { url: draft.trim(), audio: undefined, audioName: undefined }); setEditing(null); }}>
+                      <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={async (e) => { e.preventDefault(); const sp2 = parseSpotify(draft); if (sp2) { setError(''); set(i, { url: spotifyUrl(sp2), audio: undefined, audioName: undefined }); return setEditing(null); } const p2 = parseYouTube(draft); if (!p2 && isAudioLink(draft)) { setError(''); setImporting(true); const r = await audioFromLink(draft); setImporting(false); if ('error' in r) return setError(r.error); set(i, { audio: r.audio, audioName: r.name }); return setEditing(null); } if (!p2 || p2.list && !p2.video) return setError('Pega el link de una canción de YouTube, Google Drive, Dropbox o un MP3.'); setError(''); set(i, { url: draft.trim(), audio: undefined, audioName: undefined }); setEditing(null); }}>
                         <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Pega el link nuevo" aria-label="Link nuevo" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-sky-400/50" />
                         <button type="submit" className="rounded-lg bg-sky-600 px-2 text-xs font-semibold text-[#fff]">Listo</button>
                         <button type="button" onClick={() => setEditing(null)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
                       </form>
                     ) : (
                       <>
-                        <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300">{p ? v.url.replace(/^https?:\/\/(www\.)?/, '') : v.audioName || 'Mi audio'}</span>
+                        {sp ? <SpotifyTitle id={sp} /> : <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300">{p ? v.url.replace(/^https?:\/\/(www\.)?/, '') : v.audioName || 'Mi audio'}</span>}
                         <button type="button" onClick={() => { setEditing(i); setDraft(''); }} className="shrink-0 rounded-lg bg-white/[0.06] px-2 py-1 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/[0.12]">🔄 Cambiar</button>
                       </>
                     )}
@@ -277,7 +325,9 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     </div>
                     <button type="button" aria-label="Quitar" onClick={() => setVideos((l) => l.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                   </div>
-                  {v.audio ? (
+                  {sp ? (
+                    <SpotifyStatus />
+                  ) : v.audio ? (
                     <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-200 ring-1 ring-emerald-400/20">
                       <span className="min-w-0 flex-1 truncate">🎵 Suena tu audio: <b className="font-semibold">{v.audioName || 'Mi audio'}</b></span>
                       {p?.video && <button type="button" onClick={() => set(i, { audio: undefined, audioName: undefined })} data-help="Quitar tu audio: vuelve a sonar YouTube" className="shrink-0 font-semibold text-emerald-100 underline">Quitar (vuelve a YouTube)</button>}
@@ -285,12 +335,12 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                   ) : (
                     p?.video && <EmbedCheck video={p.video}><AudioPicker strong onPick={(audio, audioName) => set(i, { audio, audioName })} /><Alternatives video={p.video} onUse={(u) => set(i, { url: u })} /></EmbedCheck>
                   )}
-                  {(p?.video || v.audio) && v.resume && (
+                  {(p?.video || v.audio || sp) && v.resume && (
                     <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
                       ⏭️ Cada día suenan {Math.round(((v.to ?? (v.from ?? 0) + 600) - (v.from ?? 0)) / 60)} min, desde donde quedaste la última vez (la primera vez, desde {fmtSeconds(v.from) || '0:00'}). Al terminarse el video, vuelve a empezar.
                     </p>
                   )}
-                  {(p?.video || v.audio) && (
+                  {(p?.video || v.audio || sp) && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
                       <label className="flex items-center gap-1">Desde <input defaultValue={fmtSeconds(v.from) || '0:00'} onBlur={(e) => set(i, { from: toSeconds(e.target.value) || undefined })} className="w-14 rounded-md bg-white/[0.06] px-1.5 py-1 text-center text-zinc-100 outline-none ring-1 ring-white/10" /></label>
                       <label className="flex items-center gap-1">Hasta <input disabled={toEnd} key={toEnd ? 'fin' : 'corte'} defaultValue={toEnd ? '' : fmtSeconds(v.to)} placeholder="fin" onBlur={(e) => set(i, { to: toSeconds(e.target.value) })} className="w-14 rounded-md bg-white/[0.06] px-1.5 py-1 text-center text-zinc-100 outline-none ring-1 ring-white/10 disabled:opacity-40" /></label>
@@ -305,7 +355,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
           </ol>
 
           <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega un link de YouTube, Google Drive, Dropbox o MP3" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Spotify, Google Drive, Dropbox o MP3" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
             <button type="submit" disabled={importing} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{importing ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : <><Plus className="h-4 w-4" /> Agregar</>}</button>
             <UploadSong onAdd={(audio, audioName) => setVideos((l) => [...l, { url: '', audio, audioName }])} onError={setError} />
           </form>
