@@ -58,7 +58,7 @@ export const refFor = (d: Def, body: 'hombre' | 'mujer' | null) => d.ref?.[body 
 
 export type FoodItem = { name: string; grams: number; sure?: boolean; per100: Nutrients };
 export type FoodEntry = { id: string; day: string; slot: string; title: string; source: 'foto' | 'texto' | 'balanza' | 'receta'; items: FoodItem[]; note: string; recipe_id?: string | null; created_at?: string };
-export type Supplement = { id: string; name: string; dose: string; per_day: number; time: string | null; nutrients: Nutrients; other: string; active: boolean; sort: number };
+export type Supplement = { id: string; name: string; dose: string; per_day: number; time: string | null; nutrients: Nutrients; other: string; active: boolean; sort: number; /** Test de suplementación (SQL 46): hasta cuándo, por qué y si va a la lista de compras. */ until?: string | null; reason?: string; buy?: boolean };
 export type Take = { id: string; supplement_id: string; day: string; n: number };
 
 const round = (n: number) => (n >= 100 ? Math.round(n) : n >= 10 ? Math.round(n * 10) / 10 : Math.round(n * 100) / 100);

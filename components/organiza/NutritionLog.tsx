@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import { weekdayOf } from '@/components/organiza/model';
 import { MEAL_SLOTS, useNutrition, usePlan, type Meal, type Workout } from '@/components/organiza/plan';
 import { useRecipes } from '@/components/organiza/recipeData';
+import { SupplementTest } from '@/components/organiza/SupplementTest';
 import {
   add, dayTotal, entryTotal, fmt, itemTotal, NUTRIENTS, photoToBase64, readLabel, recognizeFood, refFor, useFoodLog,
   type FoodApi, type FoodEntry, type FoodItem, type NKey, type Nutrients, type Supplement,
@@ -329,6 +330,8 @@ const Register: React.FC<{ api: FoodApi; day: string; onClose: () => void }> = (
 
 const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
   const [editing, setEditing] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -351,6 +354,7 @@ const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
     <div className="rounded-2xl bg-white/[0.03] p-3 ring-1 ring-white/10">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="flex-1 text-sm font-semibold text-white"><Pill className="mr-1 inline h-4 w-4 text-sky-300" /> Suplementos</p>
+        <button type="button" onClick={() => setTesting(true)} data-help="Encuesta → tu propuesta → análisis experto → plan con horas y duración" className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2 py-1 text-xs font-bold text-[#fff] hover:bg-sky-500">🧪 Test de suplementación</button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => fromLabel(e.target.files?.[0])} />
         <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs font-semibold text-zinc-200 hover:bg-white/[0.12] disabled:opacity-60">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />} Foto de la etiqueta</button>
         <button type="button" onClick={async () => { const s = await api.addSupplement({ name: 'Suplemento' }); if (s) setEditing(s.id); }} className="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs font-semibold text-zinc-200 hover:bg-white/[0.12]"><Plus className="h-3.5 w-3.5" /> Agregar</button>
@@ -365,7 +369,7 @@ const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
                 <button type="button" onClick={() => api.take(s, day)} data-help={n >= s.per_day ? 'Listo por hoy (toca para desmarcar)' : 'Lo tomé'} className="flex shrink-0 gap-1">
                   {Array.from({ length: s.per_day }, (_, k) => <span key={k} className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ring-2 ${k < n ? 'bg-emerald-500 text-[#fff] ring-emerald-400' : 'text-zinc-500 ring-white/25'}`}>{k < n ? '✓' : k + 1}</span>)}
                 </button>
-                <button type="button" onClick={() => setEditing(s.id)} className="min-w-0 flex-1 truncate text-left text-sm text-zinc-100 hover:text-white">{s.name} <span className="text-xs text-zinc-500">· {s.dose}{s.per_day > 1 ? ` × ${s.per_day}` : ''}{s.time ? ` · ${s.time}` : ''}</span></button>
+                <button type="button" onClick={() => setEditing(s.id)} className="min-w-0 flex-1 truncate text-left text-sm text-zinc-100 hover:text-white">{s.buy ? '🛒 ' : ''}{s.name} <span className="text-xs text-zinc-500">· {s.dose}{s.per_day > 1 ? ` × ${s.per_day}` : ''}{s.time ? ` · ${s.time}` : ''}{s.until ? ` · hasta ${new Date(`${s.until}T12:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}${s.until < day ? ' (reevaluar)' : ''}` : ''}</span></button>
               </li>
             );
           })}
@@ -373,7 +377,21 @@ const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
       ) : (
         <p className="text-xs text-zinc-500">Agrega lo que tomas (o saca foto a la etiqueta del frasco) y márcalo cada día: lo que aporta se suma a tus vitaminas.</p>
       )}
+      {api.supplements.some((s) => s.buy) && (
+        <div className="mt-2 rounded-xl bg-black/20 p-2 text-xs text-zinc-300">
+          <p className="flex items-center gap-2 font-semibold text-zinc-200">🛒 Para comprar <span className="flex-1" />
+            <button type="button" onClick={() => { void navigator.clipboard?.writeText(api.supplements.filter((s) => s.buy).map((s) => `- ${s.name} (${s.dose})`).join('\n')); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="text-[11px] font-semibold text-orange-300">{copied ? '✓ Copiada' : 'Copiar lista'}</button>
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {api.supplements.filter((s) => s.buy).map((s) => (
+              <li key={s.id} className="flex items-center gap-2"><span className="flex-1">{s.name} <span className="text-zinc-500">· {s.dose}</span></span><button type="button" onClick={() => api.patchSupplement(s.id, { buy: false })} className="text-[11px] text-emerald-300 hover:text-emerald-200">✓ Ya lo compré</button></li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] text-zinc-500">Cuando exista Master Compras, esta lista pasa sola allá.</p>
+        </div>
+      )}
       {editingRow && <SupplementEditor s={editingRow} api={api} onClose={() => setEditing(null)} />}
+      {testing && <SupplementTest api={api} onClose={() => setTesting(false)} />}
     </div>
   );
 };
@@ -408,6 +426,11 @@ const SupplementEditor: React.FC<{ s: Supplement; api: FoodApi; onClose: () => v
             <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-1 text-[11px] font-semibold text-orange-300">{showAll ? 'Solo lo que aporta' : '＋ Agregar otro nutriente'}</button>
           </div>
           <input value={s.other} onChange={(e) => set({ other: e.target.value })} placeholder="Otros (creatina 5 g, colágeno…)" className={field} />
+          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
+            <label className="flex items-center gap-1.5">Hasta <input type="date" value={s.until ?? ''} onChange={(e) => set({ until: e.target.value || null })} className={`${field} w-36 py-1`} /></label>
+            <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={!!s.buy} onChange={(e) => set({ buy: e.target.checked })} className="accent-orange-500" /> 🛒 Para comprar</label>
+          </div>
+          {s.reason && <p className="text-[11px] text-zinc-400">💡 {s.reason}</p>}
           <div className="flex items-center gap-2">
             <label className="flex flex-1 cursor-pointer items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={!s.active} onChange={(e) => set({ active: !e.target.checked })} className="accent-orange-500" /> Ya no lo tomo (se oculta)</label>
             <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar «${s.name}»?`, message: 'Se borran también sus checks.', confirmLabel: 'Borrar', tone: 'danger' })) { await api.removeSupplement(s.id); onClose(); } }} className="text-xs text-zinc-500 hover:text-rose-300">Borrar</button>
