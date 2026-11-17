@@ -6,6 +6,7 @@ import { authFetch } from '@/lib/authFetch';
 import { supabase } from '@/lib/supabaseClient';
 import { useSpace } from '@/components/organiza/space';
 import { useDb } from '@/components/organiza/db';
+import { SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyDisconnect } from '@/lib/spotify';
 
 const panel = 'rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10';
 const main = 'inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-50';
@@ -14,7 +15,35 @@ type Conn = { provider: string; account: string; updated_at: string };
 const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const toKey = (b64: string) => Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64.length / 4) * 4, '=')), (c) => c.charCodeAt(0));
 
-/** Google, Apple y Notion, y los avisos de este dispositivo. */
+/**
+ * 🎧 Spotify (2026-11-18): canciones, podcasts y playlists en la música del focus, y controlar Spotify en el modo
+ * cocina y al entrenar. La conexión queda en este navegador (cada equipo se conecta una vez). Requiere Premium.
+ */
+const SpotifyCard: React.FC = () => {
+  const [on, setOn] = useState<'no' | 'old' | 'ok'>('no');
+  useEffect(() => setOn(spotifyConnected() ? (spotifyCanStream() ? 'ok' : 'old') : 'no'), []);
+  return (
+    <section className={panel}>
+      <h2 className="font-semibold text-white"><span className="text-[#1ed760]">●</span> Spotify</h2>
+      <p className="mt-1 text-sm text-zinc-400">Pon canciones, podcasts y playlists de Spotify en la música de tu focus, y controla Spotify en el modo cocina y al entrenar. Necesita Spotify Premium. Se conecta una vez en cada equipo.</p>
+      {!SPOTIFY_ID ? (
+        <p className="mt-3 text-sm text-amber-200">Spotify todavía no está activado en Master Planner.</p>
+      ) : on === 'ok' ? (
+        <>
+          <p className="mt-3 text-sm text-emerald-300">✓ Conectado en este equipo</p>
+          <button type="button" onClick={() => { spotifyDisconnect(); setOn('no'); }} className="mt-2 text-sm font-semibold text-zinc-400 hover:text-white">Desconectar</button>
+        </>
+      ) : (
+        <>
+          {on === 'old' && <p className="mt-3 text-sm text-amber-200">Estás conectado, pero falta el permiso nuevo para que la música suene dentro de Master Planner.</p>}
+          <button type="button" onClick={() => void spotifyConnect()} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1ed760] px-4 py-2 text-sm font-bold text-[#09090b] hover:brightness-110">{on === 'old' ? 'Reconectar Spotify' : 'Conectar Spotify'}</button>
+        </>
+      )}
+    </section>
+  );
+};
+
+/** Google, Apple, Notion y Spotify, y los avisos de este dispositivo. */
 export const ConexionesView: React.FC = () => {
   const { space, userId } = useSpace();
   const db = useDb();
@@ -156,6 +185,8 @@ export const ConexionesView: React.FC = () => {
           </>
         ) : <button type="button" onClick={() => connect('notion')} disabled={busy === 'notion'} className={`${main} mt-3`}>Conectar Notion</button>}
       </section>
+
+      <SpotifyCard />
     </div>
   );
 };
