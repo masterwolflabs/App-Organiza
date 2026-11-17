@@ -9,6 +9,7 @@ import { ShoppingButton } from '@/components/organiza/Shopping';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
 import { MEAL_SLOTS, MUSCLES, sum, usePlan, useNutrition, WORKOUT_SLOTS, type Exercise, type Goals, type Meal, type PlanKind, type Workout } from '@/components/organiza/plan';
 import { CookMode, RecipeGallery } from '@/components/organiza/Recipes';
+import { NutritionLog } from '@/components/organiza/NutritionLog';
 import { CATEGORIES, categoryOfSlot, mealFromRecipe, useRecipes, type Recipe } from '@/components/organiza/recipeData';
 
 /**
@@ -398,6 +399,7 @@ export const AlimentacionView: React.FC = () => {
         <ShoppingButton />
       </div>
       <p className="mb-5 mt-1 text-sm text-zinc-400">Tu recetario: elige, cocina sin pensar y perfecciona. La 1ª te arriesgas, la 2ª te certificas, la 3ª te beneficias.</p>
+      <NutritionLog />
       <RecipeGallery api={recipes} onUse={setUsing} />
       <h2 className="mb-3 mt-10 font-display text-2xl font-semibold text-white">🗓️ Tu semana</h2>
       <WeekPlanner kind="meals" plan={plan} />
