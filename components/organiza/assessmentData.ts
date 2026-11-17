@@ -20,7 +20,7 @@ export type Level = 'basica' | 'intermedia' | 'avanzada';
 export const LEVELS: Level[] = ['basica', 'intermedia', 'avanzada'];
 export type QType = 'single' | 'multi' | 'text' | 'number' | 'scale';
 /** Para el perfil: en qué bloque cae la respuesta (en este orden se muestran). */
-export type Section = 'objetivos' | 'experiencia' | 'equipamiento' | 'disponibilidad' | 'duracion' | 'prioridades' | 'salud' | 'alimentacion' | 'fisico' | 'habitos';
+export type Section = 'objetivos' | 'experiencia' | 'equipamiento' | 'disponibilidad' | 'duracion' | 'prioridades' | 'salud' | 'alimentacion' | 'estilo' | 'ejercicios' | 'cardio' | 'habitos' | 'fisico';
 
 /** `exclusive`: al marcarla se desmarcan las demás (ej. «Ninguna en especial»). */
 export type Option = { id: string; label: string; emoji?: string; help?: string; exclusive?: boolean };
@@ -33,6 +33,7 @@ export type Option = { id: string; label: string; emoji?: string; help?: string;
 export type Condition =
   | { q: string; equals?: string | string[]; includes?: string; gte?: number; lte?: number; answered?: boolean; mentions?: string[] }
   | { all: Condition[] }
+  | { not: Condition }
   | { any: Condition[] };
 
 export type Question = {
@@ -67,9 +68,9 @@ export type LevelState = { answers: Answers; step: number; done_at: string | nul
 export type AssessmentState = { version: string; basica: LevelState; intermedia: LevelState; avanzada: LevelState };
 
 /** Súbela al cambiar las preguntas: las respuestas que ya no calcen se limpian solas al cargar. */
-export const QUESTIONS_VERSION = 'basica-1';
+export const QUESTIONS_VERSION = 'intermedia-1';
 /** Niveles cuyas preguntas todavía son de prueba (se muestran con aviso 🧪). */
-export const PROVISIONAL_LEVELS: Level[] = ['avanzada'];
+export const PROVISIONAL_LEVELS: Level[] = ['avanzada']; // 🧪 experimental hasta que Emanuel lo apruebe
 export const PROVISIONAL = PROVISIONAL_LEVELS.length > 0;
 
 export const SECTION_LABEL: Record<Section, string> = {
@@ -81,17 +82,81 @@ export const SECTION_LABEL: Record<Section, string> = {
   prioridades: '💪 Prioridades musculares',
   salud: '🩹 Molestias o limitaciones',
   alimentacion: '🥗 Alimentación',
-  fisico: '📏 Características físicas',
+  estilo: '🧭 Cómo entrenas',
+  ejercicios: '🏋️ Ejercicios',
+  cardio: '🏃 Cardio',
   habitos: '😴 Recuperación y hábitos',
+  fisico: '📏 Características físicas',
 };
 
 /* ── Las preguntas (en orden). Para cambiar la evaluación se edita SOLO esta lista. ──────── */
 
 const molestia = (palabras: string[]): Condition => ({ all: [{ q: 'molestias', equals: 'si' }, { q: 'molestias_detalle', mentions: palabras }] });
 const LUMBAR = ['lumbar', 'lumbago', 'espalda baja', 'baja espalda', 'parte baja de la espalda', 'zona baja', 'cintura', 'ciatica', 'ciatico'];
-const MUNECA = ['muneca', 'munecas'];
-const HOMBRO = ['hombro', 'hombros'];
-const RODILLA = ['rodilla', 'rodillas'];
+
+/**
+ * 🩹 Molestias por zona (Emanuel, 17 nov): cada zona tiene su pregunta «¿cuándo aparece?» y SOLO se muestra si la
+ * persona la nombra al describir su molestia. Para sumar una zona, agrégala aquí (palabras sin tildes).
+ * Si nombra una parte del cuerpo que no está en la lista, aparece una pregunta general.
+ */
+type Zone = { id: string; label: string; words: string[]; options: Option[] };
+const REPOSO: Option = { id: 'reposo', label: 'También en reposo', emoji: '🛋️' };
+const ZONES: Zone[] = [
+  { id: 'muneca', label: 'las muñecas', words: ['muneca', 'munecas'], options: [
+    { id: 'empujar', label: 'Al empujar (flexiones, press)', emoji: '🤲' },
+    { id: 'apoyar', label: 'Al apoyar peso en las manos', emoji: '✋' },
+    { id: 'agarrar', label: 'Al agarrar barras o mancuernas', emoji: '🏋️' },
+    { id: 'girar', label: 'Al girar la muñeca', emoji: '🔄' }, REPOSO] },
+  { id: 'hombro', label: 'el hombro', words: ['hombro', 'hombros', 'manguito'], options: [
+    { id: 'arriba', label: 'Al levantar el brazo sobre la cabeza', emoji: '🙋' },
+    { id: 'empujar', label: 'Al empujar (press, flexiones)', emoji: '🤲' },
+    { id: 'tirar', label: 'Al tirar (remos, dominadas)', emoji: '🪝' },
+    { id: 'dormir', label: 'Al dormir de ese lado', emoji: '🛏️' }, REPOSO] },
+  { id: 'rodilla', label: 'la rodilla', words: ['rodilla', 'rodillas', 'menisco', 'rotula'], options: [
+    { id: 'sentadilla', label: 'Al agacharme o en sentadillas', emoji: '🧎' },
+    { id: 'escaleras', label: 'Al subir o bajar escaleras', emoji: '🪜' },
+    { id: 'correr', label: 'Al correr o saltar', emoji: '🏃' },
+    { id: 'sentado', label: 'Después de estar mucho rato sentado', emoji: '🪑' }, REPOSO] },
+  { id: 'codo', label: 'el codo', words: ['codo', 'codos'], options: [
+    { id: 'flexionar', label: 'Al doblar el brazo con peso (curl)', emoji: '💪' },
+    { id: 'extender', label: 'Al estirar el brazo con peso (tríceps, press)', emoji: '🤲' },
+    { id: 'agarrar', label: 'Al agarrar o apretar', emoji: '✊' }, REPOSO] },
+  { id: 'cuello', label: 'el cuello', words: ['cuello', 'cervical', 'cervicales', 'nuca'], options: [
+    { id: 'peso_arriba', label: 'Con peso sobre los hombros o la cabeza', emoji: '🏋️' },
+    { id: 'abdominales', label: 'Haciendo abdominales', emoji: '🔥' },
+    { id: 'girar', label: 'Al girar la cabeza', emoji: '🔄' },
+    { id: 'pantalla', label: 'Después de mucho rato en el computador o celular', emoji: '💻' }, REPOSO] },
+  { id: 'tobillo', label: 'el tobillo', words: ['tobillo', 'tobillos', 'talon', 'aquiles'], options: [
+    { id: 'correr', label: 'Al correr o saltar', emoji: '🏃' },
+    { id: 'sentadilla', label: 'Al agacharme', emoji: '🧎' },
+    { id: 'caminar', label: 'Caminando', emoji: '🚶' }, REPOSO] },
+  { id: 'cadera', label: 'la cadera', words: ['cadera', 'caderas', 'ingle'], options: [
+    { id: 'sentadilla', label: 'Al agacharme o en sentadillas', emoji: '🧎' },
+    { id: 'abrir', label: 'Al abrir las piernas', emoji: '↔️' },
+    { id: 'correr', label: 'Al correr', emoji: '🏃' },
+    { id: 'sentado', label: 'Después de estar mucho rato sentado', emoji: '🪑' }, REPOSO] },
+];
+const ALL_ZONE_WORDS = [...LUMBAR, ...ZONES.flatMap((z) => z.words)];
+const ZONE_QUESTIONS: Question[] = [
+  ...ZONES.map((z): Question => ({
+    id: `${z.id}_cuando`, level: 'basica', section: 'salud', type: 'multi', required: false,
+    title: `¿Cuándo aparece la molestia en ${z.label}?`, help: 'Marca todas las que te pasen.',
+    say: `Mencionaste ${z.label}. ¿Cuándo aparece la molestia?`,
+    showIf: molestia(z.words), options: z.options,
+  })),
+  {
+    id: 'molestia_cuando', level: 'basica', section: 'salud', type: 'multi', required: false,
+    title: '¿Cuándo aparece esa molestia?', help: 'Marca todas las que te pasen.',
+    say: '¿Y cuándo suele aparecer esa molestia?',
+    showIf: { all: [{ q: 'molestias', equals: 'si' }, { q: 'molestias_detalle', answered: true }, { not: { q: 'molestias_detalle', mentions: ALL_ZONE_WORDS } }] },
+    options: [
+      { id: 'entrenando', label: 'Entrenando con peso', emoji: '🏋️' },
+      { id: 'impacto', label: 'Con impacto (correr, saltar)', emoji: '🏃' },
+      { id: 'dia_a_dia', label: 'En el día a día', emoji: '🚶' },
+      { id: 'despues', label: 'Después de entrenar', emoji: '⏳' }, REPOSO,
+    ],
+  },
+];
 
 export const QUESTIONS: Question[] = [
   /* ═══ NIVEL BÁSICO ═══ */
@@ -277,45 +342,7 @@ export const QUESTIONS: Question[] = [
       { id: 'no_se', label: 'No estoy seguro', emoji: '🤷' },
     ],
   },
-  {
-    id: 'muneca_cuando', level: 'basica', section: 'salud', type: 'multi', required: false,
-    title: '¿En qué situaciones aparece la molestia en las muñecas?', help: 'Marca todas las que te pasen.',
-    say: 'Mencionaste las muñecas. ¿En qué situaciones aparece la molestia?',
-    showIf: molestia(MUNECA),
-    options: [
-      { id: 'empujar', label: 'Al empujar (flexiones, press)', emoji: '🤲' },
-      { id: 'apoyar', label: 'Al apoyar peso en las manos', emoji: '✋' },
-      { id: 'agarrar', label: 'Al agarrar barras o mancuernas', emoji: '🏋️' },
-      { id: 'girar', label: 'Al girar la muñeca', emoji: '🔄' },
-      { id: 'reposo', label: 'También en reposo', emoji: '🛋️' },
-    ],
-  },
-  {
-    id: 'hombro_cuando', level: 'basica', section: 'salud', type: 'multi', required: false,
-    title: '¿Cuándo aparece la molestia en el hombro?', help: 'Marca todas las que te pasen.',
-    say: 'Mencionaste el hombro. ¿Cuándo aparece la molestia?',
-    showIf: molestia(HOMBRO),
-    options: [
-      { id: 'arriba', label: 'Al levantar el brazo sobre la cabeza', emoji: '🙋' },
-      { id: 'empujar', label: 'Al empujar (press, flexiones)', emoji: '🤲' },
-      { id: 'tirar', label: 'Al tirar (remos, dominadas)', emoji: '🪝' },
-      { id: 'dormir', label: 'Al dormir de ese lado', emoji: '🛏️' },
-      { id: 'reposo', label: 'También en reposo', emoji: '🛋️' },
-    ],
-  },
-  {
-    id: 'rodilla_cuando', level: 'basica', section: 'salud', type: 'multi', required: false,
-    title: '¿Cuándo aparece la molestia en la rodilla?', help: 'Marca todas las que te pasen.',
-    say: 'Mencionaste la rodilla. ¿Cuándo aparece la molestia?',
-    showIf: molestia(RODILLA),
-    options: [
-      { id: 'sentadilla', label: 'Al agacharme o en sentadillas', emoji: '🧎' },
-      { id: 'escaleras', label: 'Al subir o bajar escaleras', emoji: '🪜' },
-      { id: 'correr', label: 'Al correr o saltar', emoji: '🏃' },
-      { id: 'sentado', label: 'Después de estar mucho rato sentado', emoji: '🪑' },
-      { id: 'reposo', label: 'También en reposo', emoji: '🛋️' },
-    ],
-  },
+  ...ZONE_QUESTIONS,
   // 9 · Alimentación
   {
     id: 'alimentacion', level: 'basica', section: 'alimentacion', type: 'single', required: true,
@@ -366,9 +393,153 @@ export const QUESTIONS: Question[] = [
     placeholder: 'Ej.: como 3 veces al día, no como carne, ceno tarde…',
   },
 
-  /* ═══ NIVEL INTERMEDIO ═══ — se diseña después. Regla: no repetir lo ya respondido (usar `showIf: { q, answered: false }`). */
+  /* ═══ NIVEL INTERMEDIO ═══ (Emanuel, 17 nov) — complementa lo básico, sin repetir lo ya guardado. */
+  {
+    id: 'organizacion', level: 'intermedia', section: 'estilo', type: 'single', required: true,
+    title: '¿Cómo prefieres organizar tus entrenamientos en la semana?',
+    say: '¡Subimos de nivel! ¿Cómo prefieres organizar tus entrenamientos durante la semana?',
+    options: [
+      { id: 'grupos', label: 'Por grupos musculares', emoji: '🧩', help: 'Ej.: un día pecho, otro espalda…' },
+      { id: 'full_body', label: 'Cuerpo completo', emoji: '🧍', help: 'Todo el cuerpo en cada sesión' },
+      { id: 'torso_pierna', label: 'Tren superior / inferior', emoji: '↕️', help: 'Un día arriba, otro abajo' },
+      { id: 'sistema', label: 'Que el sistema lo organice', emoji: '🤖' },
+    ],
+  },
+  {
+    id: 'ejercicios_conocidos', level: 'intermedia', section: 'ejercicios', type: 'text', required: false,
+    title: '¿Qué ejercicios conoces y cuáles haces habitualmente?',
+    help: 'Con tus palabras, sin preocuparte de los nombres exactos.',
+    say: 'Cuéntame, ¿qué ejercicios conoces y cuáles haces habitualmente?',
+    placeholder: 'Ej.: press banca, sentadilla, remo con mancuerna, dominadas…',
+  },
+  {
+    id: 'equipo_detalle', level: 'intermedia', section: 'equipamiento', type: 'text', required: false,
+    title: '¿Qué equipamiento específico tienes?',
+    help: 'Detalla lo que ya marcaste: máquinas, mancuernas (hasta qué peso), barras y discos, poleas y accesorios.',
+    say: 'Ahora en detalle: ¿qué equipamiento específico tienes? Máquinas, mancuernas, barras, poleas, accesorios.',
+    placeholder: 'Ej.: mancuernas de 5 a 25 kg, barra olímpica con 80 kg en discos, polea alta…',
+    // No se pregunta si en lo básico dijo que entrena solo con su cuerpo.
+    showIf: { not: { any: [{ q: 'equipo_casa', includes: 'nada' }, { q: 'equipo_aire_libre', includes: 'nada' }] } },
+  },
+  {
+    id: 'intensidad', level: 'intermedia', section: 'estilo', type: 'single', required: true,
+    title: '¿Cómo sueles entrenar?',
+    say: '¿Y con qué intensidad sueles entrenar?',
+    options: [
+      { id: 'ligero', label: 'Ligero', emoji: '🍃', help: 'Termino fresco, podría hacer mucho más' },
+      { id: 'moderado', label: 'Moderado', emoji: '🙂', help: 'Me exijo, pero me quedan varias repeticiones' },
+      { id: 'intenso', label: 'Intenso', emoji: '🔥', help: 'Termino las series con poco resto' },
+      { id: 'fallo', label: 'Cerca del fallo muscular', emoji: '💥', help: 'Casi no puedo hacer otra repetición' },
+      { id: 'no_se', label: 'No sabría decir', emoji: '🤷' },
+    ],
+  },
+  {
+    id: 'series_reps', level: 'intermedia', section: 'estilo', type: 'single', required: true,
+    title: '¿Sabes cuántas series y repeticiones haces normalmente?',
+    say: '¿Sabes cuántas series y repeticiones haces normalmente? Si no lo sabes, no pasa nada.',
+    options: [
+      { id: 'si', label: 'Sí, lo sé', emoji: '✅' },
+      { id: 'mas_o_menos', label: 'Más o menos', emoji: '🤏' },
+      { id: 'no', label: 'No lo sé', emoji: '🤷' },
+    ],
+  },
+  {
+    id: 'series_reps_detalle', level: 'intermedia', section: 'estilo', type: 'text', required: false,
+    title: '¿Cuántas series y repeticiones sueles hacer?',
+    say: 'Buenísimo. ¿Cuántas series y repeticiones sueles hacer?',
+    placeholder: 'Ej.: 4 series de 8 a 12, o 3 x 10',
+    showIf: { q: 'series_reps', equals: ['si', 'mas_o_menos'] },
+  },
+  {
+    id: 'progresion', level: 'intermedia', section: 'estilo', type: 'single', required: true,
+    title: '¿Registras los pesos que levantas y buscas subirlos poco a poco?',
+    say: '¿Registras los pesos que levantas y buscas subirlos de a poco?',
+    options: [
+      { id: 'si', label: 'Sí, registro y voy subiendo', emoji: '📈' },
+      { id: 'registro', label: 'Registro, pero no subo de forma ordenada', emoji: '📝' },
+      { id: 'subo', label: 'No registro, pero subo cuando me siento capaz', emoji: '💪' },
+      { id: 'no', label: 'No, ninguna de las dos', emoji: '➖' },
+    ],
+  },
+  {
+    id: 'ejercicios_gusto', level: 'intermedia', section: 'ejercicios', type: 'text', required: false,
+    title: '¿Qué ejercicios disfrutas?', help: 'Opcional.',
+    say: '¿Qué ejercicios disfrutas hacer?',
+    placeholder: 'Ej.: peso muerto, dominadas, bici…',
+  },
+  {
+    id: 'ejercicios_evitar', level: 'intermedia', section: 'ejercicios', type: 'text', required: false,
+    title: '¿Y cuáles prefieres evitar?', help: 'Opcional. Por gusto, comodidad o lo que sea.',
+    say: '¿Y hay ejercicios que prefieras evitar?',
+    placeholder: 'Ej.: burpees, sentadilla con barra…',
+  },
+  {
+    id: 'cardio', level: 'intermedia', section: 'cardio', type: 'single', required: true,
+    title: '¿Haces cardio?',
+    say: '¿Haces cardio?',
+    options: [
+      { id: 'si', label: 'Sí', emoji: '🏃' },
+      { id: 'a_veces', label: 'A veces', emoji: '🔄' },
+      { id: 'no', label: 'No', emoji: '➖' },
+    ],
+  },
+  {
+    id: 'cardio_tipo', level: 'intermedia', section: 'cardio', type: 'multi', required: false,
+    title: '¿Qué tipo de cardio?', help: 'Marca todos los que hagas.',
+    say: '¿Qué tipo de cardio haces?',
+    showIf: { q: 'cardio', equals: ['si', 'a_veces'] },
+    options: [
+      { id: 'caminar', label: 'Caminar', emoji: '🚶' },
+      { id: 'correr', label: 'Correr', emoji: '🏃' },
+      { id: 'bici', label: 'Bicicleta', emoji: '🚴' },
+      { id: 'eliptica', label: 'Elíptica o escaladora', emoji: '⚙️' },
+      { id: 'nadar', label: 'Natación', emoji: '🏊' },
+      { id: 'hiit', label: 'HIIT o intervalos', emoji: '⚡' },
+      { id: 'cerro', label: 'Cerro o trekking', emoji: '⛰️' },
+      { id: 'deporte', label: 'Algún deporte', emoji: '⚽' },
+    ],
+  },
+  {
+    id: 'cardio_frecuencia', level: 'intermedia', section: 'cardio', type: 'single', required: false,
+    title: '¿Con qué frecuencia?',
+    say: '¿Y con qué frecuencia?',
+    showIf: { q: 'cardio', equals: ['si', 'a_veces'] },
+    options: [
+      { id: '1', label: '1 vez a la semana o menos', emoji: '1️⃣' },
+      { id: '2_3', label: '2 a 3 veces a la semana', emoji: '🔁' },
+      { id: '4', label: '4 o más veces a la semana', emoji: '🔥' },
+    ],
+  },
+  {
+    id: 'recuperacion', level: 'intermedia', section: 'habitos', type: 'single', required: true,
+    title: '¿Cómo es tu recuperación después de entrenar?',
+    say: '¿Cómo te recuperas después de entrenar?',
+    options: [
+      { id: 'bien', label: 'Bien, al día siguiente estoy listo', emoji: '✅' },
+      { id: 'adolorido', label: 'Quedo adolorido 2 o 3 días', emoji: '😣' },
+      { id: 'cansado', label: 'Me cuesta, quedo muy cansado', emoji: '🪫' },
+      { id: 'varia', label: 'Depende de la semana', emoji: '🔄' },
+    ],
+  },
+  {
+    id: 'recuperacion_detalle', level: 'intermedia', section: 'habitos', type: 'text', required: false,
+    title: '¿Algo más sobre cómo te recuperas?', help: 'Opcional. Ej.: duermo poco, trabajo de pie, me cuesta con las piernas…',
+    say: '¿Quieres contarme algo más sobre cómo te recuperas?',
+    showIf: { q: 'recuperacion', equals: ['adolorido', 'cansado', 'varia'] },
+  },
+  {
+    id: 'poco_tiempo', level: 'intermedia', section: 'estilo', type: 'single', required: true,
+    title: 'Cuando tienes poco tiempo, ¿qué prefieres?',
+    say: 'Última de este nivel: cuando tienes poco tiempo, ¿qué prefieres hacer?',
+    options: [
+      { id: 'menos_ejercicios', label: 'Hacer menos ejercicios', emoji: '✂️' },
+      { id: 'menos_series', label: 'Hacer menos series', emoji: '➖' },
+      { id: 'express', label: 'Una rutina express adaptada', emoji: '⚡' },
+      { id: 'sistema', label: 'Que el sistema decida', emoji: '🤖' },
+    ],
+  },
 
-  /* ═══ NIVEL AVANZADO ═══ — preguntas de PRUEBA (PROVISIONAL_LEVELS) */
+  /* ═══ NIVEL AVANZADO ═══ — 🧪 EXPERIMENTAL (PROVISIONAL_LEVELS): no son definitivas todavía. */
   {
     id: 'peso', level: 'avanzada', section: 'fisico', type: 'number', required: false, min: 30, max: 250, step: 0.5, unit: 'kg',
     title: '¿Cuánto pesas?', say: 'Vamos con algunos datos físicos. ¿Cuánto pesas?',
@@ -397,6 +568,7 @@ export function meets(c: Condition | undefined, a: Answers): boolean {
   if (!c) return true;
   if ('all' in c) return c.all.every((x) => meets(x, a));
   if ('any' in c) return c.any.some((x) => meets(x, a));
+  if ('not' in c) return !meets(c.not, a);
   const v = a[c.q];
   if (c.answered !== undefined && c.answered !== isAnswered(v)) return false;
   if (c.equals !== undefined) {
@@ -468,7 +640,7 @@ export function optionsFromSpeech(q: Question, t: string): string[] {
 }
 
 /** Quita respuestas que ya no calzan con las preguntas actuales (opciones que cambiaron, preguntas borradas). */
-function clean(level: Level, st: LevelState): LevelState {
+function clean(level: Level, st: LevelState, others: Answers = {}): LevelState {
   const out: Answers = {};
   for (const q of QUESTIONS.filter((x) => x.level === level)) {
     const v = st.answers[q.id];
@@ -482,7 +654,7 @@ function clean(level: Level, st: LevelState): LevelState {
     }
     out[q.id] = v;
   }
-  const qs = visibleQuestions(level, out);
+  const qs = visibleQuestions(level, { ...others, ...out });
   const complete = qs.every((q) => valid(q, out[q.id]));
   return { ...st, answers: out, done_at: complete ? st.done_at : null, step: Math.min(st.step, Math.max(0, qs.length - 1)) };
 }
@@ -518,7 +690,9 @@ export function useAssessment() {
         cloud = p?.assessment ?? {};
       } catch {}
       if (!on) return;
-      const s: AssessmentState = { version: QUESTIONS_VERSION, basica: clean('basica', newer(cloud.basica, local.basica)), intermedia: clean('intermedia', newer(cloud.intermedia, local.intermedia)), avanzada: clean('avanzada', newer(cloud.avanzada, local.avanzada)) };
+      const raw = { basica: newer(cloud.basica, local.basica), intermedia: newer(cloud.intermedia, local.intermedia), avanzada: newer(cloud.avanzada, local.avanzada) };
+      const every = allAnswers(raw);
+      const s: AssessmentState = { version: QUESTIONS_VERSION, basica: clean('basica', raw.basica, every), intermedia: clean('intermedia', raw.intermedia, every), avanzada: clean('avanzada', raw.avanzada, every) };
       latest.current = s;
       setState(s);
       setReady(true);

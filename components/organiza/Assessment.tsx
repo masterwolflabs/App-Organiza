@@ -75,7 +75,7 @@ const Home: React.FC<{ api: AssessmentApi; voice: ReturnType<typeof useCoachVoic
           <span className="flex flex-wrap items-center gap-1.5 font-semibold text-white">
             {LEVEL_LABEL[level]}
             {optional && <span className="rounded-full bg-white/10 px-2 py-px text-[10px] font-bold text-zinc-300">OPCIONAL</span>}
-            {isTrial(level) && <span className="rounded-full bg-amber-500/20 px-2 py-px text-[10px] font-bold text-amber-200">🧪 DE PRUEBA</span>}
+            {isTrial(level) && <span className="rounded-full bg-amber-500/20 px-2 py-px text-[10px] font-bold text-amber-200">🧪 EXPERIMENTAL</span>}
             {st.done_at && <span className="rounded-full bg-emerald-500 px-2 py-px text-[10px] font-bold text-[#09090b]">✓ LISTA</span>}
           </span>
           <span className="mt-0.5 block text-xs text-zinc-400">{sub}</span>
@@ -95,7 +95,7 @@ const Home: React.FC<{ api: AssessmentApi; voice: ReturnType<typeof useCoachVoic
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-5">
         {card('basica', '⚡', 'Lo esencial: objetivo, lugar, tiempo, molestias y alimentación. Es lo primero.', false)}
-        {card('intermedia', '🎯', 'Complementa lo básico, sin repetir lo que ya contaste.', true)}
+        {card('intermedia', '🎯', 'Cómo entrenas: organización, intensidad, cargas, cardio y recuperación. No repite lo que ya contaste.', true)}
         {card('avanzada', '🔬', 'Profundiza solo en lo que todavía haga falta.', true)}
         {api.state.basica.done_at && (
           <button type="button" onClick={onResults} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 py-3 text-sm font-bold text-[#fff] hover:bg-red-400">📊 Ver mi perfil</button>
@@ -183,7 +183,7 @@ const Flow: React.FC<{ level: Level; api: AssessmentApi; voice: ReturnType<typeo
       <div className="border-b border-white/10 px-4 pb-3 pt-3">
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => go(i - 1)} aria-label="Volver" className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
-          <p className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-zinc-400">{LEVEL_LABEL[level]}{isTrial(level) ? ' · prueba' : ''}</p>
+          <p className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-zinc-400">{LEVEL_LABEL[level]}{isTrial(level) ? ' · experimental' : ''}</p>
           {voice.supported && (
             <>
               <button type="button" onClick={() => voice.update({ enabled: !voice.settings.enabled })} aria-label={voice.settings.enabled ? 'Apagar la voz' : 'Encender la voz'} data-help={voice.settings.enabled ? 'Apagar la voz' : 'Encender la voz'} className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white">{voice.settings.enabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</button>
@@ -377,7 +377,7 @@ const Results: React.FC<{ api: AssessmentApi; onBack: () => void; onEdit: (l: Le
             <ul className="space-y-1.5">
               {rows.filter((r) => r.section === s && isAnswered(r.v)).map((r) => (
                 <li key={r.q.id} className="flex items-start gap-2 text-sm">
-                  <span className="min-w-0 flex-1 text-zinc-400">{r.q.title}{isTrial(r.level) && <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-bold text-amber-200">🧪 PRUEBA</span>}<span className="block whitespace-pre-line font-semibold text-zinc-100">{answerLabel(r.q, r.v)}</span></span>
+                  <span className="min-w-0 flex-1 text-zinc-400">{r.q.title}{isTrial(r.level) && <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-bold text-amber-200">🧪 EXPERIMENTAL</span>}<span className="block whitespace-pre-line font-semibold text-zinc-100">{answerLabel(r.q, r.v)}</span></span>
                   <button type="button" aria-label={`Cambiar: ${r.q.title}`} onClick={() => onEdit(r.level, r.i)} className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-200"><Pencil className="h-3.5 w-3.5" /></button>
                 </li>
               ))}
