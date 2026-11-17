@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
-import { audioNames, resolveAudio } from '@/components/organiza/musicAudio';
+import { audioNames, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
 
 /**
@@ -367,6 +367,11 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const mutedRef = useRef(false);
   const list = useRef(videos);
   list.current = videos;
+  // ⚡ Al abrir el focus, tus audios propios quedan listos de antemano (saltar a uno no espera la red).
+  const audioKey = videos.map((v) => v.audio ?? '').join('|');
+  useEffect(() => {
+    warmAudio(audioKey.split('|'));
+  }, [audioKey]);
   // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
   const lengths = useRef<Record<number, number>>({});
 

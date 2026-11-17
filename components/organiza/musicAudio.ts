@@ -68,33 +68,69 @@ export async function audioFromLink(link: string): Promise<{ audio: string; name
 /** ¿Es un link que vale la pena probar? (Drive, Dropbox o cualquier http). */
 export const isAudioLink = (link: string) => directAudioUrl(link) !== null;
 
-const signed = new Map<string, { url: string; until: number }>();
-
-/** La dirección que toca el reproductor (los archivos subidos se firman por 1 día). */
+/*
+ * ⚡ Cambio rápido (Daily focus-cambio-rapido, 2026-11-18): dónde quedó guardado cada link de Drive y el
+ * permiso para tocarlo (1 día) se recuerdan en este equipo, así saltar a tu audio no pregunta nada a la red.
+ */
+const LS_STORED = 'mp-music-stored';
+const LS_SIGNED = 'mp-music-signed';
+const lsRead = <T,>(k: string): Record<string, T> => {
+  try {
+    return JSON.parse(localStorage.getItem(k) || '{}') as Record<string, T>;
+  } catch {
+    return {};
+  }
+};
+const lsWrite = (k: string, v: Record<string, unknown>) => {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+};
+const signed = new Map<string, Promise<string | null>>();
 const imported = new Map<string, Promise<string | null>>();
 /** El nombre real de cada link de Drive/Dropbox (lo dice Drive al traerlo). */
 export const audioNames = new Map<string, string>();
+
+/** La dirección que toca el reproductor (los archivos guardados se firman por 1 día). */
 export async function resolveAudio(audio: string): Promise<string | null> {
   // Link de Drive/Dropbox guardado antes del 18 nov: se trae a tu cuenta la primera vez y suena desde ahí.
   if (isCloudLink(audio)) {
-    if (!imported.has(audio)) imported.set(audio, audioFromLink(audio).then((r) => {
-      if (!('audio' in r)) return null;
-      if (r.name && r.name !== linkName(audio)) audioNames.set(audio, r.name);
-      return r.audio;
-    }));
+    const known = lsRead<{ audio: string; name?: string }>(LS_STORED)[audio];
+    if (known) {
+      if (known.name) audioNames.set(audio, known.name);
+      return resolveAudio(known.audio);
+    }
+    if (!imported.has(audio))
+      imported.set(audio, audioFromLink(audio).then((r) => {
+        if (!('audio' in r)) return null;
+        const name = r.name && r.name !== linkName(audio) ? r.name : undefined;
+        if (name) audioNames.set(audio, name);
+        lsWrite(LS_STORED, { ...lsRead(LS_STORED), [audio]: { audio: r.audio, name } });
+        return r.audio;
+      }));
     const stored = await imported.get(audio)!;
     if (!stored) imported.delete(audio);
     return stored && stored.startsWith('storage:') ? resolveAudio(stored) : null;
   }
   if (!audio.startsWith('storage:')) return directAudioUrl(audio);
   const path = audio.slice('storage:'.length);
-  const hit = signed.get(path);
-  if (hit && hit.until > Date.now()) return hit.url;
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 86_400);
-  if (!data?.signedUrl) return null;
-  signed.set(path, { url: data.signedUrl, until: Date.now() + 80_000_000 });
-  return data.signedUrl;
+  const saved = lsRead<{ url: string; until: number }>(LS_SIGNED)[path];
+  if (saved && saved.until > Date.now()) return saved.url;
+  if (!signed.has(path))
+    signed.set(path, supabase.storage.from(BUCKET).createSignedUrl(path, 86_400).then(({ data }) => {
+      if (!data?.signedUrl) return null;
+      const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
+      for (const k of Object.keys(all)) if (all[k].until < Date.now()) delete all[k];
+      lsWrite(LS_SIGNED, { ...all, [path]: { url: data.signedUrl, until: Date.now() + 80_000_000 } });
+      return data.signedUrl;
+    }));
+  const url = await signed.get(path)!;
+  signed.delete(path);
+  return url;
 }
+
+/** Deja listas de antemano las canciones propias de una lista (al abrir el focus). */
+export const warmAudio = (audios: (string | undefined)[]) => audios.forEach((a) => a && void resolveAudio(a).catch(() => null));
 
 /** Sube un archivo de audio a la cuenta. Devuelve el valor para `Video.audio` o el error en palabras simples. */
 export async function uploadMusic(file: File): Promise<{ audio: string; name: string } | { error: string }> {
