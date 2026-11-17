@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FOCUS_SWITCH, FocusTimer, openFocus } from '@/components/organiza/FocusTimer';
+import { FOCUS_SWITCH, FocusTimer, openFocus, openFocusAt } from '@/components/organiza/FocusTimer';
 import { iso, refOf, toMinutes, weekdayOf, type Item } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
 import { notify } from '@/components/organiza/notify';
@@ -72,6 +72,9 @@ export const AutoFocus: React.FC = () => {
       // de sobra) y llegó la hora de esta (Levantarse), el focus cambia aunque el tiempo no llegó a cero.
       // Cambia si esta se abre sola, o si la abierta era de las que se abren solas (la sigue el horario).
       if (!opens && !cur?.auto_focus) return;
+      // Abriste este focus a mano mientras «i» ya estaba en su horario (ej. para probarlo): no se cierra.
+      // El horario manda solo cuando «i» EMPIEZA después de que abriste el que tienes en pantalla.
+      if (cur && new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, toMinutes(i.time)).getTime() <= openFocusAt) return;
       if (cur) window.dispatchEvent(new CustomEvent(FOCUS_SWITCH, { detail: i.id }));
       if (opens) {
         lsSet(BEAT(key), String(Date.now()));

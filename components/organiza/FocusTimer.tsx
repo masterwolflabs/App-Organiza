@@ -25,6 +25,8 @@ const mmss = (s: number) => {
  * siguiente acción y le avisa con el evento `organiza:focus-switch` (detail = id de la nueva acción).
  */
 export let openFocus: Item | null = null;
+/** Cuándo se abrió el focus que está abierto (el horario solo lo cambia por una acción que EMPIECE después). */
+export let openFocusAt = 0;
 export const FOCUS_SWITCH = 'organiza:focus-switch';
 
 /**
@@ -131,6 +133,7 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   }, []);
   useEffect(() => {
     openFocus = item;
+    openFocusAt = Date.now();
     const onSwitch = (e: Event) => {
       if ((e as CustomEvent<string>).detail !== item.id) leaveRef.current();
     };
