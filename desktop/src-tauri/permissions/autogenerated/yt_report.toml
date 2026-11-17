@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-yt-report"
+description = "Enables the yt_report command without any pre-configured scope."
+commands.allow = ["yt_report"]
+
+[[permission]]
+identifier = "deny-yt-report"
+description = "Denies the yt_report command without any pre-configured scope."
+commands.deny = ["yt_report"]

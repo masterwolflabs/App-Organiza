@@ -7,11 +7,14 @@
 //! - Comandos que llama la web: `notify` (aviso nativo), `focus_mode` (ventana al frente y siempre encima).
 //! - Sin App Nap: macOS no adormece la app de fondo (si no, los relojes de la página se atrasan).
 //! - Se actualiza sola: busca versiones nuevas en GitHub Releases al abrir y cada 6 h.
+//! - 🎵 Canciones que YouTube no deja sonar dentro de la página (2026-11-17, 1.0.3): se abren en una
+//!   ventana de YouTube ESCONDIDA (`yt_*`), solo se escuchan y el focus sigue en pantalla. La ventanita
+//!   le cuenta a la página cada medio segundo dónde va (`yt_report` → evento «yt-state»).
 
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
@@ -71,6 +74,102 @@ fn focus_mode(app: AppHandle, on: bool) {
 #[tauri::command]
 fn bring_to_front(app: AppHandle) {
     show(&app);
+}
+
+const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+
+/// Solo ventanas «yt-…» (las de la música): la página nunca puede tocar otra ventana con estos comandos.
+fn yt_window(app: &AppHandle, label: &str) -> Option<WebviewWindow> {
+    if !label.starts_with("yt-") {
+        return None;
+    }
+    app.get_webview_window(label)
+}
+
+/// Abre (escondida) la canción de YouTube `video` desde el segundo `start`, al volumen `volume` (0–100).
+#[tauri::command]
+fn yt_open(app: AppHandle, label: String, video: String, start: f64, volume: f64) -> Result<(), String> {
+    if !label.starts_with("yt-") || !video.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("datos inválidos".into());
+    }
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.close();
+    }
+    let url = format!("https://www.youtube.com/watch?v={}&t={}s", video, start.max(0.0).floor() as u64);
+    let vol = (volume / 100.0).clamp(0.0, 1.0);
+    // Cada medio segundo le cuenta a la página dónde va el video (y le pone el volumen que se pidió).
+    let script = format!(
+        r#"(function(){{
+  if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
+  window.__mpVol = {vol};
+  setInterval(function(){{
+    var v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+    if (!v) return;
+    if (Math.abs(v.volume - window.__mpVol) > 0.01) v.volume = window.__mpVol;
+    var ad = !!document.querySelector('.ad-showing');
+    var st = v.ended ? 0 : v.paused ? 2 : (v.readyState < 3 || ad) ? 3 : 1;
+    try {{ window.__TAURI__.core.invoke('yt_report', {{ label: '{label}', t: ad ? 0 : v.currentTime, dur: ad ? 0 : (v.duration || 0), state: st }}); }} catch (e) {{}}
+  }}, 500);
+}})();"#
+    );
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(url.parse().map_err(|_| "url")?))
+        .title("Master Planner · música")
+        .inner_size(360.0, 230.0)
+        .visible(false)
+        .focused(false)
+        .skip_taskbar(true)
+        .user_agent(SAFARI_UA)
+        .initialization_script(script)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// La ventanita de música le cuenta a la página dónde va.
+#[tauri::command]
+fn yt_report(app: AppHandle, label: String, t: f64, dur: f64, state: i32) {
+    let _ = app.emit_to("main", "yt-state", serde_json::json!({ "label": label, "t": t, "dur": dur, "state": state }));
+}
+
+/// play · pause · seek (valor = segundo) · volume (valor = 0–100).
+#[tauri::command]
+fn yt_cmd(app: AppHandle, label: String, action: String, value: f64) {
+    let Some(w) = yt_window(&app, &label) else { return };
+    let js = match action.as_str() {
+        "play" => "var v=document.querySelector('video');v&&v.play();".to_string(),
+        "pause" => "var v=document.querySelector('video');v&&v.pause();".to_string(),
+        "seek" => format!("var v=document.querySelector('video');v&&(v.currentTime={});", value.max(0.0)),
+        "volume" => format!("window.__mpVol={};", (value / 100.0).clamp(0.0, 1.0)),
+        "mute" => format!("var v=document.querySelector('video');v&&(v.muted={});", value > 0.0),
+        _ => return,
+    };
+    let _ = w.eval(&js);
+}
+
+/// Muestra la ventanita chica en una esquina (encima de todo) o la vuelve a esconder.
+#[tauri::command]
+fn yt_show(app: AppHandle, label: String, show: bool) {
+    let Some(w) = yt_window(&app, &label) else { return };
+    if show {
+        if let Ok(Some(m)) = w.current_monitor() {
+            let s = m.scale_factor();
+            let size = m.size().to_logical::<f64>(s);
+            let pos = m.position().to_logical::<f64>(s);
+            let _ = w.set_position(tauri::LogicalPosition::new(pos.x + size.width - 380.0, pos.y + size.height - 270.0));
+        }
+        let _ = w.set_always_on_top(true);
+        let _ = w.show();
+    } else {
+        let _ = w.hide();
+    }
+}
+
+/// Cierra la ventanita de música.
+#[tauri::command]
+fn yt_close(app: AppHandle, label: String) {
+    if let Some(w) = yt_window(&app, &label) {
+        let _ = w.close();
+    }
 }
 
 /// Busca una versión nueva de la app de Mac. `manual` = la pidió la persona (avisa también si no hay).
@@ -133,7 +232,17 @@ pub fn run() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![notify, focus_mode, bring_to_front])
+        // Si la página principal se recarga, ninguna ventanita de música queda sonando sola.
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                for (label, w) in webview.app_handle().webview_windows() {
+                    if label.starts_with("yt-") {
+                        let _ = w.close();
+                    }
+                }
+            }
+        })
+        .invoke_handler(tauri::generate_handler![notify, focus_mode, bring_to_front, yt_open, yt_report, yt_cmd, yt_show, yt_close])
         .setup(move |app| {
             keep_awake();
             let handle = app.handle().clone();
@@ -207,6 +316,10 @@ pub fn run() {
         .on_window_event(|window, ev| {
             // Cerrar = esconder: la app sigue de fondo para avisar a la hora.
             if let WindowEvent::CloseRequested { api, .. } = ev {
+                // La ventanita de música sí se cierra de verdad.
+                if window.label().starts_with("yt-") {
+                    return;
+                }
                 api.prevent_close();
                 let _ = window.hide();
             }

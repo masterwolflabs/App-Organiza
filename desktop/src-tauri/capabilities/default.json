@@ -11,6 +11,14 @@
     ]
   },
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:event:default",
+    "allow-notify",
+    "allow-focus-mode",
+    "allow-bring-to-front",
+    "allow-yt-open",
+    "allow-yt-cmd",
+    "allow-yt-show",
+    "allow-yt-close"
   ]
 }

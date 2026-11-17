@@ -7,11 +7,13 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { canEmbed, fmtSeconds, parseYouTube, playlistIds, previewVolume, toSeconds } from '@/components/organiza/YouTubeList';
 import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
+import { isAudioLink, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
+import { isDesktop } from '@/lib/desktop';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
 
-/** Aviso si quien subió el video no deja reproducirlo fuera de YouTube. */
-const EmbedCheck: React.FC<{ video: string }> = ({ video }) => {
+/** Aviso si quien subió el video no deja reproducirlo fuera de YouTube. `children` = el botón «🎵 Usar mi audio». */
+const EmbedCheck: React.FC<{ video: string; children?: React.ReactNode }> = ({ video, children }) => {
   const [ok, setOk] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
@@ -22,7 +24,59 @@ const EmbedCheck: React.FC<{ video: string }> = ({ video }) => {
   }, [video]);
   if (ok === null) return <p className="mt-2 text-[11px] text-zinc-500">Revisando si suena en Master Planner…</p>;
   if (ok) return <p className="mt-2 text-[11px] font-semibold text-emerald-300">✓ Suena en Master Planner</p>;
-  return <p className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">⚠️ Esta canción no puede sonar dentro de Master Planner: su dueño (o el sello, por derechos) solo deja escucharla en YouTube. En el focus se salta y te da un botón para abrirla en YouTube. Si quieres que suene aquí, busca otra subida (por ejemplo «audio» o «letra») y usa 🔄 Cambiar.</p>;
+  return (
+    <div className="mt-2 rounded-lg bg-rose-500/15 px-2 py-1.5 text-xs text-rose-200 ring-1 ring-rose-400/30">
+      <p>⚠️ Esta canción no puede sonar dentro de Master Planner: su dueño (o el sello, por derechos) solo deja escucharla en YouTube. Para que suene aquí, usa tu propio audio (un archivo o un link de Drive / Dropbox / MP3), o busca otra subida y usa 🔄 Cambiar.</p>
+      {isDesktop() && <p className="mt-1 font-semibold text-emerald-200">💻 En esta app de Mac igual suena: se abre escondida en una ventanita de YouTube (📺 para verla).</p>}
+      {children}
+    </div>
+  );
+};
+
+/**
+ * 🎵 Usar mi audio (2026-11-17): subir el archivo de la canción o pegar un link de Drive / Dropbox / MP3.
+ * Queda en la canción; suena ese en vez de YouTube, con el mismo desde/hasta, crossfade y volumen.
+ */
+const AudioPicker: React.FC<{ onPick: (audio: string, name: string) => void; strong?: boolean }> = ({ onPick, strong }) => {
+  const [open, setOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const file = React.useRef<HTMLInputElement>(null);
+  const upload = async (f?: File) => {
+    if (!f) return;
+    setBusy(true);
+    setErr('');
+    const r = await uploadMusic(f);
+    setBusy(false);
+    if ('error' in r) return setErr(r.error);
+    onPick(r.audio, r.name);
+    setOpen(false);
+  };
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} data-help="Que suene tu propio archivo en vez de YouTube" className={strong ? 'mt-1.5 inline-flex items-center gap-1 rounded-lg bg-rose-500/25 px-2.5 py-1.5 text-xs font-bold text-rose-50 ring-1 ring-rose-300/40 hover:bg-rose-500/35' : 'inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold text-zinc-400 ring-1 ring-white/15 hover:text-zinc-100'}>
+        🎵 Usar mi audio
+      </button>
+    );
+  return (
+    <div className="mt-2 w-full rounded-lg bg-black/25 p-2 ring-1 ring-white/10">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input ref={file} type="file" accept={MUSIC_ACCEPT} className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+        <button type="button" disabled={busy} onClick={() => file.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-60">
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Subir archivo
+        </button>
+        <span className="text-[11px] text-zinc-500">o</span>
+        <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={(e) => { e.preventDefault(); if (!isAudioLink(link)) return setErr('Pega un link de Google Drive, Dropbox o de un MP3.'); onPick(link.trim(), 'Audio de link'); setOpen(false); }}>
+          <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link de Drive, Dropbox o MP3" aria-label="Link del audio" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
+          <button type="submit" className="rounded-lg bg-white/[0.08] px-2 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">Usar</button>
+        </form>
+        <button type="button" aria-label="Cancelar" onClick={() => setOpen(false)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">MP3, M4A o WAV hasta 25 MB. Queda solo en tu cuenta. Un link de Drive tiene que estar compartido «cualquiera con el link».</p>
+      {err && <p className="mt-1 text-[11px] text-rose-300">{err}</p>}
+    </div>
+  );
 };
 
 /**
@@ -146,7 +200,14 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     </div>
                     <button type="button" aria-label="Quitar" onClick={() => setVideos((l) => l.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                   </div>
-                  {p?.video && <EmbedCheck video={p.video} />}
+                  {v.audio ? (
+                    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-200 ring-1 ring-emerald-400/20">
+                      <span className="min-w-0 flex-1 truncate">🎵 Suena tu audio: <b className="font-semibold">{v.audioName || 'Mi audio'}</b></span>
+                      <button type="button" onClick={() => set(i, { audio: undefined, audioName: undefined })} data-help="Quitar tu audio: vuelve a sonar YouTube" className="shrink-0 font-semibold text-emerald-100 underline">Quitar (vuelve a YouTube)</button>
+                    </p>
+                  ) : (
+                    p?.video && <EmbedCheck video={p.video}><AudioPicker strong onPick={(audio, audioName) => set(i, { audio, audioName })} /></EmbedCheck>
+                  )}
                   {p?.video && v.resume && (
                     <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
                       ⏭️ Cada día suenan {Math.round(((v.to ?? (v.from ?? 0) + 600) - (v.from ?? 0)) / 60)} min, desde donde quedaste la última vez (la primera vez, desde {fmtSeconds(v.from) || '0:00'}). Al terminarse el video, vuelve a empezar.

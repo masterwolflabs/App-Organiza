@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-yt-cmd"
+description = "Enables the yt_cmd command without any pre-configured scope."
+commands.allow = ["yt_cmd"]
+
+[[permission]]
+identifier = "deny-yt-cmd"
+description = "Denies the yt_cmd command without any pre-configured scope."
+commands.deny = ["yt_cmd"]

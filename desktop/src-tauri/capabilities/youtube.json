@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "youtube-musica",
+  "description": "La ventanita escondida de YouTube (música del focus) solo puede contarle a la app dónde va el video (yt_report).",
+  "windows": [
+    "yt-*"
+  ],
+  "remote": {
+    "urls": [
+      "https://www.youtube.com/*",
+      "https://youtube.com/*"
+    ]
+  },
+  "permissions": [
+    "allow-yt-report"
+  ]
+}

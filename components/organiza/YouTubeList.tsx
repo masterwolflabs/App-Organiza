@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
+import { resolveAudio } from '@/components/organiza/musicAudio';
+import { desktop, isDesktop, onYtState } from '@/lib/desktop';
 
 /**
  * Música del modo focus (Emanuel, 2026-11-03): la lista de YouTube de una acción suena sola, cada
@@ -72,6 +74,134 @@ function loadYT(): Promise<YTNamespace> {
     document.head.appendChild(s);
   });
   return loading;
+}
+
+type PlayerEvents = { onReady?: (e: { target: YTPlayer }) => void; onStateChange?: (e: { data: number; target: YTPlayer }) => void; onError?: (e?: { data?: number }) => void };
+
+/**
+ * 🎵 Reproductor del audio propio (2026-11-17): un `<audio>` que habla igual que el de YouTube (mismos
+ * métodos y estados 1 sonando · 2 pausa · 0 terminó · 3 cargando), así el crossfade, el «hasta», el bucle
+ * y el vigilante funcionan sin cambios. (En iPhone el volumen lo manda el teléfono: ahí el fade es corte.)
+ */
+function audioPlayer(host: HTMLElement, audio: string, title: string, start: number, events: PlayerEvents): YTPlayer {
+  const el = document.createElement('audio');
+  el.preload = 'auto';
+  el.setAttribute('playsinline', '');
+  host.appendChild(el);
+  let gone = false;
+  const p: YTPlayer = {
+    destroy: () => {
+      gone = true;
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      el.remove();
+    },
+    playVideo: () => void el.play().catch(() => events.onStateChange?.({ data: 2, target: p })),
+    pauseVideo: () => el.pause(),
+    seekTo: (s: number) => {
+      el.currentTime = Math.max(0, s);
+    },
+    setVolume: (v: number) => {
+      el.volume = Math.max(0, Math.min(1, v / 100));
+    },
+    getCurrentTime: () => el.currentTime || 0,
+    getDuration: () => (Number.isFinite(el.duration) ? el.duration : 0),
+    getVideoData: () => ({ title }),
+    mute: () => {
+      el.muted = true;
+    },
+    unMute: () => {
+      el.muted = false;
+    },
+  };
+  const state = (data: number) => () => !gone && events.onStateChange?.({ data, target: p });
+  el.addEventListener('playing', state(1));
+  el.addEventListener('pause', () => !el.ended && state(2)());
+  el.addEventListener('waiting', state(3));
+  el.addEventListener('ended', state(0));
+  el.addEventListener('error', () => !gone && events.onError?.());
+  el.addEventListener('loadedmetadata', () => {
+    if (gone) return;
+    if (start) el.currentTime = start;
+    events.onReady?.({ target: p });
+  }, { once: true });
+  resolveAudio(audio).then((src) => {
+    if (gone) return;
+    if (!src) return events.onError?.();
+    el.src = src;
+  });
+  return p;
+}
+
+/** Videos que YouTube no deja sonar dentro de la página (error 150). En la app de Mac van directo a la ventanita. */
+export const blockedVideos = new Set<string>();
+
+/**
+ * 💻 App de Mac (1.0.3): la canción bloqueada suena en una ventana de YouTube ESCONDIDA y el focus queda en
+ * pantalla. Habla igual que el reproductor de YouTube; la ventanita cuenta dónde va cada medio segundo.
+ * `show(true)` la muestra chica en una esquina. (Si YouTube pone un anuncio, se espera como «cargando».)
+ */
+function macPlayer(video: string, start: number, events: PlayerEvents): YTPlayer & { show: (on: boolean) => void } {
+  const label = `yt-${Math.random().toString(36).slice(2, 10)}`;
+  let t = start;
+  let dur = 0;
+  let at = Date.now();
+  let state = -1;
+  let vol = 100;
+  let ready = false;
+  let gone = false;
+  const p = {
+    destroy: () => {
+      gone = true;
+      stop();
+      void desktop.ytClose(label);
+    },
+    playVideo: () => void desktop.ytCmd(label, 'play'),
+    pauseVideo: () => void desktop.ytCmd(label, 'pause'),
+    seekTo: (s: number) => {
+      t = s;
+      at = Date.now();
+      void desktop.ytCmd(label, 'seek', s);
+    },
+    setVolume: (v: number) => {
+      if (Math.round(v) === vol) return;
+      vol = Math.round(v);
+      void desktop.ytCmd(label, 'volume', vol);
+    },
+    // Entre un aviso y otro se adelanta solo con el reloj (así el corte en «hasta» cae justo).
+    getCurrentTime: () => (state === 1 ? t + (Date.now() - at) / 1000 : t),
+    getDuration: () => dur,
+    getVideoData: () => ({ title: 'Sonando en la ventanita de YouTube' }),
+    mute: () => void desktop.ytCmd(label, 'mute', 1),
+    unMute: () => void desktop.ytCmd(label, 'mute', 0),
+    show: (on: boolean) => void desktop.ytShow(label, on),
+  };
+  const stop = onYtState(label, (s) => {
+    if (gone) return;
+    t = s.t;
+    at = Date.now();
+    if (s.dur) dur = s.dur;
+    if (!ready) {
+      ready = true;
+      events.onReady?.({ target: p });
+    }
+    if (ready && s.state !== state) {
+      state = s.state;
+      events.onStateChange?.({ data: s.state, target: p });
+    }
+  });
+  desktop.ytOpen(label, video, start, vol).then((ok) => !ok && !gone && events.onError?.());
+  // Si en 25 s no contó nada (sin internet, video borrado), se salta.
+  setTimeout(() => !ready && !gone && events.onError?.(), 25000);
+  return p;
+}
+
+/** El reproductor de una canción: su audio propio si tiene; bloqueada en la app de Mac, la ventanita; si no, YouTube. */
+function makePlayer(YT: YTNamespace, host: HTMLElement, v: Video, opts: { videoId?: string; playerVars: Record<string, unknown>; events: PlayerEvents }): YTPlayer {
+  if (v.audio) return audioPlayer(host, v.audio, v.audioName || 'Mi audio', Number(opts.playerVars.start) || 0, opts.events);
+  if (opts.videoId && isDesktop() && blockedVideos.has(opts.videoId)) return macPlayer(opts.videoId, Number(opts.playerVars.start) || 0, opts.events);
+  return new YT.Player(host, { width: 200, height: 112, videoId: opts.videoId, playerVars: opts.playerVars, events: opts.events });
 }
 
 /** ¿Este video se puede reproducir fuera de YouTube? (quien lo sube puede bloquearlo). Reproductor oculto, en silencio. */
@@ -168,19 +298,17 @@ export function previewVolume(v: Video, volume: number, ms = 6000): () => void {
     }
     host.remove();
   };
-  if (!parsed) {
+  if (!parsed && !v.audio) {
     stop();
     return stop;
   }
   loadYT().then((YT) => {
     if (done) return;
     const vars: Record<string, unknown> = { autoplay: 1, playsinline: 1, rel: 0 };
-    if (parsed.video && v.from) vars.start = Math.floor(v.from);
-    if (!parsed.video) Object.assign(vars, { listType: 'playlist', list: parsed.list });
-    p = new YT.Player(host, {
-      width: 200,
-      height: 112,
-      videoId: parsed.video,
+    if ((v.audio || parsed?.video) && v.from) vars.start = Math.floor(v.from);
+    if (!v.audio && !parsed?.video) Object.assign(vars, { listType: 'playlist', list: parsed?.list });
+    p = makePlayer(YT, host, v, {
+      videoId: parsed?.video,
       playerVars: vars,
       events: {
         onReady: (e: { target: YTPlayer }) => {
@@ -228,6 +356,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   // La última que YouTube no dejó tocar aquí (error 150: el dueño o el sello lo bloquean fuera de YouTube).
   const [blockedSong, setBlockedSong] = useState<number | null>(null);
   const [showList, setShowList] = useState(false);
+  // La que suena va por la ventanita de YouTube del Mac (y si se está mostrando en la esquina).
+  const [onMac, setOnMac] = useState(false);
+  const [macVisible, setMacVisible] = useState(false);
   // Silencio aparte de la pausa: la música sigue avanzando, sin sonido.
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(false);
@@ -243,7 +374,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const v = list.current[index];
     const parsed = v && parseYouTube(v.url);
     const box = boxes[slot].current;
-    if (!v || !parsed || !box) return false;
+    if (!v || (!parsed && !v.audio) || !box) return false;
+    // Con audio propio se toca ese archivo (como un video suelto, nunca como playlist).
+    const single = !!v.audio || !!parsed?.video;
     slots.current[slot].player?.destroy();
     slots.current[slot] = { player: null, index, ready: false, loadedAt: Date.now(), preload };
     const host = document.createElement('div');
@@ -252,23 +385,21 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const YT = await loadYT();
     const vars: Record<string, unknown> = { autoplay: 1, playsinline: 1, rel: 0 };
     const begin = startAt ?? v.from ?? 0;
-    if (parsed.video && begin) vars.start = Math.floor(begin);
-    if (!parsed.video) {
+    if (single && begin) vars.start = Math.floor(begin);
+    if (!single) {
       vars.listType = 'playlist';
-      vars.list = parsed.list;
+      vars.list = parsed?.list;
     }
     // Reproductor chico y oculto: solo se escucha, y YouTube baja la calidad del video sola.
-    slots.current[slot].player = new YT.Player(host, {
-      width: 200,
-      height: 112,
-      videoId: parsed.video,
+    slots.current[slot].player = makePlayer(YT, host, v, {
+      videoId: parsed?.video,
       playerVars: vars,
       events: {
         onReady: (e: { target: YTPlayer }) => {
           // Un reproductor viejo de este canal (ya reemplazado) no puede marcar como listo al nuevo.
           if (slots.current[slot].player && slots.current[slot].player !== e.target) return;
           lengths.current[index] = e.target.getDuration?.() || lengths.current[index];
-          if (startAt !== undefined && parsed.video) e.target.seekTo(startAt, true);
+          if (startAt !== undefined && single) e.target.seekTo(startAt, true);
           e.target.setVolume(volume);
           if (mutedRef.current) e.target.mute?.();
           if (preload) {
@@ -283,7 +414,10 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           } else if (playingRef.current) e.target.playVideo();
           slots.current[slot].ready = true;
           slots.current[slot].readyAt = Date.now();
-          if (slot === activeRef.current) setTitle(e.target.getVideoData?.().title ?? '');
+          if (slot === activeRef.current) {
+            setTitle(e.target.getVideoData?.().title ?? '');
+            setOnMac('show' in e.target);
+          }
         },
         onStateChange: (e: { data: number; target: YTPlayer }) => {
           if (slots.current[slot].player && slots.current[slot].player !== e.target) return;
@@ -293,11 +427,13 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           if (slot !== activeRef.current) return;
           if (e.data === YT.PlayerState.PLAYING) {
             setTitle(e.target.getVideoData?.().title ?? '');
+            setOnMac('show' in e.target);
+            if (!('show' in e.target)) setMacVisible(false);
             setBlocked(false);
           }
           if (e.data === YT.PlayerState.ENDED) {
             // Playlist entera: sigue sola por dentro; se pasa a la siguiente recién al terminar su último video.
-            if (!parsed.video) {
+            if (!single) {
               const all = e.target.getPlaylist?.() ?? [];
               if ((e.target.getPlaylistIndex?.() ?? 0) < all.length - 1) return;
             }
@@ -305,7 +441,13 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           }
         },
         // Video que no se puede reproducir fuera de YouTube: se salta, aunque pase en pleno crossfade.
-        onError: () => {
+        onError: (e?: { data?: number }) => {
+          // App de Mac: la que YouTube no deja sonar aquí (101/150) se vuelve a cargar en la ventanita escondida.
+          if (isDesktop() && parsed?.video && !v.audio && (e?.data === 101 || e?.data === 150) && !blockedVideos.has(parsed.video)) {
+            blockedVideos.add(parsed.video);
+            if (slots.current[slot].index === index) void load(slot, index, volume, startAt, preload);
+            return;
+          }
           slots.current[slot].failed = true;
           if (slot !== activeRef.current) return;
           setSkipped((n) => n + 1);
@@ -477,7 +619,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       if (!v || !cur.player || !playingRef.current) return;
       // No cargó en 12 s: se salta.
       if (!cur.ready) {
-        if (Date.now() - (cur.loadedAt ?? Date.now()) > 12000) {
+        // (La ventanita del Mac abre la página entera de YouTube: se le da más tiempo.)
+        if (Date.now() - (cur.loadedAt ?? Date.now()) > ('show' in cur.player ? 30000 : 12000)) {
           setSkipped((n) => n + 1);
           fading.current = false;
           advance(true);
@@ -493,7 +636,8 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       if ((cur.state === 2 || cur.state === 5 || cur.state === -1) && since > 1500) {
         cur.stateAt = Date.now();
         cur.player.playVideo();
-      } else if (cur.state === 3 && since > 5000) {
+      } else if (cur.state === 3 && since > 5000 && !('show' in cur.player)) {
+        // (En la ventanita del Mac «cargando» puede ser un anuncio de YouTube: se espera, no se recarga.)
         cur.stateAt = Date.now();
         cur.nudges = (cur.nudges ?? 0) + 1;
         const t0 = cur.player.getCurrentTime?.() ?? 0;
@@ -504,7 +648,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
         cur.player.seekTo(t0, true);
         cur.player.playVideo();
       }
-      if (!parseYouTube(v.url)?.video) return;
+      if (!v.audio && !parseYouTube(v.url)?.video) return;
       const now = cur.player.getCurrentTime?.() ?? 0;
       const dur = cur.player.getDuration?.() ?? 0;
       if (cur.state === 1) progress.current?.(cur.index, now, dur);
@@ -558,6 +702,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           <button type="button" aria-label={playing ? 'Pausar música' : 'Seguir música'} data-help={playing ? 'Pausar música (el reloj sigue)' : 'Seguir música'} onClick={toggle} className="rounded-full bg-white/[0.14] p-2 text-[#fff] hover:bg-white/25">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
           <button type="button" aria-label="Canción siguiente" data-help="Canción siguiente" onClick={() => advance(true)} className="rounded-lg p-1.5 text-zinc-200 hover:bg-white/10"><SkipForward className="h-4 w-4" /></button>
           <button type="button" aria-label={muted ? 'Activar sonido' : 'Silenciar'} data-help={muted ? 'Activar sonido' : 'Silenciar'} onClick={() => { const m = !muted; mutedRef.current = m; setMuted(m); slots.current.forEach((x) => (m ? x.player?.mute?.() : x.player?.unMute?.())); }} className={`rounded-lg p-1.5 hover:bg-white/10 ${muted ? 'text-rose-300' : 'text-zinc-200'}`}>{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
+          {onMac && (
+            <button type="button" aria-label={macVisible ? 'Esconder video' : 'Ver video'} data-help={macVisible ? 'Esconder la ventanita de YouTube' : 'Ver el video chiquito en una esquina'} onClick={() => { const on = !macVisible; setMacVisible(on); (slots.current[activeRef.current].player as { show?: (x: boolean) => void } | null)?.show?.(on); }} className={`rounded-lg p-1.5 text-xs hover:bg-white/10 ${macVisible ? 'text-sky-300' : 'text-zinc-200'}`}>📺</button>
+          )}
           <button type="button" aria-label="Elegir canción" data-help="Elegir canción" onClick={() => setShowList((x) => !x)} className={`rounded-lg p-1.5 hover:bg-white/10 ${showList ? 'text-sky-300' : 'text-zinc-200'}`}><ListMusic className="h-4 w-4" /></button>
         </span>
       </div>
@@ -569,7 +716,11 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       )}
       {blockedSong !== null && videos[blockedSong] && (
         <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
-          ⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube.{' '}
+          {videos[blockedSong].audio ? (
+            <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox, revisa que esté compartido «cualquiera con el link»; o súbelo como archivo en ⚙️ Configurar.{' '}</>
+          ) : (
+            <>⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube. Para que suene aquí: ⚙️ Configurar → 🎵 Usar mi audio.{' '}</>
+          )}
           <a href={`https://www.youtube.com/watch?v=${parseYouTube(videos[blockedSong].url)?.video ?? ''}&t=${Math.floor(videos[blockedSong].from ?? 0)}s`} target="_blank" rel="noreferrer" className="font-semibold underline">Abrir en YouTube ↗</a>
         </p>
       )}

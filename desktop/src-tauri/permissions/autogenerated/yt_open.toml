@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-yt-open"
+description = "Enables the yt_open command without any pre-configured scope."
+commands.allow = ["yt_open"]
+
+[[permission]]
+identifier = "deny-yt-open"
+description = "Denies the yt_open command without any pre-configured scope."
+commands.deny = ["yt_open"]
