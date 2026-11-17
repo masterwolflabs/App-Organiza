@@ -7,7 +7,11 @@ import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
 import { MediaPanel } from '@/components/organiza/Recipes';
-import { BodyMap } from '@/components/organiza/BodyMap';
+import dynamic from 'next/dynamic';
+
+// El mono 3D (three.js, ~600 KB) se baja solo al abrir Workout Pro, no con el resto de la app.
+const BodyMap3D = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.BodyMap3D), { ssr: false, loading: () => <div className="h-[440px]" /> });
+const MuscleCover = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.MuscleCover), { ssr: false, loading: () => <span className="absolute inset-0 animate-pulse bg-white/[0.03]" /> });
 import { playOnce } from '@/components/organiza/sounds';
 import { notify } from '@/components/organiza/notify';
 import {
@@ -26,6 +30,8 @@ const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-whit
 const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(Math.round(s)) % 60).padStart(2, '0')}`;
 const xid = () => Math.random().toString(36).slice(2, 9);
 const minutesOf = (r: Routine, v: Version) => (v === 'corta' ? r.short_minutes ?? 30 : r.full_minutes ?? 60);
+/** Músculos de una rutina (para su portada con el mono). */
+const routineMuscles = (r: Routine, v?: Version) => [...new Set((v ? exercisesOf(r, v) : r.exercises).flatMap((e) => e.muscles))];
 const kg = (n: number) => `${String(n).replace('.', ',')} kg`;
 
 /* ── Tarjeta de rutina ────────────────────────────────────────────────────────────── */
@@ -33,8 +39,8 @@ const kg = (n: number) => `${String(n).replace('.', ',')} kg`;
 const RoutineCard: React.FC<{ r: Routine; version?: Version; sub?: string; done?: boolean; onOpen: () => void; onTrain?: () => void }> = ({ r, version, sub, done, onOpen, onTrain }) => (
   <div className={`overflow-hidden rounded-2xl bg-[#17191f] ring-1 transition hover:ring-white/25 ${done ? 'ring-emerald-400/50' : 'ring-white/10'}`}>
     <button type="button" onClick={onOpen} className="block w-full text-left">
-      <div className="relative h-24 bg-gradient-to-br from-red-500/30 to-orange-400/10" style={coverCss(r.cover_url)}>
-        {!r.cover_url && <span className="absolute inset-0 flex items-center justify-center text-4xl">{r.emoji}</span>}
+      <div className="relative h-28 bg-gradient-to-br from-red-500/30 to-orange-400/10" style={coverCss(r.cover_url)}>
+        {!r.cover_url && <MuscleCover muscles={routineMuscles(r, version)} fallback={<span className="absolute inset-0 flex items-center justify-center text-4xl">{r.emoji}</span>} />}
         {r.code && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-[#fff] backdrop-blur">{r.code === 'cerro' ? '⛰️' : r.code}{r.core ? ' · masivo' : ''}</span>}
         {done && <span className="absolute right-2 top-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-[#09090b]">✓ Hecho</span>}
       </div>
@@ -91,43 +97,43 @@ export const WorkoutProView: React.FC = () => {
 
       <div className={`mb-5 rounded-2xl px-4 py-3 text-sm font-semibold ring-1 ${status.met ? 'bg-emerald-500/10 text-emerald-100 ring-emerald-400/30' : 'bg-white/[0.04] text-zinc-100 ring-white/10'}`}>{status.text}</div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-8">
-          <section>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <h2 className="mr-2 font-display text-xl font-semibold text-white">🗓️ Tu semana</h2>
-              {MODES.map((m) => (
-                <button key={m.id} type="button" data-help={m.help} onClick={() => setMode(m.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15 hover:bg-white/[0.06]'}`}>{m.emoji} {m.label}</button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {WEEK.map((w, wd) => {
-                const p = week[String(wd)] ?? { routine: null, version: 'completa' as Version };
-                const r = api.routines.find((x) => x.id === p.routine);
-                return (
-                  <div key={wd}>
-                    <p className={`mb-1 text-xs font-semibold ${wd === today ? 'text-red-300' : 'text-zinc-400'}`}>{w}{wd === today ? ' · hoy' : ''}</p>
-                    {r ? (
-                      <RoutineCard r={r} version={p.version} done={doneOn(wd)} sub={`${p.version === 'corta' ? '⚡ Corta' : '🏋️ Completa'} · ~${minutesOf(r, p.version)} min`} onOpen={() => setDayOpen(wd)} onTrain={() => setTrain({ r, v: p.version })} />
-                    ) : (
-                      <button type="button" onClick={() => setDayOpen(wd)} className={`flex h-[172px] w-full flex-col items-center justify-center gap-1 rounded-2xl ring-1 ${doneOn(wd) ? 'bg-emerald-500/10 ring-emerald-400/40' : 'bg-white/[0.02] ring-white/10 hover:ring-white/25'}`}>
-                        <span className="text-3xl">🌿</span>
-                        <span className="text-sm font-semibold text-zinc-300">Descanso</span>
-                        <span className="text-[11px] text-zinc-500">{doneOn(wd) ? '✓ Igual entrenaste' : 'Toca para cambiar'}</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+      <section>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="mr-2 font-display text-xl font-semibold text-white">🗓️ Tu semana</h2>
+          {MODES.map((m) => (
+            <button key={m.id} type="button" data-help={m.help} onClick={() => setMode(m.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15 hover:bg-white/[0.06]'}`}>{m.emoji} {m.label}</button>
+          ))}
+        </div>
+        <div className="-mx-1 grid snap-x snap-mandatory auto-cols-[minmax(150px,1fr)] grid-flow-col gap-3 overflow-x-auto px-1 pb-2 lg:auto-cols-fr">
+          {WEEK.map((w, wd) => {
+            const p = week[String(wd)] ?? { routine: null, version: 'completa' as Version };
+            const r = api.routines.find((x) => x.id === p.routine);
+            return (
+              <div key={wd} className="snap-start">
+                <p className={`mb-1 text-xs font-semibold ${wd === today ? 'text-red-300' : 'text-zinc-400'}`}>{w}{wd === today ? ' · hoy' : ''}</p>
+                {r ? (
+                  <RoutineCard r={r} version={p.version} done={doneOn(wd)} sub={`${p.version === 'corta' ? '⚡ Corta' : '🏋️ Completa'} · ~${minutesOf(r, p.version)} min`} onOpen={() => setDayOpen(wd)} onTrain={() => setTrain({ r, v: p.version })} />
+                ) : (
+                  <button type="button" onClick={() => setDayOpen(wd)} className={`flex h-[196px] w-full flex-col items-center justify-center gap-1 rounded-2xl ring-1 ${doneOn(wd) ? 'bg-emerald-500/10 ring-emerald-400/40' : 'bg-white/[0.02] ring-white/10 hover:ring-white/25'}`}>
+                    <span className="text-3xl">🌿</span>
+                    <span className="text-sm font-semibold text-zinc-300">Descanso</span>
+                    <span className="text-[11px] text-zinc-500">{doneOn(wd) ? '✓ Igual entrenaste' : 'Toca para cambiar'}</span>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
-          <section>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0">
+          <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
               <h2 className="flex-1 font-display text-xl font-semibold text-white">📋 Tus rutinas</h2>
               <button type="button" onClick={async () => { const r = await api.addRoutine(); if (r) setEditing(r.id); }} className="inline-flex items-center gap-1 rounded-xl bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[0.14]"><Plus className="h-3.5 w-3.5" /> Nueva rutina</button>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {api.routines.map((r) => <RoutineCard key={r.id} r={r} onOpen={() => setEditing(r.id)} />)}
             </div>
           </section>
@@ -136,8 +142,7 @@ export const WorkoutProView: React.FC = () => {
         <aside className="space-y-5 lg:sticky lg:top-4 lg:self-start">
           <section className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10">
             <h2 className="mb-3 text-sm font-semibold text-white">🧍 Lo que entrenaste</h2>
-            <BodyMap body={api.body} counts={api.counts} onPick={setMuscle} />
-            {!api.body && <p className="mt-2 text-center text-[11px] text-zinc-500">Figura de hombre o mujer: en tu Perfil.</p>}
+            <BodyMap3D counts={api.counts} picked={muscle} onPick={setMuscle} />
             {muscle && (
               <div className="mt-3 rounded-xl bg-black/25 p-3 text-xs text-zinc-300">
                 <p className="mb-1 flex items-center justify-between font-semibold text-white">{muscleLabel(muscle)} · {api.counts[muscle] ?? 0} en 7 días <button type="button" aria-label="Cerrar" onClick={() => setMuscle(null)}><X className="h-3.5 w-3.5" /></button></p>
@@ -248,8 +253,8 @@ const RoutineEditor: React.FC<{ r: Routine; api: WorkoutApi; onTrain: (v: Versio
     <BodyPortal>
       <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={onClose}>
         <div role="dialog" aria-label={`Rutina ${r.title}`} onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-[#14161b] ring-1 ring-white/10">
-          <div className="relative h-28 bg-gradient-to-br from-red-500/30 to-orange-400/10" style={coverCss(r.cover_url)}>
-            {!r.cover_url && <span className="absolute inset-0 flex items-center justify-center text-5xl">{r.emoji}</span>}
+          <div className="relative h-40 bg-gradient-to-br from-red-500/30 to-orange-400/10" style={coverCss(r.cover_url)}>
+            {!r.cover_url && <MuscleCover muscles={routineMuscles(r)} fallback={<span className="absolute inset-0 flex items-center justify-center text-5xl">{r.emoji}</span>} />}
             <button type="button" onClick={() => setPicking((v) => !v)} className="absolute bottom-2 right-2 rounded-lg bg-black/55 px-2 py-1 text-xs font-semibold text-[#fff] backdrop-blur">🖼️ Portada</button>
             <button type="button" aria-label="Cerrar" onClick={onClose} className="absolute right-2 top-2 rounded-lg bg-black/55 p-1.5 text-[#fff]"><X className="h-4 w-4" /></button>
           </div>
