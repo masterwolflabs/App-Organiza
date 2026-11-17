@@ -89,7 +89,9 @@ function audioPlayer(host: HTMLElement, audio: string, title: string, start: num
   el.setAttribute('playsinline', '');
   host.appendChild(el);
   let gone = false;
-  const p: YTPlayer = {
+  const p: YTPlayer & { slow: true } = {
+    // (La primera vez un link de Drive se trae a tu cuenta: puede tardar; el vigilante le da más tiempo.)
+    slow: true,
     destroy: () => {
       gone = true;
       el.pause();
@@ -620,7 +622,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       // No cargó en 12 s: se salta.
       if (!cur.ready) {
         // (La ventanita del Mac abre la página entera de YouTube: se le da más tiempo.)
-        if (Date.now() - (cur.loadedAt ?? Date.now()) > ('show' in cur.player ? 30000 : 12000)) {
+        if (Date.now() - (cur.loadedAt ?? Date.now()) > ('slow' in cur.player ? 45000 : 'show' in cur.player ? 30000 : 12000)) {
           setSkipped((n) => n + 1);
           fading.current = false;
           advance(true);
