@@ -333,6 +333,13 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                           <button key={label} type="button" data-help={help} onClick={() => set(i, { spotifyApp: app })} className={`rounded-full px-2 py-1 font-semibold ring-1 ${spotifyInApp(sp, v.spotifyApp) === app ? 'bg-[#1ed760]/20 text-[#1ed760] ring-[#1ed760]/50' : 'text-zinc-400 ring-white/15'}`}>{label}</button>
                         ))}
                       </div>
+                      {/* 💬 Cómo suena (Emanuel, 2026-11-18): entre dos de Spotify no hay crossfade; la playlist manda con su Automix. */}
+                      {i > 0 && parseSpotify(videos[i - 1].url) && (
+                        <p className="mt-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-100 ring-1 ring-amber-400/20">🔀 Entre esta y la anterior (las dos de Spotify) no habrá crossfade: pasan con un corte. Si quieres que se fundan, arma una <b>playlist en Spotify</b> con ellas, activa su <b>Automix</b> y pega aquí la playlist.</p>
+                      )}
+                      {(spotifyKind(sp) === 'playlist' || spotifyKind(sp) === 'album' || spotifyKind(sp) === 'show') && (
+                        <p className="mt-2 rounded-lg bg-white/[0.04] px-2 py-1.5 text-[11px] leading-relaxed text-zinc-300 ring-1 ring-white/10">📃 Es {spotifyKind(sp) === 'show' ? 'un podcast' : spotifyKind(sp) === 'album' ? 'un álbum' : 'una playlist'}: suena entero en orden{spotifyInApp(sp, v.spotifyApp) ? ' con el crossfade/Automix de tu Spotify' : ''}. Master Planner no lo maneja canción por canción: lo corta cuando se cumple tu «hasta»{toEnd ? ' (ponle un «hasta», si no sigue hasta que termine el focus)' : ''}.</p>
+                      )}
                       <SpotifyStatus />
                     </>
                   ) : v.audio ? (
