@@ -5,7 +5,7 @@ import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX
 import type { Video } from '@/components/organiza/model';
 import { audioNames, forgetAudio, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
-import { access as spotifyAccess, parseSpotify, spotifyApi, spotifyMeta } from '@/lib/spotify';
+import { access as spotifyAccess, parseSpotify, spotifyApi, spotifyKind, spotifyMeta } from '@/lib/spotify';
 
 /**
  * Música del modo focus (Emanuel, 2026-11-03): la lista de YouTube de una acción suena sola, cada
@@ -287,7 +287,7 @@ function macPlayer(video: string, start: number, events: PlayerEvents): YTPlayer
  * suena aquí con su desde/hasta, volumen y crossfade. Donde el SDK no corre (app de Mac, Safari de iPhone)
  * controla tu Spotify abierto (Spotify Connect). Un solo parlante: dos de Spotify seguidas se cortan, no se funden.
  */
-type SdkState = { paused: boolean; loading?: boolean; position: number; duration: number; track_window?: { current_track?: { id?: string; uri?: string; linked_from?: { id?: string | null } } } };
+type SdkState = { paused: boolean; loading?: boolean; position: number; duration: number; context?: { uri?: string | null }; track_window?: { current_track?: { id?: string; uri?: string; linked_from?: { id?: string | null; uri?: string | null } } } };
 type SdkPlayer = { connect(): Promise<boolean>; addListener(ev: string, cb: (x: never) => void): boolean; setVolume(v: number): Promise<void>; pause(): Promise<void>; resume(): Promise<void>; seek(ms: number): Promise<void>; activateElement?(): Promise<void> };
 type SpotifyDevice = { player: SdkPlayer; deviceId: string } | null;
 let sdkDevice: Promise<SpotifyDevice> | null = null;
@@ -325,8 +325,11 @@ function spotifyDevice(): Promise<SpotifyDevice> {
   return sdkDevice;
 }
 
-function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlayer & { lazy: true; slow: true } {
-  const uri = `spotify:track:${id}`;
+function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlayer & { lazy: true; slow: true } {
+  // Canción o episodio suenan solos; podcast, álbum, playlist o artista suenan enteros (en orden) hasta tu «hasta».
+  const kind = spotifyKind(uri);
+  const id = uri.split(':')[2];
+  const single = kind === 'track' || kind === 'episode';
   let gone = false;
   let started = false;
   let ready = false;
@@ -362,11 +365,12 @@ function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlaye
   const onSdk = (st: SdkState | null) => {
     if (!st || !mine() || gone) return;
     const cur = st.track_window?.current_track;
-    if (cur && cur.id !== id && cur.linked_from?.id !== id && cur.uri !== uri) return;
+    if (single ? cur && cur.id !== id && cur.linked_from?.id !== id && cur.uri !== uri : st.context?.uri && st.context.uri !== uri) return;
     t = st.position / 1000;
     at = Date.now();
     if (st.duration) dur = st.duration / 1000;
-    if (st.paused && started && st.position === 0 && state === 1) return emit(0);
+    // (Solo una canción o un episodio «termina»: en un podcast o playlist hay pausas cortas entre uno y otro.)
+    if (single && st.paused && started && st.position === 0 && state === 1) return emit(0);
     emit(st.paused ? 2 : st.loading ? 3 : 1);
   };
   const pollConnect = () => {
@@ -375,9 +379,9 @@ function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlaye
       if (!mine() || gone) return;
       const r = await spotifyApi('', 'GET');
       if (!r || r.status === 204 || !r.ok) return;
-      const j = (await r.json().catch(() => null)) as { is_playing?: boolean; progress_ms?: number; item?: { id?: string; duration_ms?: number } } | null;
+      const j = (await r.json().catch(() => null)) as { is_playing?: boolean; progress_ms?: number; item?: { id?: string; duration_ms?: number }; context?: { uri?: string } | null } | null;
       if (!j || gone) return;
-      if (j.item?.id !== id) return state === 1 ? emit(0) : undefined;
+      if (single ? j.item?.id !== id : j.context?.uri !== uri) return state === 1 && single ? emit(0) : undefined;
       t = (j.progress_ms ?? 0) / 1000;
       at = Date.now();
       if (j.item?.duration_ms) dur = j.item.duration_ms / 1000;
@@ -394,7 +398,7 @@ function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlaye
     started = true;
     emit(3);
     await dev?.player.activateElement?.().catch(() => {});
-    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', { uris: [uri], position_ms: Math.round(t * 1000) });
+    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', single ? { uris: [uri], position_ms: Math.round(t * 1000) } : { context_uri: uri, position_ms: Math.round(t * 1000) });
     if (gone) return;
     if (!r || !r.ok) {
       // Sin parlante aquí y sin Spotify abierto en ningún equipo (404), o sin Premium (403).
@@ -456,13 +460,14 @@ function spotifyPlayer(id: string, start: number, events: PlayerEvents): YTPlaye
     if (!token) return events.onError?.({ data: 401, target: p });
     const [d, info, m] = await Promise.all([
       spotifyDevice(),
-      fetch(`https://api.spotify.com/v1/tracks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ duration_ms?: number; name?: string; artists?: { name: string }[] } | null>,
-      spotifyMeta(id),
+      // Cuánto dura (canción o episodio). Un podcast/álbum/playlist entero no tiene largo: manda tu «hasta».
+      (single ? fetch(`https://api.spotify.com/v1/${kind}s/${id}${kind === 'episode' ? '?market=from_token' : ''}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)) as Promise<{ duration_ms?: number; name?: string; artists?: { name: string }[]; show?: { name?: string } } | null>,
+      spotifyMeta(uri),
     ]);
     if (gone) return;
     dev = d;
     if (info?.duration_ms) dur = info.duration_ms / 1000;
-    title = info?.name ? `${info.name}${info.artists?.length ? ` · ${info.artists.map((a) => a.name).join(', ')}` : ''}` : m?.title || title;
+    title = info?.name ? `${info.name}${info.artists?.length ? ` · ${info.artists.map((a) => a.name).join(', ')}` : info.show?.name ? ` · ${info.show.name}` : ''}` : m?.title || title;
     ready = true;
     events.onReady?.({ target: p });
   })();

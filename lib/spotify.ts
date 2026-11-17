@@ -102,25 +102,35 @@ export const spotifyVolume = (v: number) => api(`/volume?volume_percent=${Math.m
 
 /* ── Canciones de Spotify en el focus (2026-11-18, Daily focus-spotify-en-lista) ─────────────────── */
 
-/** Link de canción de Spotify → su id (open.spotify.com/track/… o spotify:track:…). */
+export type SpotifyKind = 'track' | 'episode' | 'album' | 'playlist' | 'show' | 'artist';
+/**
+ * Link de Spotify → su URI (`spotify:<tipo>:<id>`): canción y episodio suenan solos; podcast (show), álbum,
+ * playlist y artista suenan enteros en orden (2026-11-18: Emanuel pegó un podcast y no lo tomaba).
+ */
 export function parseSpotify(link: string): string | null {
   const t = link.trim();
-  const uri = t.match(/^spotify:track:([A-Za-z0-9]{22})$/)?.[1];
-  if (uri) return uri;
+  const uri = t.match(/^spotify:(track|episode|album|playlist|show|artist):([A-Za-z0-9]{22})$/);
+  if (uri) return `spotify:${uri[1]}:${uri[2]}`;
   try {
     const u = new URL(t);
-    if (!/(^|\.)spotify\.com$/.test(u.hostname) && u.hostname !== 'spotify.link') return null;
-    return u.pathname.match(/\/track\/([A-Za-z0-9]{22})/)?.[1] ?? null;
+    if (!/(^|\.)spotify\.com$/.test(u.hostname)) return null;
+    const m = u.pathname.match(/\/(track|episode|album|playlist|show|artist)\/([A-Za-z0-9]{22})/);
+    return m ? `spotify:${m[1]}:${m[2]}` : null;
   } catch {
     return null;
   }
 }
+export const spotifyKind = (uri: string) => uri.split(':')[1] as SpotifyKind;
+/** La URI → su link limpio de open.spotify.com (sin ?si=… de compartir). */
+export const spotifyUrl = (uri: string) => `https://open.spotify.com/${uri.split(':')[1]}/${uri.split(':')[2]}`;
+/** ¿Es un link de Spotify (aunque no sea de algo que suene)? Nunca se trata como «audio». */
+export const isSpotifyLink = (link: string) => /^(spotify:|https?:\/\/([a-z]+\.)?spotify\.(com|link)\/)/i.test(link.trim());
 
 /** Nombre y carátula de una canción (oEmbed de Spotify: no necesita conexión). */
 const meta = new Map<string, Promise<{ title: string; thumb: string | null } | null>>();
 export function spotifyMeta(id: string) {
   if (!meta.has(id))
-    meta.set(id, fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${id}`)}`)
+    meta.set(id, fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl(id))}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { title?: string; thumbnail_url?: string } | null) => (j ? { title: j.title ?? '', thumb: j.thumbnail_url ?? null } : null))
       .catch(() => null));

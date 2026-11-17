@@ -18,6 +18,8 @@ export function directAudioUrl(link: string): string | null {
   try {
     const u = new URL(link.trim());
     if (!/^https?:$/.test(u.protocol)) return null;
+    // Spotify y YouTube no son archivos de audio (tienen su propio reproductor).
+    if (/(^|\.)(spotify\.com|spotify\.link|youtube\.com|youtu\.be)$/.test(u.hostname)) return null;
     if (u.hostname.endsWith('drive.google.com')) {
       const id = u.pathname.match(/\/d\/([^/]+)/)?.[1] ?? u.searchParams.get('id');
       return id ? `https://drive.google.com/uc?export=download&id=${id}` : null;

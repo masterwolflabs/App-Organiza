@@ -10,11 +10,9 @@ import type { Item, Module, Video } from '@/components/organiza/model';
 import { audioFromLink, isAudioLink, isCloudLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
 import { authFetch } from '@/lib/authFetch';
-import { parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyMeta } from '@/lib/spotify';
+import { isSpotifyLink, parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyKind, spotifyMeta, spotifyUrl } from '@/lib/spotify';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
-/** Link de Spotify en su forma limpia (sin ?si=… de compartir). */
-const spotifyUrl = (id: string) => `https://open.spotify.com/track/${id}`;
 
 /** 🎧 Nombre y carátula de una canción de Spotify (2026-11-18). */
 function useSpotifyMeta(id: string | null) {
@@ -36,7 +34,8 @@ const SpotifyCover: React.FC<{ id: string }> = ({ id }) => {
 };
 const SpotifyTitle: React.FC<{ id: string }> = ({ id }) => {
   const m = useSpotifyMeta(id);
-  return <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300"><span className="font-semibold text-[#1ed760]">Spotify</span> · {m?.title || 'Canción de Spotify'}</span>;
+  const kind = { track: 'Canción', episode: 'Episodio', album: 'Álbum', playlist: 'Playlist', show: 'Podcast', artist: 'Artista' }[spotifyKind(id)];
+  return <span className="min-w-0 flex-1 truncate px-1.5 text-xs text-zinc-300"><span className="font-semibold text-[#1ed760]">Spotify · {kind}</span> · {m?.title || '…'}</span>;
 };
 /** ¿Puede sonar? Conectar Spotify (una vez, con Premium) para que suene dentro de Master Planner. */
 const SpotifyStatus: React.FC = () => {
@@ -243,6 +242,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
       setVideos((l) => [...l, { url: spotifyUrl(sp) }]);
       return setUrl('');
     }
+    if (isSpotifyLink(url)) return setError('Ese link de Spotify no es de una canción, episodio, podcast, álbum ni playlist.');
     const p = parseYouTube(url);
     // 🎵 Link de Google Drive, Dropbox o un MP3: entra igual que una de YouTube. Drive y Dropbox se traen a
     // tu cuenta una vez (así suenan en cualquier navegador y en la app de Mac).

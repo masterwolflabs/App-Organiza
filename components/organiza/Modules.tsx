@@ -1,7 +1,7 @@
 'use client';
 
 import { audioFromLink, isAudioLink } from '@/components/organiza/musicAudio';
-import { parseSpotify } from '@/lib/spotify';
+import { parseSpotify, spotifyUrl } from '@/lib/spotify';
 import { WorkoutOfDay } from '@/components/organiza/WorkoutPro';
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react';
@@ -275,7 +275,7 @@ const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }
           </div>
         );
       })}
-      <form className="flex gap-1.5" onSubmit={async (e) => { e.preventDefault(); const sp = parseSpotify(url); if (sp) { setError(''); patch({ videos: [...videos, { url: `https://open.spotify.com/track/${sp}` }] }); return setUrl(''); } if (!parseYouTube(url) && isAudioLink(url)) { setError('Guardando tu audio…'); const r = await audioFromLink(url); if ('error' in r) return setError(r.error); setError(''); patch({ videos: [...videos, { url: '', audio: r.audio, audioName: r.name }] }); return setUrl(''); } if (!parseYouTube(url)) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
+      <form className="flex gap-1.5" onSubmit={async (e) => { e.preventDefault(); const sp = parseSpotify(url); if (sp) { setError(''); patch({ videos: [...videos, { url: spotifyUrl(sp) }] }); return setUrl(''); } if (!parseYouTube(url) && isAudioLink(url)) { setError('Guardando tu audio…'); const r = await audioFromLink(url); if ('error' in r) return setError(r.error); setError(''); patch({ videos: [...videos, { url: '', audio: r.audio, audioName: r.name }] }); return setUrl(''); } if (!parseYouTube(url)) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Spotify, Google Drive, Dropbox o MP3" className={`${input} text-zinc-300`} />
         <button type="submit" className="rounded-md px-2 text-sm font-semibold text-sky-300 hover:bg-white/[0.06]"><Plus className="h-4 w-4" /></button>
       </form>
