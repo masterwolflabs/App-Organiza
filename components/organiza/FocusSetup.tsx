@@ -7,7 +7,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { canEmbed, fmtSeconds, parseYouTube, playlistIds, previewVolume, toSeconds } from '@/components/organiza/YouTubeList';
 import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
-import { audioFromLink, isAudioLink, isCloudLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
+import { audioFromLink, isAudioLink, isCloudLink, linkName } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
 import { authFetch } from '@/lib/authFetch';
 import { isSpotifyLink, parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyInApp, spotifyKind, spotifyMeta, spotifyUrl } from '@/lib/spotify';
@@ -113,30 +113,9 @@ const Alternatives: React.FC<{ video: string; onUse: (url: string) => void }> = 
   );
 };
 
-/** 🎵 Subir el archivo de una canción (MP3, M4A, WAV) directo a la lista, igual que pegar un link. */
-const UploadSong: React.FC<{ onAdd: (audio: string, name: string) => void; onError: (e: string) => void }> = ({ onAdd, onError }) => {
-  const [busy, setBusy] = useState(false);
-  const ref = React.useRef<HTMLInputElement>(null);
-  const pick = async (f?: File) => {
-    if (!f) return;
-    setBusy(true);
-    onError('');
-    const r = await uploadMusic(f);
-    setBusy(false);
-    if (ref.current) ref.current.value = '';
-    if ('error' in r) return onError(r.error);
-    onAdd(r.audio, r.name);
-  };
-  return (
-    <>
-      <input ref={ref} type="file" accept={MUSIC_ACCEPT} className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
-      <button type="button" disabled={busy} onClick={() => ref.current?.click()} data-help="Subir el archivo de la canción (MP3, M4A o WAV hasta 50 MB)" className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '🎵'} Subir archivo</button>
-    </>
-  );
-};
-
 /**
- * 🎵 Usar mi audio (2026-11-17): subir el archivo de la canción o pegar un link de Drive / Dropbox / MP3.
+ * 🎵 Usar mi audio (2026-11-17): pegar un link de Drive / Dropbox / MP3 (desde el 18 nov no se suben archivos:
+ * no se guarda nada en la nube de Master Planner, suena desde tu Drive).
  * Queda en la canción; suena ese en vez de YouTube, con el mismo desde/hasta, crossfade y volumen.
  */
 const AudioPicker: React.FC<{ onPick: (audio: string, name: string) => void; strong?: boolean }> = ({ onPick, strong }) => {
@@ -144,17 +123,6 @@ const AudioPicker: React.FC<{ onPick: (audio: string, name: string) => void; str
   const [link, setLink] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const file = React.useRef<HTMLInputElement>(null);
-  const upload = async (f?: File) => {
-    if (!f) return;
-    setBusy(true);
-    setErr('');
-    const r = await uploadMusic(f);
-    setBusy(false);
-    if ('error' in r) return setErr(r.error);
-    onPick(r.audio, r.name);
-    setOpen(false);
-  };
   if (!open)
     return (
       <button type="button" onClick={() => setOpen(true)} data-help="Que suene tu propio archivo en vez de YouTube" className={strong ? 'mt-1.5 inline-flex items-center gap-1 rounded-lg bg-rose-500/25 px-2.5 py-1.5 text-xs font-bold text-rose-50 ring-1 ring-rose-300/40 hover:bg-rose-500/35' : 'inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold text-zinc-400 ring-1 ring-white/15 hover:text-zinc-100'}>
@@ -164,18 +132,14 @@ const AudioPicker: React.FC<{ onPick: (audio: string, name: string) => void; str
   return (
     <div className="mt-2 w-full rounded-lg bg-black/25 p-2 ring-1 ring-white/10">
       <div className="flex flex-wrap items-center gap-1.5">
-        <input ref={file} type="file" accept={MUSIC_ACCEPT} className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
-        <button type="button" disabled={busy} onClick={() => file.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-[#fff] hover:bg-sky-500 disabled:opacity-60">
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Subir archivo
-        </button>
-        <span className="text-[11px] text-zinc-500">o</span>
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
         <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={async (e) => { e.preventDefault(); setErr(''); setBusy(true); const r = await audioFromLink(link); setBusy(false); if ('error' in r) return setErr(r.error); onPick(r.audio, r.name); setOpen(false); }}>
           <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link de Drive, Dropbox o MP3" aria-label="Link del audio" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
           <button type="submit" className="rounded-lg bg-white/[0.08] px-2 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">Usar</button>
         </form>
         <button type="button" aria-label="Cancelar" onClick={() => setOpen(false)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-500">MP3, M4A o WAV hasta 50 MB. Queda solo en tu cuenta. Un link de Drive tiene que estar compartido «cualquiera con el link».</p>
+      <p className="mt-1 text-[11px] text-zinc-500">Pega el link de tu canción en Google Drive o Dropbox (compartido «Cualquier persona con el enlace»). No se copia: suena desde tu Drive.</p>
       {err && <p className="mt-1 text-[11px] text-rose-300">{err}</p>}
     </div>
   );
@@ -289,7 +253,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
             <h2 className="flex items-center gap-2 font-semibold text-white"><Music className="h-4 w-4 text-sky-300" /> Música del focus · <ItemIcon value={item.icon} /> {item.title}</h2>
             <button type="button" aria-label="Cerrar" onClick={close} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
-          <p className="mt-1 text-xs text-zinc-400">Pega tus canciones en orden (YouTube, Spotify, Google Drive, Dropbox o MP3) o sube el archivo. Cada una suena desde y hasta donde digas, y se funden una con otra.</p>
+          <p className="mt-1 text-xs text-zinc-400">Pega tus canciones en orden (YouTube, Spotify, Google Drive, Dropbox o MP3). Cada una suena desde y hasta donde digas, y se funden una con otra.</p>
 
           <ol className="mt-4 space-y-2">
             {videos.map((v, i) => {
@@ -372,7 +336,6 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
           <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Spotify, Google Drive, Dropbox o MP3" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
             <button type="submit" disabled={importing} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{importing ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : <><Plus className="h-4 w-4" /> Agregar</>}</button>
-            <UploadSong onAdd={(audio, audioName) => setVideos((l) => [...l, { url: '', audio, audioName }])} onError={setError} />
           </form>
           {askList && (
             <div className="mt-2 rounded-xl bg-sky-500/10 p-3 ring-1 ring-sky-400/30">

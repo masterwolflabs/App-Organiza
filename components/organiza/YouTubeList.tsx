@@ -1063,7 +1063,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           {parseSpotify(videos[blockedSong].url) ? (
             <>⚠️ No pude tocar la canción {blockedSong + 1} de Spotify. Conéctalo en ⚙️ Configurar (Spotify Premium) o abre Spotify en tu computador o teléfono.{' '}</>
           ) : videos[blockedSong].audio ? (
-            <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox: en ⚙️ Configurar bórrala y vuelve a pegar el link (ahora se guarda en tu cuenta y suena siempre), o usa 🎵 Subir archivo.{' '}</>
+            <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox: revisa que esté compartido «Cualquier persona con el enlace»; si no, en ⚙️ Configurar vuelve a pegar el link.{' '}</>
           ) : (
             <>⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube. Para que suene aquí: ⚙️ Configurar → 🎵 Usar mi audio.{' '}</>
           )}

@@ -35,6 +35,13 @@ export async function POST(request: Request) {
 
   const src = cloudSource(String(link ?? ''));
   if (!src) return Response.json({ error: 'Pega un link de Google Drive o Dropbox.' }, { status: 400 });
+  // Limpieza: la copia que guardaba el sistema anterior (17-18 nov) ya no se usa: se borra de la nube.
+  if (src.key.startsWith('d:')) {
+    const bucket = admin().storage.from('organiza-music');
+    const { data: old } = await bucket.list(user.id, { search: `drive-${src.key.slice(2)}` });
+    const names = (old ?? []).filter((f) => f.name.startsWith(`drive-${src.key.slice(2)}.`)).map((f) => `${user.id}/${f.name}`);
+    if (names.length) await bucket.remove(names);
+  }
   // Un byte para saber si se puede tocar (compartido, es audio) y cómo se llama. Tope de 8 s.
   const head = await fetch(src.url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store', signal: AbortSignal.timeout(8000) }).catch(() => null);
   head?.body?.cancel().catch(() => {});
