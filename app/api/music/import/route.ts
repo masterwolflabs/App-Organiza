@@ -47,19 +47,27 @@ const nameOf = (raw: string) => fileOf(raw).replace(/\.[^.]+$/, '').trim().slice
 export async function POST(request: Request) {
   const user = await userOf(request);
   if (!user) return Response.json({ error: 'Inicia sesión.' }, { status: 401 });
-  const { link } = (await request.json().catch(() => ({}))) as { link?: string };
+  const { link, path: own } = (await request.json().catch(() => ({}))) as { link?: string; path?: string };
+  const bucket = admin().storage.from('organiza-music');
+  // La dirección para tocar un audio YA guardado (firmada aquí: el navegador no le pide nada a la nube).
+  const sign = async (p: string) => (await bucket.createSignedUrl(p, 86_400)).data?.signedUrl ?? null;
+  if (own) {
+    const p = String(own).replace(/^storage:/, '');
+    if (!p.startsWith(`${user.id}/`) || p.includes('..')) return Response.json({ error: 'Ese audio no es tuyo.' }, { status: 403 });
+    const url = await sign(p);
+    return url ? Response.json({ url }) : Response.json({ error: 'No encontré tu audio.' }, { status: 404 });
+  }
   const src = source(String(link ?? ''));
   if (!src) return Response.json({ error: 'Pega un link de Google Drive o Dropbox.' }, { status: 400 });
 
   // ¿Ya está en tu cuenta? (la misma canción en los 7 días de una acción = un solo archivo).
-  const bucket = admin().storage.from('organiza-music');
   const { data: have } = await bucket.list(user.id, { search: src.key, limit: 5 });
   const hit = have?.find((f) => f.name.startsWith(`${src.key}.`));
   if (hit) {
     // Ya estaba: solo se pide el nombre del archivo (un byte, no se baja de nuevo).
     const head = await fetch(src.url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' }).catch(() => null);
     await head?.body?.cancel().catch(() => {});
-    return Response.json({ audio: `storage:${user.id}/${hit.name}`, name: nameOf(head?.headers.get('content-disposition') ?? '') });
+    return Response.json({ audio: `storage:${user.id}/${hit.name}`, url: await sign(`${user.id}/${hit.name}`), name: nameOf(head?.headers.get('content-disposition') ?? '') });
   }
 
   const res = await fetch(src.url, { redirect: 'follow', cache: 'no-store' }).catch(() => null);
@@ -88,5 +96,5 @@ export async function POST(request: Request) {
   const up = await bucket.upload(path, Buffer.concat(chunks), { contentType: MIME[ext] ?? 'audio/mpeg', upsert: true });
   if (up.error) return Response.json({ error: `No se pudo guardar: ${up.error.message}` }, { status: 500 });
   const name = nameOf(res.headers.get('content-disposition') ?? '');
-  return Response.json({ audio: `storage:${path}`, name });
+  return Response.json({ audio: `storage:${path}`, url: await sign(path), name });
 }

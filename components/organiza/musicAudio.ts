@@ -116,14 +116,18 @@ export async function resolveAudio(audio: string): Promise<string | null> {
   const path = audio.slice('storage:'.length);
   const saved = lsRead<{ url: string; until: number }>(LS_SIGNED)[path];
   if (saved && saved.until > Date.now()) return saved.url;
+  // El permiso para tocarlo lo firma nuestro servidor (2026-11-18: pedírselo directo a la nube daba 403).
   if (!signed.has(path))
-    signed.set(path, supabase.storage.from(BUCKET).createSignedUrl(path, 86_400).then(({ data }) => {
-      if (!data?.signedUrl) return null;
-      const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
-      for (const k of Object.keys(all)) if (all[k].until < Date.now()) delete all[k];
-      lsWrite(LS_SIGNED, { ...all, [path]: { url: data.signedUrl, until: Date.now() + 80_000_000 } });
-      return data.signedUrl;
-    }));
+    signed.set(path, authFetch('/api/music/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) })
+      .then((r) => r.json().catch(() => ({})))
+      .then((j: { url?: string }) => {
+        if (!j.url) return null;
+        const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
+        for (const k of Object.keys(all)) if (all[k].until < Date.now()) delete all[k];
+        lsWrite(LS_SIGNED, { ...all, [path]: { url: j.url, until: Date.now() + 80_000_000 } });
+        return j.url;
+      })
+      .catch(() => null));
   const url = await signed.get(path)!;
   signed.delete(path);
   return url;
