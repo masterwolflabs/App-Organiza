@@ -129,6 +129,16 @@ export async function resolveAudio(audio: string): Promise<string | null> {
   return url;
 }
 
+/** Olvida lo recordado de un audio (si su permiso guardado ya no sirve, se pide uno nuevo). */
+export function forgetAudio(audio: string) {
+  const stored = lsRead<{ audio: string }>(LS_STORED);
+  const path = (stored[audio]?.audio ?? audio).replace(/^storage:/, '');
+  const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
+  delete all[path];
+  lsWrite(LS_SIGNED, all);
+  signed.delete(path);
+}
+
 /** Deja listas de antemano las canciones propias de una lista (al abrir el focus). */
 export const warmAudio = (audios: (string | undefined)[]) => audios.forEach((a) => a && void resolveAudio(a).catch(() => null));
 

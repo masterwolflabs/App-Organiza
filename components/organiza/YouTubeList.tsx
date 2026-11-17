@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
-import { audioNames, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
+import { audioNames, forgetAudio, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
 
 /**
@@ -98,7 +98,7 @@ const freshAudio = () => {
 function pooled(audio: string, from: number): Pooled {
   let e = pool.get(audio);
   // Si falló (sin internet, link roto), se arma de nuevo.
-  if (e && e.el.error && !e.busy) {
+  if (e && (e.el.error || e.el.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) && !e.busy) {
     pool.delete(audio);
     e = undefined;
   }
@@ -110,9 +110,16 @@ function pooled(audio: string, from: number): Pooled {
     el.addEventListener('loadedmetadata', () => {
       if (!entry.busy && entry.from) el.currentTime = entry.from;
     }, { once: true });
-    resolveAudio(audio).then((src) => {
-      if (src && !el.src) el.src = src;
-    });
+    // Si falla mientras espera (permiso vencido, sin internet), sale de la reserva: la canción usará uno nuevo.
+    el.addEventListener('error', () => {
+      if (!entry.busy && pool.get(audio) === entry) pool.delete(audio);
+    }, { once: true });
+    resolveAudio(audio)
+      .then((src) => {
+        if (src && !el.src) el.src = src;
+        else if (!src && pool.get(audio) === entry && !entry.busy) pool.delete(audio);
+      })
+      .catch(() => pool.get(audio) === entry && !entry.busy && pool.delete(audio));
   }
   return e;
 }
@@ -175,7 +182,23 @@ function audioPlayer(host: HTMLElement, audio: string, title: string, start: num
   on('pause', () => !el.ended && state(2)());
   on('waiting', state(3));
   on('ended', state(0));
-  on('error', () => !gone && events.onError?.());
+  // Si falla, se pide un permiso nuevo y se prueba UNA vez más antes de saltarla.
+  let retried = false;
+  on('error', () => {
+    if (gone) return;
+    console.warn('[Master Planner · música] no pude tocar tu audio', { audio, code: el.error?.code, msg: el.error?.message, retried });
+    if (retried) return events.onError?.();
+    retried = true;
+    forgetAudio(audio);
+    resolveAudio(audio)
+      .then((src) => {
+        if (gone) return;
+        if (!src) return events.onError?.();
+        on('loadedmetadata', ready, true);
+        el.src = src;
+      })
+      .catch(() => !gone && events.onError?.());
+  });
   const ready = () => {
     if (gone) return;
     if (Math.abs(el.currentTime - start) > 0.5) el.currentTime = start;
@@ -185,11 +208,13 @@ function audioPlayer(host: HTMLElement, audio: string, title: string, start: num
   if (el.readyState >= 1) setTimeout(ready, 0);
   else on('loadedmetadata', ready, true);
   if (!el.src)
-    resolveAudio(audio).then((src) => {
-      if (gone || el.src) return;
-      if (!src) return events.onError?.();
-      el.src = src;
-    });
+    resolveAudio(audio)
+      .then((src) => {
+        if (gone || el.src) return;
+        if (!src) return events.onError?.();
+        el.src = src;
+      })
+      .catch(() => !gone && events.onError?.());
   return p;
 }
 
@@ -681,7 +706,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
     const t = setInterval(() => {
       const cur = slots.current[activeRef.current];
       const v = list.current[cur.index];
-      if (!v || !cur.player || !playingRef.current) return;
+      if (!v || !cur.player || !playingRef.current || finishedRef.current) return;
       // No cargó en 12 s: se salta.
       if (!cur.ready) {
         // (La ventanita del Mac abre la página entera de YouTube: se le da más tiempo.)
