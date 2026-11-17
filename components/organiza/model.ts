@@ -179,7 +179,7 @@ export const MODULE_CHOICES: { key: string; emoji: string; label: string; hint: 
   { key: 'sueno', emoji: '😴', label: 'Sueño', hint: 'A qué hora te acostaste y te levantaste', make: () => ({ id: mid(), type: 'sueno', title: 'Mi sueño' }) },
   { key: 'entreno', emoji: '🏋️', label: 'Plan de entrenamiento', hint: 'Día, ejercicio, series y repeticiones', make: () => ({ id: mid(), type: 'tabla', title: 'Plan de entrenamiento', columns: ['Día', 'Ejercicio', 'Series', 'Reps', 'Peso'], rows: [['Lunes', '', '', '', '']] }) },
   { key: 'alimentacion', emoji: '🍳', label: 'Conectar a Alimentación', hint: 'Lo que vas a comer ese día, con foto y cómo prepararlo', make: () => ({ id: mid(), type: 'alimentacion', title: 'Alimentación' }) },
-  { key: 'entrenamiento', emoji: '🏋️', label: 'Conectar a Entrenamiento', hint: 'Lo que entrenas ese día: ejercicios, series y reps', make: () => ({ id: mid(), type: 'entrenamiento', title: 'Entrenamiento' }) },
+  { key: 'entrenamiento', emoji: '🏋️', label: 'Conectar a Workout Pro', hint: 'La rutina de ese día y el botón Entrenar', make: () => ({ id: mid(), type: 'entrenamiento', title: 'Entrenamiento' }) },
   { key: 'tabla', emoji: '🧾', label: 'Tabla libre', hint: 'Una tabla con las columnas que quieras', make: () => ({ id: mid(), type: 'tabla', title: 'Tabla', columns: ['Nombre', 'Detalle'], rows: [['', '']] }) },
   { key: 'youtube', emoji: '🎵', label: 'Lista de YouTube', hint: 'Videos que suenan solos en el modo focus', make: () => ({ id: mid(), type: 'youtube', title: 'Lista de YouTube', videos: [] }) },
   { key: 'base', emoji: '🗃️', label: 'Base de datos', hint: 'Una base dentro de esta tarea, como en Notion', make: () => ({ id: mid(), type: 'base', title: 'Base de datos' }) },

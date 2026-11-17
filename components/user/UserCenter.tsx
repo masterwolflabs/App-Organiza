@@ -1,5 +1,6 @@
 'use client';
 
+import { BodyPref } from '@/components/organiza/BodyPref';
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Database, Gem, HardDrive, Loader2, Palette, Settings, ShieldCheck, UserRound, Vault, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
@@ -203,6 +204,9 @@ const Perfil: React.FC<{ user: UserInfo; onSaved: (n: string) => void }> = ({ us
             {msg && <span className="text-xs text-zinc-400">{msg}</span>}
           </div>
         </form>
+      </Card>
+      <Card title="Tu figura">
+        <BodyPref userId={user.id} />
       </Card>
     </>
   );

@@ -327,22 +327,23 @@ const SpotifyPanel: React.FC = () => {
 
 /* ── Modo cocina ──────────────────────────────────────────────────────────────────── */
 
-const MediaPanel: React.FC = () => {
-  const [url, setUrl] = useState(() => lsGet('mp-cocina-video') ?? '');
+/** `doing` = «mientras cocinas» / «mientras entrenas» (Workout Pro lo reutiliza). */
+export const MediaPanel: React.FC<{ doing?: string; store?: string }> = ({ doing = 'mientras cocinas', store = 'mp-cocina-video' }) => {
+  const [url, setUrl] = useState(() => lsGet(store) ?? '');
   const [draft, setDraft] = useState(url);
   const p = parseYouTube(url);
   const src = p?.video ? `https://www.youtube.com/embed/${p.video}?rel=0&playsinline=1` : p?.list ? `https://www.youtube.com/embed/videoseries?list=${p.list}&rel=0` : null;
   return (
     <div className="flex h-full flex-col gap-3">
-      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setUrl(draft.trim()); lsSet('mp-cocina-video', draft.trim()); }}>
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Pega un video de YouTube para ver mientras cocinas" className={field} />
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setUrl(draft.trim()); lsSet(store, draft.trim()); }}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Pega un video de YouTube para ver ${doing}`} className={field} />
         <button type="submit" className="rounded-lg bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14]">Ver</button>
       </form>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-black ring-1 ring-white/10">
         {src ? (
           <iframe src={src} title="Video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen className="absolute inset-0 h-full w-full" />
         ) : (
-          <div className="flex h-full min-h-48 items-center justify-center p-6 text-center text-sm text-zinc-500">📺 Aquí va tu video mientras cocinas (una receta, una serie, lo que quieras).</div>
+          <div className="flex h-full min-h-48 items-center justify-center p-6 text-center text-sm text-zinc-500">📺 Aquí va tu video {doing} (una receta, una técnica, una serie, lo que quieras).</div>
         )}
       </div>
       <SpotifyPanel />

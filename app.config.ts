@@ -38,7 +38,7 @@ export const SECTIONS = [
   { key: 'tiempo', label: 'Tiempo', icon: CloudSun, dock: false },
   { key: 'daily', label: 'Daily', icon: ListTodo, dock: false },
   { key: 'alimentacion', label: 'Nutrition Pro', icon: Utensils, dock: false },
-  { key: 'entrenamiento', label: 'Entrenamiento', icon: Dumbbell, dock: false },
+  { key: 'entrenamiento', label: 'Workout Pro', icon: Dumbbell, dock: false },
   { key: 'checklist', label: 'Cierre del día', icon: ListChecks, dock: false },
   { key: 'ruta', label: 'Tu Ruta', icon: Trophy, dock: false },
   { key: 'acomodar', label: 'Por acomodar', icon: CalendarRange, dock: false },

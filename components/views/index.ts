@@ -16,7 +16,8 @@ import { ChecklistView } from '@/components/views/ChecklistView';
 import { RutaView } from '@/components/views/RutaView';
 import { ConexionesView } from '@/components/views/ConexionesView';
 import { ConceptosView } from '@/components/views/ConceptosView';
-import { AlimentacionView, EntrenamientoView } from '@/components/organiza/Planner';
+import { AlimentacionView } from '@/components/organiza/Planner';
+import { WorkoutProView } from '@/components/organiza/WorkoutPro';
 import { AvisosView } from '@/components/views/AvisosView';
 import { TiempoView } from '@/components/views/TiempoView';
 
@@ -35,7 +36,7 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   avisos: AvisosView,
   conexiones: ConexionesView,
   alimentacion: AlimentacionView,
-  entrenamiento: EntrenamientoView,
+  entrenamiento: WorkoutProView,
 };
 
 /** Páginas propias de Organiza dentro de Configuración. */

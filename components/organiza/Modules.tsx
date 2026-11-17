@@ -1,5 +1,6 @@
 'use client';
 
+import { WorkoutOfDay } from '@/components/organiza/WorkoutPro';
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { DatabaseTable } from '@/components/databases/DatabaseTable';
@@ -63,7 +64,7 @@ export const Modules: React.FC<Props> = ({ item, modules, checks, onChange, week
           {m.type === 'sueno' && <SleepLog item={item} checks={checks} bedDefault={/dormir|acostar/i.test(item.title) ? item.time : undefined} />}
           {m.type === 'youtube' && <YouTubeEditor m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'alimentacion' && <PlanLink kind="meals" weekdays={weekdays?.length ? weekdays : [item.weekday]} slot={slotFor(item.title)} />}
-          {m.type === 'entrenamiento' && <PlanLink kind="workouts" weekdays={weekdays?.length ? weekdays : [item.weekday]} />}
+          {m.type === 'entrenamiento' && <WorkoutOfDay weekdays={weekdays?.length ? weekdays : [item.weekday]} />}
           {m.type === 'tabla' && <Grid m={m} patch={(p) => patch(m.id, p)} />}
           {m.type === 'base' && <Base m={m} patch={(p) => patch(m.id, p)} />}
         </Box>
