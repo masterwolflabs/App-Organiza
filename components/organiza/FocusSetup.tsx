@@ -9,6 +9,7 @@ import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
 import { isAudioLink, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
+import { authFetch } from '@/lib/authFetch';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
 
@@ -29,6 +30,48 @@ const EmbedCheck: React.FC<{ video: string; children?: React.ReactNode }> = ({ v
       <p>⚠️ Esta canción no puede sonar dentro de Master Planner: su dueño (o el sello, por derechos) solo deja escucharla en YouTube. Para que suene aquí, usa tu propio audio (un archivo o un link de Drive / Dropbox / MP3), o busca otra subida y usa 🔄 Cambiar.</p>
       {isDesktop() && <p className="mt-1 font-semibold text-emerald-200">💻 En esta app de Mac igual suena: se abre escondida en una ventanita de YouTube (📺 para verla).</p>}
       {children}
+    </div>
+  );
+};
+
+/**
+ * 🔎 Otra subida que sí suene (2026-11-17): busca la misma canción en YouTube, revisa cuáles suenan aquí
+ * y ofrece «Usar esta» (conserva desde/hasta). Necesita la llave YOUTUBE_API_KEY en Vercel.
+ */
+const Alternatives: React.FC<{ video: string; onUse: (url: string) => void }> = ({ video, onUse }) => {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'nokey' | 'error'>('idle');
+  const [items, setItems] = useState<{ id: string; title: string; channel: string; ok?: boolean }[]>([]);
+  const search = async () => {
+    setState('busy');
+    try {
+      const r = await authFetch(`/api/youtube/alternativas?video=${encodeURIComponent(video)}`);
+      const j = (await r.json()) as { missingKey?: boolean; items?: { id: string; title: string; channel: string }[] };
+      if (j.missingKey) return setState('nokey');
+      const list = j.items ?? [];
+      setItems(list);
+      setState('done');
+      // Cada una se prueba de verdad (el sello puede bloquearla aunque YouTube diga que se puede).
+      list.forEach((x) => canEmbed(x.id).then((ok) => setItems((l) => l.map((y) => (y.id === x.id ? { ...y, ok } : y)))));
+    } catch {
+      setState('error');
+    }
+  };
+  if (state === 'idle') return <button type="button" onClick={search} className="mt-1.5 ml-1.5 inline-flex items-center gap-1 rounded-lg bg-white/[0.08] px-2.5 py-1.5 text-xs font-bold text-rose-50 ring-1 ring-white/15 hover:bg-white/[0.14]">🔎 Buscar otra subida que suene</button>;
+  if (state === 'busy') return <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-300"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando la misma canción…</p>;
+  if (state === 'nokey') return <p className="mt-1.5 text-[11px] text-amber-200">🔑 La búsqueda todavía no está activada (falta la llave gratis de YouTube en Vercel). Mientras, usa tu audio.</p>;
+  if (state === 'error') return <p className="mt-1.5 text-[11px] text-amber-200">No pude buscar ahora. Prueba de nuevo en un rato.</p>;
+  const good = items.filter((x) => x.ok !== false);
+  return (
+    <div className="mt-2 space-y-1">
+      {!good.length && <p className="text-[11px] text-zinc-300">No encontré otra subida que suene aquí. Usa tu audio.</p>}
+      {good.map((x) => (
+        <div key={x.id} className="flex items-center gap-2 rounded-lg bg-black/25 p-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`https://i.ytimg.com/vi/${x.id}/default.jpg`} alt="" className="h-8 w-12 shrink-0 rounded object-cover" />
+          <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold text-zinc-100">{x.title.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"')}</span><span className="block truncate text-[10px] text-zinc-400">{x.channel}{x.ok === undefined ? ' · revisando…' : ' · ✓ suena aquí'}</span></span>
+          <button type="button" disabled={x.ok !== true} onClick={() => onUse(`https://www.youtube.com/watch?v=${x.id}`)} className="shrink-0 rounded-lg bg-sky-600 px-2 py-1 text-[11px] font-bold text-[#fff] hover:bg-sky-500 disabled:opacity-40">Usar esta</button>
+        </div>
+      ))}
     </div>
   );
 };
@@ -206,7 +249,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                       <button type="button" onClick={() => set(i, { audio: undefined, audioName: undefined })} data-help="Quitar tu audio: vuelve a sonar YouTube" className="shrink-0 font-semibold text-emerald-100 underline">Quitar (vuelve a YouTube)</button>
                     </p>
                   ) : (
-                    p?.video && <EmbedCheck video={p.video}><AudioPicker strong onPick={(audio, audioName) => set(i, { audio, audioName })} /></EmbedCheck>
+                    p?.video && <EmbedCheck video={p.video}><AudioPicker strong onPick={(audio, audioName) => set(i, { audio, audioName })} /><Alternatives video={p.video} onUse={(u) => set(i, { url: u })} /></EmbedCheck>
                   )}
                   {p?.video && v.resume && (
                     <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
