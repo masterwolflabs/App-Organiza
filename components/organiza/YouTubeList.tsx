@@ -333,6 +333,11 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
   let gone = false;
   let started = false;
   let ready = false;
+  // ⏱️ El tiempo que cuenta es cuánto LLEVA SONANDO (desde + lo escuchado), no el minuto del episodio: Spotify
+  // sigue los podcasts donde quedaste (min 25) y tu «hasta 10:00» debe ser 10 minutos de escucha (2026-11-18).
+  let base = start;
+  let played = 0;
+  let playSince = 0;
   let t = start;
   let at = Date.now();
   let state = -1;
@@ -347,6 +352,8 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
   const mine = () => spotifyOwner === p;
   const emit = (n: number) => {
     if (n === state) return;
+    if (state === 1) played += (Date.now() - playSince) / 1000;
+    if (n === 1) playSince = Date.now();
     state = n;
     if (!gone) events.onStateChange?.({ data: n, target: p });
   };
@@ -368,7 +375,7 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
     if (single ? cur && cur.id !== id && cur.linked_from?.id !== id && cur.uri !== uri : st.context?.uri && st.context.uri !== uri) return;
     t = st.position / 1000;
     at = Date.now();
-    if (st.duration) dur = st.duration / 1000;
+    if (kind === 'track' && st.duration) dur = st.duration / 1000;
     // (Solo una canción o un episodio «termina»: en un podcast o playlist hay pausas cortas entre uno y otro.)
     if (single && st.paused && started && st.position === 0 && state === 1) return emit(0);
     emit(st.paused ? 2 : st.loading ? 3 : 1);
@@ -384,7 +391,7 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
       if (single ? j.item?.id !== id : j.context?.uri !== uri) return state === 1 && single ? emit(0) : undefined;
       t = (j.progress_ms ?? 0) / 1000;
       at = Date.now();
-      if (j.item?.duration_ms) dur = j.item.duration_ms / 1000;
+      if (kind === 'track' && j.item?.duration_ms) dur = j.item.duration_ms / 1000;
       emit(j.is_playing ? 1 : 2);
     }, 1000);
   };
@@ -398,7 +405,7 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
     started = true;
     emit(3);
     await dev?.player.activateElement?.().catch(() => {});
-    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', single ? { uris: [uri], position_ms: Math.round(t * 1000) } : { context_uri: uri, position_ms: Math.round(t * 1000) });
+    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', { ...(single ? { uris: [uri] } : { context_uri: uri }), ...(kind === 'track' || base > 0 ? { position_ms: Math.round(base * 1000) } : {}) });
     if (gone) return;
     if (!r || !r.ok) {
       // Sin parlante aquí y sin Spotify abierto en ningún equipo (404), o sin Premium (403).
@@ -430,17 +437,25 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
       else void spotifyApi('/pause', 'PUT');
     },
     seekTo: (sec: number) => {
-      t = Math.max(0, sec);
+      if (!started) {
+        base = Math.max(0, sec);
+        return;
+      }
+      // Adelantar/retroceder: se mueve lo mismo en el episodio real y en lo escuchado.
+      const delta = sec - p.getCurrentTime();
+      played += delta;
+      const real = Math.max(0, t + (state === 1 ? (Date.now() - at) / 1000 : 0) + delta);
+      t = real;
       at = Date.now();
-      if (!mine() || !started) return;
-      if (dev) void dev.player.seek(Math.round(t * 1000));
-      else void spotifyApi(`/seek?position_ms=${Math.round(t * 1000)}`, 'PUT');
+      if (!mine()) return;
+      if (dev) void dev.player.seek(Math.round(real * 1000));
+      else void spotifyApi(`/seek?position_ms=${Math.round(real * 1000)}`, 'PUT');
     },
     setVolume: (v: number) => {
       vol = Math.max(0, Math.min(100, v));
       sendVol();
     },
-    getCurrentTime: () => (state === 1 ? t + (Date.now() - at) / 1000 : t),
+    getCurrentTime: () => base + played + (state === 1 ? (Date.now() - playSince) / 1000 : 0),
     getDuration: () => dur,
     getVideoData: () => ({ title }),
     mute: () => {
@@ -466,7 +481,7 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
     ]);
     if (gone) return;
     dev = d;
-    if (info?.duration_ms) dur = info.duration_ms / 1000;
+    if (kind === 'track' && info?.duration_ms) dur = info.duration_ms / 1000;
     title = info?.name ? `${info.name}${info.artists?.length ? ` · ${info.artists.map((a) => a.name).join(', ')}` : info.show?.name ? ` · ${info.show.name}` : ''}` : m?.title || title;
     ready = true;
     events.onReady?.({ target: p });
