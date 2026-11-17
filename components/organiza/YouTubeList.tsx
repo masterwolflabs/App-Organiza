@@ -83,21 +83,72 @@ type PlayerEvents = { onReady?: (e: { target: YTPlayer }) => void; onStateChange
  * métodos y estados 1 sonando · 2 pausa · 0 terminó · 3 cargando), así el crossfade, el «hasta», el bucle
  * y el vigilante funcionan sin cambios. (En iPhone el volumen lo manda el teléfono: ahí el fade es corte.)
  */
-function audioPlayer(host: HTMLElement, audio: string, title: string, start: number, events: PlayerEvents): YTPlayer {
-  const el = document.createElement('audio');
+/**
+ * ⚡ Audios listos de antemano (2026-11-18, Daily focus-cambio-rapido): al abrir el focus, cada audio propio
+ * queda cargado y parado en su «desde». Al tocar ⏭ solo se le da play: no espera a la red.
+ */
+type Pooled = { el: HTMLAudioElement; busy: boolean; from: number };
+const pool = new Map<string, Pooled>();
+const freshAudio = () => {
+  const el = new Audio();
   el.preload = 'auto';
   el.setAttribute('playsinline', '');
-  host.appendChild(el);
+  return el;
+};
+function pooled(audio: string, from: number): Pooled {
+  let e = pool.get(audio);
+  // Si falló (sin internet, link roto), se arma de nuevo.
+  if (e && e.el.error && !e.busy) {
+    pool.delete(audio);
+    e = undefined;
+  }
+  if (!e) {
+    const el = freshAudio();
+    e = { el, busy: false, from };
+    pool.set(audio, e);
+    const entry = e;
+    el.addEventListener('loadedmetadata', () => {
+      if (!entry.busy && entry.from) el.currentTime = entry.from;
+    }, { once: true });
+    resolveAudio(audio).then((src) => {
+      if (src && !el.src) el.src = src;
+    });
+  }
+  return e;
+}
+/** Deja listos los audios propios de la lista (se llama al abrir el focus). */
+export function warmPool(videos: Video[]) {
+  videos.forEach((v) => v.audio && pooled(v.audio, v.from ?? 0));
+}
+
+function audioPlayer(host: HTMLElement, audio: string, title: string, start: number, events: PlayerEvents): YTPlayer {
+  // El de la reserva si está libre (la misma canción en los dos canales usa uno nuevo).
+  const entry = pooled(audio, start);
+  const mine = entry.busy ? null : entry;
+  if (mine) mine.busy = true;
+  const el = mine ? mine.el : freshAudio();
+  const ac = new AbortController();
+  const on = (type: string, fn: () => void, once = false) => el.addEventListener(type, fn, { signal: ac.signal, once });
   let gone = false;
   const p: YTPlayer & { slow: true } = {
     // (La primera vez un link de Drive se trae a tu cuenta: puede tardar; el vigilante le da más tiempo.)
     slow: true,
     destroy: () => {
       gone = true;
+      ac.abort();
       el.pause();
-      el.removeAttribute('src');
-      el.load();
-      el.remove();
+      if (mine) {
+        // Vuelve a la reserva, parado en su «desde» y listo para la próxima vez.
+        el.muted = false;
+        el.volume = 1;
+        try {
+          el.currentTime = mine.from;
+        } catch {}
+        mine.busy = false;
+      } else {
+        el.removeAttribute('src');
+        el.load();
+      }
     },
     playVideo: () => void el.play().catch(() => events.onStateChange?.({ data: 2, target: p })),
     pauseVideo: () => el.pause(),
@@ -118,22 +169,27 @@ function audioPlayer(host: HTMLElement, audio: string, title: string, start: num
       el.muted = false;
     },
   };
+  void host;
   const state = (data: number) => () => !gone && events.onStateChange?.({ data, target: p });
-  el.addEventListener('playing', state(1));
-  el.addEventListener('pause', () => !el.ended && state(2)());
-  el.addEventListener('waiting', state(3));
-  el.addEventListener('ended', state(0));
-  el.addEventListener('error', () => !gone && events.onError?.());
-  el.addEventListener('loadedmetadata', () => {
+  on('playing', state(1));
+  on('pause', () => !el.ended && state(2)());
+  on('waiting', state(3));
+  on('ended', state(0));
+  on('error', () => !gone && events.onError?.());
+  const ready = () => {
     if (gone) return;
-    if (start) el.currentTime = start;
+    if (Math.abs(el.currentTime - start) > 0.5) el.currentTime = start;
     events.onReady?.({ target: p });
-  }, { once: true });
-  resolveAudio(audio).then((src) => {
-    if (gone) return;
-    if (!src) return events.onError?.();
-    el.src = src;
-  });
+  };
+  // Ya cargado (de la reserva): listo al tiro. Si no, apenas sepa cuánto dura.
+  if (el.readyState >= 1) setTimeout(ready, 0);
+  else on('loadedmetadata', ready, true);
+  if (!el.src)
+    resolveAudio(audio).then((src) => {
+      if (gone || el.src) return;
+      if (!src) return events.onError?.();
+      el.src = src;
+    });
   return p;
 }
 
@@ -371,6 +427,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
   const audioKey = videos.map((v) => v.audio ?? '').join('|');
   useEffect(() => {
     warmAudio(audioKey.split('|'));
+    warmPool(list.current);
   }, [audioKey]);
   // Largo real de cada video (se conoce al cargarlo); sirve para ubicar la música en el tiempo del focus.
   const lengths = useRef<Record<number, number>>({});
