@@ -83,7 +83,7 @@ const WeekBlock: React.FC<{
         ))}
       </div>
     </div>
-    <div className="-mx-1 grid snap-x auto-cols-[minmax(138px,1fr)] grid-flow-col gap-2.5 overflow-x-auto px-1 pb-1">
+    <div className="-mx-3 -my-2 grid snap-x auto-cols-[minmax(138px,1fr)] grid-flow-col gap-2.5 overflow-x-auto px-3 py-3">
       {WEEK.map((w, wd) => {
         const p = week[String(wd)] ?? { routine: null, version: 'completa' as Version };
         const r = api.routines.find((x) => x.id === p.routine);
@@ -91,11 +91,11 @@ const WeekBlock: React.FC<{
         const done = doneOn(wd);
         const isToday = wd === today;
         return (
-          <div key={wd} className={`flex snap-start flex-col overflow-hidden rounded-2xl bg-[#17191f] ring-1 transition ${isToday ? 'ring-red-400/60' : done ? 'ring-emerald-400/40' : 'ring-white/10 hover:ring-white/20'}`}>
+          <div key={wd} className={`flex snap-start flex-col overflow-hidden rounded-2xl bg-[#17191f] ring-1 transition ${isToday ? 'ring-2 ring-red-500 shadow-[0_0_10px_rgba(239,68,68,0.55),0_0_26px_rgba(239,68,68,0.35)]' : done ? 'ring-emerald-400/40' : 'ring-white/10 hover:ring-white/20'}`}>
             <button type="button" onClick={() => onDay(wd)} className="flex flex-1 flex-col text-left">
               <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2">
-                <span className={`text-xs font-bold ${isToday ? 'text-red-300' : 'text-zinc-300'}`}>{SHORT[wd]} <span className="font-normal opacity-70">{date.getDate()}</span></span>
-                {done ? <span className="rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-[#09090b]">✓</span> : isToday ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-[#fff]">hoy</span> : null}
+                <span className={`text-xs font-bold ${isToday ? 'text-red-400 [text-shadow:0_0_8px_rgba(239,68,68,0.6)]' : 'text-zinc-300'}`}>{SHORT[wd]} <span className="font-normal opacity-70">{date.getDate()}</span></span>
+                {done ? <span className="rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-[#09090b]">✓</span> : isToday ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-[#fff] shadow-[0_0_8px_rgba(239,68,68,0.8)]">hoy</span> : null}
               </div>
               <div className="relative mx-2 h-20 overflow-hidden rounded-xl bg-white/[0.03]" style={r ? coverCss(r.cover_url) : undefined}>
                 {r ? (
@@ -115,7 +115,7 @@ const WeekBlock: React.FC<{
                 <Play className="h-3 w-3" /> Entrenar
               </button>
             ) : (
-              <span className="border-t border-white/5 py-1.5 text-center text-[11px] text-zinc-600">—</span>
+              <span aria-hidden className="py-1.5 text-[11px]">&nbsp;</span>
             )}
           </div>
         );
