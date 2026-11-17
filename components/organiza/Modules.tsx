@@ -1,5 +1,6 @@
 'use client';
 
+import { isAudioLink, linkName } from '@/components/organiza/musicAudio';
 import { WorkoutOfDay } from '@/components/organiza/WorkoutPro';
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, GripVertical, Plus, Trash2, X } from 'lucide-react';
@@ -258,11 +259,11 @@ const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`https://i.ytimg.com/vi/${p.video}/default.jpg`} alt="" className="h-9 w-12 shrink-0 rounded object-cover" />
             ) : (
-              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-white/[0.06] text-[10px] text-zinc-400">Lista</span>
+              <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-white/[0.06] text-[10px] text-zinc-400">{v.audio ? '🎵' : 'Lista'}</span>
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs text-zinc-300">{i + 1}. {v.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
-              {p?.video && (
+              <span className="block truncate text-xs text-zinc-300">{i + 1}. {p ? v.url.replace(/^https?:\/\/(www\.)?/, '') : v.audioName || 'Mi audio'}</span>
+              {(p?.video || v.audio) && (
                 <span className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-500">
                   desde <input defaultValue={fmtSeconds(v.from)} placeholder="0:00" onBlur={(e) => set(i, { from: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
                   hasta <input defaultValue={fmtSeconds(v.to)} placeholder="fin" onBlur={(e) => set(i, { to: toSeconds(e.target.value) })} className="w-12 rounded bg-white/[0.05] px-1 text-zinc-200 outline-none" />
@@ -273,8 +274,8 @@ const YouTubeEditor: React.FC<{ m: Module; patch: (p: Partial<Module>) => void }
           </div>
         );
       })}
-      <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (!parseYouTube(url)) return setError('Ese link no es de YouTube.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega un link de YouTube (video o playlist)" className={`${input} text-zinc-300`} />
+      <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (!parseYouTube(url) && isAudioLink(url)) { setError(''); patch({ videos: [...videos, { url: '', audio: url.trim(), audioName: linkName(url) }] }); return setUrl(''); } if (!parseYouTube(url)) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.'); setError(''); patch({ videos: [...videos, { url: url.trim() }] }); setUrl(''); }}>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link de YouTube, Google Drive, Dropbox o MP3" className={`${input} text-zinc-300`} />
         <button type="submit" className="rounded-md px-2 text-sm font-semibold text-sky-300 hover:bg-white/[0.06]"><Plus className="h-4 w-4" /></button>
       </form>
       {error && <p className="text-xs text-rose-300">{error}</p>}

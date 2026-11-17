@@ -735,9 +735,9 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={`https://i.ytimg.com/vi/${id}/default.jpg`} alt="" className="h-7 w-10 rounded object-cover" />
                   ) : (
-                    <span className="flex h-7 w-10 items-center justify-center rounded bg-white/10 text-[9px]">Lista</span>
+                    <span className="flex h-7 w-10 items-center justify-center rounded bg-white/10 text-[9px]">{x.audio ? '🎵' : 'Lista'}</span>
                   )}
-                  <span className="flex-1">Canción {i + 1}{x.to !== undefined ? ` · hasta ${fmtSeconds(x.to)}` : ''}</span>
+                  <span className="flex-1">Canción {i + 1}{x.audio && !id ? ` · ${x.audioName || 'Mi audio'}` : ''}{x.to !== undefined ? ` · hasta ${fmtSeconds(x.to)}` : ''}</span>
                   {i === at && <span>▶</span>}
                 </button>
               </li>

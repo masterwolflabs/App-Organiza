@@ -32,6 +32,19 @@ export function directAudioUrl(link: string): string | null {
   }
 }
 
+/** Nombre para mostrar de un link de audio (Drive y Dropbox no dicen el nombre del archivo). */
+export function linkName(link: string): string {
+  try {
+    const u = new URL(link.trim());
+    if (u.hostname.endsWith('drive.google.com')) return 'Audio de Google Drive';
+    const file = decodeURIComponent(u.pathname.split('/').pop() ?? '').replace(/\.[^.]+$/, '').trim();
+    if (u.hostname.endsWith('dropbox.com')) return file || 'Audio de Dropbox';
+    return file.slice(0, 80) || 'Audio de link';
+  } catch {
+    return 'Audio de link';
+  }
+}
+
 /** ¿Es un link que vale la pena probar? (Drive, Dropbox o cualquier http). */
 export const isAudioLink = (link: string) => directAudioUrl(link) !== null;
 
