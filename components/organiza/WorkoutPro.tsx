@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Dumbbell, Pause, Play, Plus, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight, Dumbbell, Pause, Play, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -15,8 +15,8 @@ const MuscleCover = dynamic(() => import('@/components/organiza/BodyMap3D').then
 import { playOnce } from '@/components/organiza/sounds';
 import { notify } from '@/components/organiza/notify';
 import {
-  exercisesOf, isoDay, LIBRARY, MODES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
-  type DayPlan, type Feel, type LoggedExercise, type Mode, type MuscleId, type Routine, type RoutineExercise, type Version, type WorkoutApi,
+  exercisesOf, isoDay, LIBRARY, MODES, PLACES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
+  type DayPlan, type Feel, type Place, type LoggedExercise, type Mode, type MuscleId, type Routine, type RoutineExercise, type Version, type WorkoutApi,
 } from '@/components/organiza/workoutData';
 
 /**
@@ -57,6 +57,88 @@ const RoutineCard: React.FC<{ r: Routine; version?: Version; sub?: string; done?
     )}
   </div>
 );
+
+/* ── MODIFICACIÓN 01 (17 nov): banner, dónde entrenas y rutina personalizada ─────────── */
+
+const Hero: React.FC = () => (
+  <header className="theme-fixed relative mb-4 overflow-hidden rounded-3xl bg-[#0b0c10] ring-1 ring-white/10">
+    <img src="/workout/banner.webp" alt="" className="absolute inset-0 h-full w-full object-cover object-[70%_30%] sm:object-[center_30%]" draggable={false} />
+    <div className="absolute inset-0 bg-gradient-to-r from-[#0b0c10] via-[#0b0c10]/80 to-[#0b0c10]/10" />
+    <div className="absolute inset-0 bg-gradient-to-t from-[#0b0c10]/70 to-transparent" />
+    <div className="relative max-w-xl px-5 py-8 sm:px-8 sm:py-12">
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-400 [text-shadow:0_0_10px_rgba(239,68,68,0.6)]">🏋️ Workout Pro</p>
+      <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-[#fff] sm:text-5xl">Entrena a tu manera</h1>
+      <p className="mt-3 text-sm leading-relaxed text-[#d4d4d8] sm:text-base">Construye una rutina que se adapte a tus objetivos, tu tiempo y tu estilo de vida.</p>
+    </div>
+  </header>
+);
+
+/** En casa · Al aire libre · Gimnasio: se elige y se guarda (`training.place`); la lógica por lugar viene después. */
+const PlacePicker: React.FC<{ value: Place | null; onPick: (p: Place) => void }> = ({ value, onPick }) => (
+  <section className="mb-4" aria-label="Dónde entrenas">
+    <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+      {PLACES.map((p) => {
+        const on = value === p.id;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onPick(p.id)}
+            className={`theme-fixed group relative h-28 overflow-hidden rounded-2xl bg-[#0b0c10] text-left transition sm:h-40 ${on ? 'ring-2 ring-red-500 shadow-[0_0_10px_rgba(239,68,68,0.55),0_0_26px_rgba(239,68,68,0.3)]' : 'ring-1 ring-white/10 hover:ring-white/30'}`}
+          >
+            <img src={p.img} alt="" className={`absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105 ${on ? '' : 'opacity-75 group-hover:opacity-90'}`} draggable={false} />
+            <span className="absolute inset-0 bg-gradient-to-t from-[#0b0c10]/90 via-[#0b0c10]/30 to-transparent" />
+            {on && <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-[#fff] shadow-[0_0_10px_rgba(239,68,68,0.8)]"><Check className="h-3.5 w-3.5" /></span>}
+            <span className="absolute inset-x-0 bottom-0 p-2.5 sm:p-4">
+              <span className="block text-sm font-bold leading-tight text-[#fff] sm:text-lg">{p.emoji} {p.label}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  </section>
+);
+
+const PersonalizeCTA: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
+  <button type="button" onClick={onOpen} className="wp-attn theme-fixed group relative mb-5 flex w-full items-center gap-3 overflow-hidden rounded-3xl bg-gradient-to-r from-[#7f1d1d] via-[#b91c1c] to-[#ea580c] p-4 text-left ring-1 ring-red-400/40 sm:gap-4 sm:p-5">
+    <span className="wp-shine pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+    <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-[#fff] ring-1 ring-white/25 sm:h-12 sm:w-12"><Sparkles className="h-6 w-6" /></span>
+    <span className="relative min-w-0 flex-1">
+      <span className="block font-display text-base font-semibold text-[#fff] sm:text-xl">Crear mi rutina personalizada</span>
+      <span className="mt-0.5 block text-xs leading-snug text-[#fee2e2] sm:text-sm">Responde una evaluación y descubre cómo organizar tus entrenamientos según tus objetivos y disponibilidad.</span>
+    </span>
+    <ChevronRight className="relative h-5 w-5 shrink-0 text-[#fff] transition group-hover:translate-x-1" />
+  </button>
+);
+
+/** Espacio preparado para la evaluación (las preguntas se diseñan después). */
+const PersonalizeModal: React.FC<{ place: Place | null; onClose: () => void }> = ({ place, onClose }) => {
+  const p = PLACES.find((x) => x.id === place);
+  return (
+    <BodyPortal>
+      <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={onClose}>
+        <div role="dialog" aria-label="Crear mi rutina personalizada" onClick={(e) => e.stopPropagation()} className="w-full max-w-md overflow-hidden rounded-3xl bg-[#14161b] ring-1 ring-white/10">
+          <div className="theme-fixed relative bg-gradient-to-r from-[#7f1d1d] via-[#b91c1c] to-[#ea580c] px-5 py-6">
+            <button type="button" aria-label="Cerrar" onClick={onClose} className="absolute right-3 top-3 rounded-lg bg-black/30 p-1.5 text-[#fff] hover:bg-black/45"><X className="h-4 w-4" /></button>
+            <Sparkles className="h-8 w-8 text-[#fff]" />
+            <p className="mt-2 font-display text-2xl font-semibold text-[#fff]">Tu rutina personalizada</p>
+            <p className="mt-1 text-sm text-[#fee2e2]">Una evaluación corta para armar tus entrenamientos según tus objetivos y tu tiempo.</p>
+          </div>
+          <div className="space-y-3 p-5">
+            <div className="rounded-2xl bg-white/[0.04] p-4 text-center ring-1 ring-white/10">
+              <p className="text-3xl">🧪</p>
+              <p className="mt-1 font-semibold text-white">Estamos preparando tu evaluación</p>
+              <p className="mt-1 text-xs text-zinc-400">Muy pronto podrás responderla aquí mismo.</p>
+            </div>
+            {p && <p className="text-center text-xs text-zinc-400">Entrenas: <b className="text-zinc-200">{p.emoji} {p.label}</b></p>}
+            <button type="button" onClick={onClose} className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-bold text-[#fff] hover:bg-red-400">Entendido</button>
+          </div>
+        </div>
+      </div>
+    </BodyPortal>
+  );
+};
 
 /* ── La semana: un bloque con 7 días parejos ─────────────────────────────────────── */
 
@@ -138,6 +220,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const [dayOpen, setDayOpen] = useState<number | null>(null);
   const [train, setTrain] = useState<{ r: Routine; v: Version } | null>(null);
   const [muscle, setMuscle] = useState<MuscleId | null>(null);
+  const [personalize, setPersonalize] = useState(false);
   const today = weekdayOf(new Date());
   const week = api.training.week ?? {};
   const planned = Object.values(week).filter((d) => d.routine).length;
@@ -156,15 +239,16 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const setMode = async (mode: Mode) => {
     if (mode === 'mixta') return api.saveTraining({ ...api.training, mode });
     if (api.training.mode && api.training.mode !== 'mixta' && api.training.mode !== mode && !(await confirm({ title: `¿Cambiar tu semana a «${MODES.find((m) => m.id === mode)?.label}»?`, message: 'Los días se arman de nuevo con tus rutinas. Después puedes cambiar cualquier día.', confirmLabel: 'Cambiar' }))) return;
-    await api.saveTraining({ mode, week: weekFor(mode, api.routines) });
+    await api.saveTraining({ ...api.training, mode, week: weekFor(mode, api.routines) });
   };
-  const setDay = (wd: number, p: DayPlan) => api.saveTraining({ mode: 'mixta', week: { ...week, [String(wd)]: p } });
+  const setDay = (wd: number, p: DayPlan) => api.saveTraining({ ...api.training, mode: 'mixta', week: { ...week, [String(wd)]: p } });
 
   if (!api.ready) return <p className="text-sm text-zinc-500">Cargando Workout Pro…</p>;
   return (
     <div className="mx-auto max-w-7xl">
-      <h1 className="font-display text-3xl font-semibold text-white">🏋️ Workout Pro</h1>
-      <p className="mb-5 mt-1 text-sm text-zinc-400">Entrena bien, no hasta hacerte papilla: la calidad es hacer los ejercicios clave. Corto también vale.</p>
+      <Hero />
+      <PlacePicker value={api.training.place ?? null} onPick={(place) => api.saveTraining({ ...api.training, place })} />
+      <PersonalizeCTA onOpen={() => setPersonalize(true)} />
 
       <WeekBlock
         api={api}
@@ -240,6 +324,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
 
       {dayOpen !== null && <DayChooser wd={dayOpen} api={api} plan={week[String(dayOpen)] ?? { routine: null, version: 'completa' }} onSave={(p) => { setDay(dayOpen, p); setDayOpen(null); }} onEdit={(id) => { setDayOpen(null); setEditing(id); }} onClose={() => setDayOpen(null)} />}
       {editingRoutine && <RoutineEditor r={editingRoutine} api={api} onTrain={(v) => { setEditing(null); setTrain({ r: editingRoutine, v }); }} onClose={() => setEditing(null)} />}
+      {personalize && <PersonalizeModal place={api.training.place ?? null} onClose={() => setPersonalize(false)} />}
       {train && <TrainMode r={train.r} version={train.v} api={api} onClose={() => setTrain(null)} />}
     </div>
   );

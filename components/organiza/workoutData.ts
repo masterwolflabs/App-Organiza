@@ -247,7 +247,14 @@ export const exercisesOf = (r: Pick<Routine, 'exercises'>, v: Version) => (v ===
 
 export type DayPlan = { routine: string | null; version: Version };
 export type Mode = 'minimo' | 'semi' | 'pro' | 'express' | 'mixta' | 'descanso';
-export type Training = { mode?: Mode; week?: Record<string, DayPlan> };
+/** Dónde entrenas (MODIFICACIÓN 01, 17 nov): por ahora solo se elige y se guarda; la lógica de rutinas por lugar viene después. */
+export type Place = 'casa' | 'aire_libre' | 'gimnasio';
+export const PLACES: { id: Place; label: string; img: string; emoji: string }[] = [
+  { id: 'casa', label: 'En casa', img: '/workout/casa.webp', emoji: '🏠' },
+  { id: 'aire_libre', label: 'Al aire libre', img: '/workout/aire-libre.webp', emoji: '🌳' },
+  { id: 'gimnasio', label: 'Gimnasio', img: '/workout/gimnasio.webp', emoji: '🏋️' },
+];
+export type Training = { mode?: Mode; week?: Record<string, DayPlan>; place?: Place };
 
 export const MODES: { id: Mode; label: string; emoji: string; help: string }[] = [
   { id: 'minimo', label: 'Mínimo', emoji: '🛟', help: '3 días largos (los masivos). Con esto la semana está cumplida.' },
