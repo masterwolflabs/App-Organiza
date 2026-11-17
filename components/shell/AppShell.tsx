@@ -129,7 +129,8 @@ export function AppShell({ session }: { session: Session }) {
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('*')
+      // Solo las columnas del directorio (select * da 403: el resto del perfil no se lee así).
+      .select('"displayName", "avatarUrl"')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {

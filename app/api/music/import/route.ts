@@ -64,13 +64,15 @@ export async function POST(request: Request) {
   const { data: have } = await bucket.list(user.id, { search: src.key, limit: 5 });
   const hit = have?.find((f) => f.name.startsWith(`${src.key}.`));
   if (hit) {
-    // Ya estaba: solo se pide el nombre del archivo (un byte, no se baja de nuevo).
-    const head = await fetch(src.url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' }).catch(() => null);
-    await head?.body?.cancel().catch(() => {});
-    return Response.json({ audio: `storage:${user.id}/${hit.name}`, url: await sign(`${user.id}/${hit.name}`), name: nameOf(head?.headers.get('content-disposition') ?? '') });
+    // Ya estaba: se firma al tiro. El nombre se le pregunta a Drive con tope de 3 s (2026-11-18: esa
+    // pregunta a veces se quedaba colgada y la canción nunca sonaba); sin respuesta, va sin nombre.
+    const url = await sign(`${user.id}/${hit.name}`);
+    const head = await fetch(src.url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store', signal: AbortSignal.timeout(3000) }).catch(() => null);
+    head?.body?.cancel().catch(() => {});
+    return Response.json({ audio: `storage:${user.id}/${hit.name}`, url, name: nameOf(head?.headers.get('content-disposition') ?? '') });
   }
 
-  const res = await fetch(src.url, { redirect: 'follow', cache: 'no-store' }).catch(() => null);
+  const res = await fetch(src.url, { redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(50_000) }).catch(() => null);
   if (!res?.ok || !res.body) return Response.json({ error: 'Drive no entregó el archivo. Revisa que esté compartido «Cualquier persona con el enlace».' }, { status: 502 });
   const fileName = fileOf(res.headers.get('content-disposition') ?? '');
   const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
