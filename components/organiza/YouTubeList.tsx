@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { Video } from '@/components/organiza/model';
-import { resolveAudio } from '@/components/organiza/musicAudio';
+import { audioNames, resolveAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
 
 /**
@@ -109,7 +109,8 @@ function audioPlayer(host: HTMLElement, audio: string, title: string, start: num
     },
     getCurrentTime: () => el.currentTime || 0,
     getDuration: () => (Number.isFinite(el.duration) ? el.duration : 0),
-    getVideoData: () => ({ title }),
+    // El nombre real del archivo si Drive lo dijo (las guardadas antes decían «Audio de Google Drive»).
+    getVideoData: () => ({ title: audioNames.get(audio) || title }),
     mute: () => {
       el.muted = true;
     },

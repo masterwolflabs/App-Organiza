@@ -72,10 +72,16 @@ const signed = new Map<string, { url: string; until: number }>();
 
 /** La dirección que toca el reproductor (los archivos subidos se firman por 1 día). */
 const imported = new Map<string, Promise<string | null>>();
+/** El nombre real de cada link de Drive/Dropbox (lo dice Drive al traerlo). */
+export const audioNames = new Map<string, string>();
 export async function resolveAudio(audio: string): Promise<string | null> {
   // Link de Drive/Dropbox guardado antes del 18 nov: se trae a tu cuenta la primera vez y suena desde ahí.
   if (isCloudLink(audio)) {
-    if (!imported.has(audio)) imported.set(audio, audioFromLink(audio).then((r) => ('audio' in r ? r.audio : null)));
+    if (!imported.has(audio)) imported.set(audio, audioFromLink(audio).then((r) => {
+      if (!('audio' in r)) return null;
+      if (r.name && r.name !== linkName(audio)) audioNames.set(audio, r.name);
+      return r.audio;
+    }));
     const stored = await imported.get(audio)!;
     if (!stored) imported.delete(audio);
     return stored && stored.startsWith('storage:') ? resolveAudio(stored) : null;

@@ -32,6 +32,18 @@ function source(link: string): { url: string; key: string } | null {
   }
 }
 
+/** El nombre del archivo que manda Drive (en UTF-8 crudo: los headers llegan como latin1, «â€”» en vez de «—»). */
+function fileOf(raw: string) {
+  const disp = /[^\x00-\xff]/.test(raw) ? raw : Buffer.from(raw, 'latin1').toString('utf8');
+  const enc = disp.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  let file = disp.match(/filename="?([^";]+)"?/i)?.[1] ?? '';
+  try {
+    if (enc) file = decodeURIComponent(enc);
+  } catch {}
+  return file;
+}
+const nameOf = (raw: string) => fileOf(raw).replace(/\.[^.]+$/, '').trim().slice(0, 80);
+
 export async function POST(request: Request) {
   const user = await userOf(request);
   if (!user) return Response.json({ error: 'Inicia sesión.' }, { status: 401 });
@@ -43,18 +55,16 @@ export async function POST(request: Request) {
   const bucket = admin().storage.from('organiza-music');
   const { data: have } = await bucket.list(user.id, { search: src.key, limit: 5 });
   const hit = have?.find((f) => f.name.startsWith(`${src.key}.`));
-  if (hit) return Response.json({ audio: `storage:${user.id}/${hit.name}`, name: '' });
+  if (hit) {
+    // Ya estaba: solo se pide el nombre del archivo (un byte, no se baja de nuevo).
+    const head = await fetch(src.url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' }).catch(() => null);
+    await head?.body?.cancel().catch(() => {});
+    return Response.json({ audio: `storage:${user.id}/${hit.name}`, name: nameOf(head?.headers.get('content-disposition') ?? '') });
+  }
 
   const res = await fetch(src.url, { redirect: 'follow', cache: 'no-store' }).catch(() => null);
   if (!res?.ok || !res.body) return Response.json({ error: 'Drive no entregó el archivo. Revisa que esté compartido «Cualquier persona con el enlace».' }, { status: 502 });
-  // Drive manda el nombre en UTF-8 crudo (los headers llegan como latin1: «â€”» en vez de «—»).
-  const raw = res.headers.get('content-disposition') ?? '';
-  const disp = /[^\x00-\xff]/.test(raw) ? raw : Buffer.from(raw, 'latin1').toString('utf8');
-  const enc = disp.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  let fileName = disp.match(/filename="?([^";]+)"?/i)?.[1] ?? '';
-  try {
-    if (enc) fileName = decodeURIComponent(enc);
-  } catch {}
+  const fileName = fileOf(res.headers.get('content-disposition') ?? '');
   const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   const ext = EXT[type] ?? fileName.match(/\.(mp3|m4a|aac|wav|ogg|webm|flac)$/i)?.[1]?.toLowerCase();
   if (!ext) return Response.json({ error: type.includes('html') ? 'Drive pidió iniciar sesión: comparte el archivo como «Cualquier persona con el enlace».' : 'Ese archivo no es de audio (MP3, M4A o WAV).' }, { status: 400 });
@@ -77,6 +87,6 @@ export async function POST(request: Request) {
   const path = `${user.id}/${src.key}.${ext}`;
   const up = await bucket.upload(path, Buffer.concat(chunks), { contentType: MIME[ext] ?? 'audio/mpeg', upsert: true });
   if (up.error) return Response.json({ error: `No se pudo guardar: ${up.error.message}` }, { status: 500 });
-  const name = fileName.replace(/\.[^.]+$/, '').trim().slice(0, 80) || 'Audio de Google Drive';
+  const name = nameOf(res.headers.get('content-disposition') ?? '');
   return Response.json({ audio: `storage:${path}`, name });
 }
