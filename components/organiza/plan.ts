@@ -26,6 +26,8 @@ export type Meal = {
   steps: string;
   fast_hours: number | null;
   notes: string;
+  /** Nutrition Pro: la receta del recetario de la que viene (copia título, portada e ingredientes). */
+  recipe_id?: string | null;
 };
 
 export type Exercise = { name: string; sets: string; reps: string; weight: string; rest: string };
@@ -69,7 +71,7 @@ export function slotFor(title: string): string | null {
   if (/desayun/.test(t)) return 'desayuno';
   if (/almuerz/.test(t)) return 'almuerzo';
   if (/cena|comida de la noche/.test(t)) return 'cena';
-  if (/colaci|snack|merienda|once/.test(t)) return null;
+  if (/colaci|snack|merienda|once|aperitivo/.test(t)) return 'colacion-pm';
   return null;
 }
 

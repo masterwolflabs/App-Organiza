@@ -8,6 +8,8 @@ import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { ShoppingButton } from '@/components/organiza/Shopping';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
 import { MEAL_SLOTS, MUSCLES, sum, usePlan, useNutrition, WORKOUT_SLOTS, type Exercise, type Goals, type Meal, type PlanKind, type Workout } from '@/components/organiza/plan';
+import { CookMode, RecipeGallery } from '@/components/organiza/Recipes';
+import { CATEGORIES, categoryOfSlot, mealFromRecipe, useRecipes, type Recipe } from '@/components/organiza/recipeData';
 
 /**
  * 🍳 Alimentación y 🏋️ Entrenamiento (Emanuel, 2026-11-03): la semana como un calendario
@@ -40,8 +42,9 @@ const workoutSub = (w: Workout) => [w.muscles.join(', '), w.minutes ? `${w.minut
 
 /* ── Grilla semanal ──────────────────────────────────────────────────── */
 
-export const WeekPlanner: React.FC<{ kind: PlanKind }> = ({ kind }) => {
-  const plan = usePlan<Meal & Workout>(kind);
+export const WeekPlanner: React.FC<{ kind: PlanKind; plan?: PlanApi }> = ({ kind, plan: shared }) => {
+  const own = usePlan<Meal & Workout>(kind);
+  const plan = shared ?? own;
   const nutrition = useNutrition();
   const [open, setOpen] = useState<string | null>(null);
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -176,9 +179,25 @@ const MealPanel: React.FC<{ meal: Meal; plan: PlanApi; onClose: () => void }> = 
   const set = (p: Partial<Meal>) => plan.patch(m.id, p as Partial<Meal & Workout>);
   const [ing, setIng] = useState({ name: '', qty: '' });
   const slot = MEAL_SLOTS.find((s) => s.id === m.slot);
+  const recipes = useRecipes();
+  const [cooking, setCooking] = useState(false);
+  const linked = recipes.rows.find((r) => r.id === m.recipe_id) ?? null;
+  const cat = categoryOfSlot(m.slot);
+  const options = recipes.rows.filter((r) => !cat || r.category === cat);
   return (
+    <>
+    {cooking && linked && <CookMode r={linked} api={recipes} onClose={() => setCooking(false)} />}
     <Sheet title={m.title || 'Plato'} cover={m.cover_url} onCover={(c) => set({ cover_url: c })} onClose={onClose} weekday={m.weekday} onCopy={(d) => plan.copyTo(m.id, d)} onDelete={async () => { if (await confirm({ title: `¿Borrar «${m.title || 'este plato'}»?`, confirmLabel: 'Borrar', tone: 'danger' })) { await plan.remove(m.id); onClose(); } }}>
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{slot?.emoji} {slot?.label} · {WEEK[m.weekday]}</p>
+      {m.slot !== 'ayuno' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-orange-500/10 p-2.5 ring-1 ring-orange-400/25">
+          <select value={m.recipe_id ?? ''} onChange={(e) => { const r = recipes.rows.find((x) => x.id === e.target.value); if (r) set(mealFromRecipe(r) as Partial<Meal>); else set({ recipe_id: null }); }} aria-label="Receta del recetario" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10">
+            <option value="">🥗 Elegir del recetario…</option>
+            {options.map((r) => <option key={r.id} value={r.id}>{r.title || 'Sin nombre'}</option>)}
+          </select>
+          {linked && <button type="button" onClick={() => setCooking(true)} className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-bold text-[#fff] hover:bg-orange-400">🍳 Cocinar</button>}
+        </div>
+      )}
       <input key={`t${m.id}`} defaultValue={m.title} autoFocus={!m.title} placeholder="¿Qué vas a comer? Ej.: Huevos revueltos con café" onBlur={(e) => e.target.value !== m.title && set({ title: e.target.value })} className="w-full bg-transparent font-display text-2xl font-semibold text-white outline-none placeholder:text-zinc-600" />
       {m.slot === 'ayuno' ? (
         <label className="block text-xs text-zinc-400">Horas de ayuno<input type="number" min={0} step={0.5} defaultValue={m.fast_hours ?? ''} onBlur={(e) => set({ fast_hours: num(e.target.value) })} className={`${field} mt-1`} /></label>
@@ -209,6 +228,7 @@ const MealPanel: React.FC<{ meal: Meal; plan: PlanApi; onClose: () => void }> = 
       <label className="block text-sm font-semibold text-white">👩‍🍳 Preparación<textarea key={`s${m.id}`} defaultValue={m.steps} rows={5} placeholder="Paso a paso para prepararlo…" onBlur={(e) => e.target.value !== m.steps && set({ steps: e.target.value })} className={`${field} mt-1.5 font-normal`} /></label>
       <label className="block text-sm font-semibold text-white">📝 A tener en cuenta<textarea key={`n${m.id}`} defaultValue={m.notes} rows={2} onBlur={(e) => e.target.value !== m.notes && set({ notes: e.target.value })} className={`${field} mt-1.5 font-normal`} /></label>
     </Sheet>
+    </>
   );
 };
 
@@ -257,6 +277,45 @@ const WorkoutPanel: React.FC<{ workout: Workout; plan: PlanApi; onClose: () => v
 
 /* ── Conectado a una acción del Horario ──────────────────────────────── */
 
+/**
+ * La comida de una acción (Desayunar, Almorzar…) se conecta con la receta de ESE día (Emanuel, 2026-11-16):
+ * elegirla, repetirla en otros días de la acción y abrir el modo cocina. En vez de focus, la receta.
+ */
+const RecipeOfDay: React.FC<{ plan: PlanApi; day: number; slot: string | null; weekdays: number[] }> = ({ plan, day, slot, weekdays }) => {
+  const recipes = useRecipes();
+  const [cooking, setCooking] = useState(false);
+  const s = slot ?? 'desayuno';
+  const meal = plan.rows.find((r) => r.weekday === day && r.slot === s) as Meal | undefined;
+  const linked = recipes.rows.find((r) => r.id === meal?.recipe_id) ?? null;
+  const cat = categoryOfSlot(s);
+  const options = recipes.rows.filter((r) => !cat || r.category === cat);
+  const pick = async (id: string, days: number[]) => {
+    const r = recipes.rows.find((x) => x.id === id);
+    if (!r) return;
+    for (const d of days) {
+      const there = plan.rows.find((x) => x.weekday === d && x.slot === s);
+      if (there) await plan.patch(there.id, mealFromRecipe(r) as Partial<Meal & Workout>);
+      else await plan.add(d, s, { ...mealFromRecipe(r), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
+    }
+  };
+  const others = weekdays.filter((d) => d !== day);
+  return (
+    <div className="space-y-2 rounded-xl bg-orange-500/10 p-2.5 ring-1 ring-orange-400/25">
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={linked?.id ?? ''} onChange={(e) => e.target.value && pick(e.target.value, [day])} aria-label="Receta de este día" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10">
+          <option value="">🥗 Receta del {WEEK[day].toLowerCase()}…</option>
+          {options.map((r) => <option key={r.id} value={r.id}>{r.title || 'Sin nombre'}</option>)}
+        </select>
+        {linked && <button type="button" onClick={() => setCooking(true)} className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-bold text-[#fff] hover:bg-orange-400">🍳 Cocinar</button>}
+      </div>
+      {linked && others.length > 0 && (
+        <button type="button" onClick={() => pick(linked.id, others)} className="text-xs font-semibold text-orange-200 hover:text-orange-100">🔁 Repetir «{linked.title}» los otros días ({others.map((d) => SHORT[d]).join(', ')})</button>
+      )}
+      {cooking && linked && <CookMode r={linked} api={recipes} onClose={() => setCooking(false)} />}
+    </div>
+  );
+};
+
 /** Lo de Alimentación o Entrenamiento para el día de la acción (o los de hoy si la acción cae hoy). */
 export const PlanLink: React.FC<{ kind: PlanKind; weekdays: number[]; slot?: string | null }> = ({ kind, weekdays, slot }) => {
   const plan = usePlan<Meal & Workout>(kind);
@@ -273,6 +332,7 @@ export const PlanLink: React.FC<{ kind: PlanKind; weekdays: number[]; slot?: str
           <button key={d} type="button" onClick={() => setDay(d)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${d === day ? 'bg-sky-600 text-[#fff] ring-sky-500' : 'text-zinc-400 ring-white/15'}`}>{SHORT[d]}</button>
         ))}
       </div>
+      {kind === 'meals' && <RecipeOfDay plan={plan} day={day} slot={slot ?? null} weekdays={weekdays} />}
       {rows.length ? (
         <div className="grid grid-cols-2 gap-2">{rows.map((r) => <PlanCard key={r.id} big title={r.title} cover={r.cover_url} sub={kind === 'meals' ? mealSub(r) : workoutSub(r)} onOpen={() => setOpen(r.id)} />)}</div>
       ) : (
@@ -288,16 +348,63 @@ export const PlanLink: React.FC<{ kind: PlanKind; weekdays: number[]; slot?: str
   );
 };
 
-export const AlimentacionView: React.FC = () => (
-  <div className="mx-auto max-w-7xl">
-    <div className="flex flex-wrap items-center gap-3">
-      <h1 className="flex-1 font-display text-3xl font-semibold text-white">🍳 Alimentación</h1>
-      <ShoppingButton />
+/** 🗓️ Poner una receta en la semana: qué días y en qué momento (desayuno, almuerzo…). */
+const UseInWeek: React.FC<{ r: Recipe; plan: PlanApi; onClose: () => void }> = ({ r, plan, onClose }) => {
+  const cat = CATEGORIES.find((c) => c.id === r.category);
+  const slots = MEAL_SLOTS.filter((s) => s.id !== 'ayuno');
+  const [slot, setSlot] = useState(cat?.slots[0] ?? 'desayuno');
+  const [days, setDays] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    for (const d of days) {
+      const there = plan.rows.find((x) => x.weekday === d && x.slot === slot);
+      // Ese momento ya tenía un plato: lo cambia por la receta (uno por momento y día).
+      if (there) await plan.patch(there.id, mealFromRecipe(r) as Partial<Meal & Workout>);
+      else await plan.add(d, slot, { ...mealFromRecipe(r), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
+    }
+    setBusy(false);
+    onClose();
+  };
+  return (
+    <BodyPortal>
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+        <div role="dialog" aria-label="Poner en mi semana" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm space-y-3 rounded-2xl bg-[#14161b] p-5 ring-1 ring-white/10">
+          <p className="font-semibold text-white">🗓️ «{r.title}» en mi semana</p>
+          <select value={slot} onChange={(e) => setSlot(e.target.value)} className={field}>
+            {slots.map((s) => <option key={s.id} value={s.id}>{s.emoji} {s.label}</option>)}
+          </select>
+          <div className="flex flex-wrap gap-1.5">
+            {SHORT.map((w, d) => <button key={w} type="button" onClick={() => setDays((l) => (l.includes(d) ? l.filter((x) => x !== d) : [...l, d]))} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${days.includes(d) ? 'bg-orange-500 text-[#fff] ring-orange-400' : 'text-zinc-300 ring-white/15'}`}>{w}</button>)}
+            <button type="button" onClick={() => setDays([0, 1, 2, 3, 4, 5, 6])} className="rounded-full px-2.5 py-1 text-xs font-semibold text-orange-300 ring-1 ring-white/15">Todos</button>
+          </div>
+          <p className="text-[11px] text-zinc-500">Si ese día ya tenía algo en ese momento, se cambia por esta receta.</p>
+          <button type="button" disabled={!days.length || busy} onClick={save} className="w-full rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-[#fff] hover:bg-orange-400 disabled:opacity-50">{busy ? 'Guardando…' : `Poner en ${days.length || 0} ${days.length === 1 ? 'día' : 'días'}`}</button>
+        </div>
+      </div>
+    </BodyPortal>
+  );
+};
+
+/** 🥗 Nutrition Pro (Emanuel, 2026-11-16): el recetario en galería y, abajo, la semana. */
+export const AlimentacionView: React.FC = () => {
+  const recipes = useRecipes();
+  const plan = usePlan<Meal & Workout>('meals');
+  const [using, setUsing] = useState<Recipe | null>(null);
+  return (
+    <div className="mx-auto max-w-7xl">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="flex-1 font-display text-3xl font-semibold text-white">🥗 Nutrition Pro</h1>
+        <ShoppingButton />
+      </div>
+      <p className="mb-5 mt-1 text-sm text-zinc-400">Tu recetario: elige, cocina sin pensar y perfecciona. La 1ª te arriesgas, la 2ª te certificas, la 3ª te beneficias.</p>
+      <RecipeGallery api={recipes} onUse={setUsing} />
+      <h2 className="mb-3 mt-10 font-display text-2xl font-semibold text-white">🗓️ Tu semana</h2>
+      <WeekPlanner kind="meals" plan={plan} />
+      {using && <UseInWeek r={using} plan={plan} onClose={() => setUsing(null)} />}
     </div>
-    <p className="mb-5 mt-1 text-sm text-zinc-400">Tu semana de comidas: qué comes, cómo prepararlo y cuánto aporta.</p>
-    <WeekPlanner kind="meals" />
-  </div>
-);
+  );
+};
 
 export const EntrenamientoView: React.FC = () => (
   <div className="mx-auto max-w-7xl">
