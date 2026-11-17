@@ -57,13 +57,21 @@ export const isCloudLink = (link: string) => /^https:\/\/(drive\.google\.com|doc
  */
 export async function audioFromLink(link: string): Promise<{ audio: string; name: string } | { error: string }> {
   if (!isCloudLink(link)) return isAudioLink(link) ? { audio: link.trim(), name: linkName(link) } : { error: 'Pega un link de Google Drive, Dropbox o de un MP3.' };
+  // Drive/Dropbox: NO se copia (2026-11-18). Se revisa que suene y la canción guarda el link tal cual.
+  const r = await cloudUrl(link);
+  if ('error' in r) return r;
+  return { audio: link.trim(), name: r.name || linkName(link) };
+}
+
+/** Pide al servidor la dirección firmada (1 día) que trae la canción de Drive por partes. */
+async function cloudUrl(link: string): Promise<{ url: string; name: string } | { error: string }> {
   try {
     const r = await authFetch('/api/music/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link: link.trim() }) });
-    const j = (await r.json().catch(() => ({}))) as { audio?: string; name?: string; error?: string };
-    if (!r.ok || !j.audio) return { error: j.error || 'No pude traer el archivo. Intenta de nuevo.' };
-    return { audio: j.audio, name: j.name || linkName(link) };
+    const j = (await r.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+    if (!r.ok || !j.url) return { error: j.error || 'No pude abrir ese archivo. Intenta de nuevo.' };
+    return { url: j.url, name: j.name ?? '' };
   } catch {
-    return { error: 'No pude traer el archivo. Revisa tu internet.' };
+    return { error: 'No pude abrir ese archivo. Revisa tu internet.' };
   }
 }
 
@@ -74,7 +82,6 @@ export const isAudioLink = (link: string) => directAudioUrl(link) !== null;
  * ⚡ Cambio rápido (Daily focus-cambio-rapido, 2026-11-18): dónde quedó guardado cada link de Drive y el
  * permiso para tocarlo (1 día) se recuerdan en este equipo, así saltar a tu audio no pregunta nada a la red.
  */
-const LS_STORED = 'mp-music-stored';
 const LS_SIGNED = 'mp-music-signed';
 const lsRead = <T,>(k: string): Record<string, T> => {
   try {
@@ -95,24 +102,26 @@ export const audioNames = new Map<string, string>();
 
 /** La dirección que toca el reproductor (los archivos guardados se firman por 1 día). */
 export async function resolveAudio(audio: string): Promise<string | null> {
-  // Link de Drive/Dropbox guardado antes del 18 nov: se trae a tu cuenta la primera vez y suena desde ahí.
+  // Link de Drive/Dropbox: suena pasando por el servidor (sin copiarse). La dirección firmada se recuerda 1 día.
   if (isCloudLink(audio)) {
-    const known = lsRead<{ audio: string; name?: string }>(LS_STORED)[audio];
-    if (known) {
-      if (known.name) audioNames.set(audio, known.name);
-      return resolveAudio(known.audio);
+    const saved = lsRead<{ url: string; until: number; name?: string }>(LS_SIGNED)[audio];
+    if (saved && saved.until > Date.now()) {
+      if (saved.name) audioNames.set(audio, saved.name);
+      return saved.url;
     }
     if (!imported.has(audio))
-      imported.set(audio, audioFromLink(audio).then((r) => {
-        if (!('audio' in r)) return null;
+      imported.set(audio, cloudUrl(audio).then((r) => {
+        if ('error' in r) return null;
         const name = r.name && r.name !== linkName(audio) ? r.name : undefined;
         if (name) audioNames.set(audio, name);
-        lsWrite(LS_STORED, { ...lsRead(LS_STORED), [audio]: { audio: r.audio, name } });
-        return r.audio;
+        const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
+        for (const k of Object.keys(all)) if (all[k].until < Date.now()) delete all[k];
+        lsWrite(LS_SIGNED, { ...all, [audio]: { url: r.url, until: Date.now() + 80_000_000, name } });
+        return r.url;
       }));
-    const stored = await imported.get(audio)!;
-    if (!stored) imported.delete(audio);
-    return stored && stored.startsWith('storage:') ? resolveAudio(stored) : null;
+    const url = await imported.get(audio)!;
+    imported.delete(audio);
+    return url;
   }
   if (!audio.startsWith('storage:')) return directAudioUrl(audio);
   const path = audio.slice('storage:'.length);
@@ -137,10 +146,10 @@ export async function resolveAudio(audio: string): Promise<string | null> {
 
 /** Olvida lo recordado de un audio (si su permiso guardado ya no sirve, se pide uno nuevo). */
 export function forgetAudio(audio: string) {
-  const stored = lsRead<{ audio: string }>(LS_STORED);
-  const path = (stored[audio]?.audio ?? audio).replace(/^storage:/, '');
+  const path = audio.replace(/^storage:/, '');
   const all = lsRead<{ url: string; until: number }>(LS_SIGNED);
   delete all[path];
+  delete all[audio];
   lsWrite(LS_SIGNED, all);
   signed.delete(path);
 }
