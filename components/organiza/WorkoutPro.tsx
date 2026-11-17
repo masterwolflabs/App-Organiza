@@ -58,10 +58,81 @@ const RoutineCard: React.FC<{ r: Routine; version?: Version; sub?: string; done?
   </div>
 );
 
+/* ── La semana: un bloque con 7 días parejos ─────────────────────────────────────── */
+
+const WeekBlock: React.FC<{
+  api: WorkoutApi;
+  week: Record<string, DayPlan>;
+  today: number;
+  monday: Date;
+  status: { met: boolean; text: string };
+  doneOn: (wd: number) => boolean;
+  onMode: (m: Mode) => void;
+  onDay: (wd: number) => void;
+  onTrain: (r: Routine, v: Version) => void;
+}> = ({ api, week, today, monday, status, doneOn, onMode, onDay, onTrain }) => (
+  <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
+    <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-3">
+      <div className="min-w-0 flex-1">
+        <h2 className="font-display text-xl font-semibold text-white">🗓️ Tu semana</h2>
+        <p className={`mt-0.5 text-xs font-semibold ${status.met ? 'text-emerald-300' : 'text-zinc-400'}`}>{status.text}</p>
+      </div>
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-white/[0.04] p-1 ring-1 ring-white/10">
+        {MODES.map((m) => (
+          <button key={m.id} type="button" data-help={m.help} onClick={() => onMode(m.id)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] shadow' : 'text-zinc-400 hover:text-zinc-100'}`}>{m.emoji} {m.label}</button>
+        ))}
+      </div>
+    </div>
+    <div className="-mx-1 grid snap-x auto-cols-[minmax(138px,1fr)] grid-flow-col gap-2.5 overflow-x-auto px-1 pb-1">
+      {WEEK.map((w, wd) => {
+        const p = week[String(wd)] ?? { routine: null, version: 'completa' as Version };
+        const r = api.routines.find((x) => x.id === p.routine);
+        const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + wd);
+        const done = doneOn(wd);
+        const isToday = wd === today;
+        return (
+          <div key={wd} className={`flex snap-start flex-col overflow-hidden rounded-2xl bg-[#17191f] ring-1 transition ${isToday ? 'ring-red-400/60' : done ? 'ring-emerald-400/40' : 'ring-white/10 hover:ring-white/20'}`}>
+            <button type="button" onClick={() => onDay(wd)} className="flex flex-1 flex-col text-left">
+              <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2">
+                <span className={`text-xs font-bold ${isToday ? 'text-red-300' : 'text-zinc-300'}`}>{SHORT[wd]} <span className="font-normal opacity-70">{date.getDate()}</span></span>
+                {done ? <span className="rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-[#09090b]">✓</span> : isToday ? <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-[#fff]">hoy</span> : null}
+              </div>
+              <div className="relative mx-2 h-20 overflow-hidden rounded-xl bg-white/[0.03]" style={r ? coverCss(r.cover_url) : undefined}>
+                {r ? (
+                  !r.cover_url && <MuscleCover muscles={routineMuscles(r, p.version)} fallback={<span className="absolute inset-0 flex items-center justify-center text-3xl">{r.emoji}</span>} />
+                ) : (
+                  <span className="absolute inset-0 flex items-center justify-center text-2xl">🌿</span>
+                )}
+                {r?.code && <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-px text-[10px] font-bold text-[#fff] backdrop-blur">{r.code === 'cerro' ? '⛰️' : r.code}</span>}
+              </div>
+              <div className="flex-1 px-2.5 py-2">
+                <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{r ? r.title : 'Descanso'}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">{r ? `${p.version === 'corta' ? '⚡ Corta' : 'Completa'} · ${minutesOf(r, p.version)} min` : done ? 'Igual entrenaste 💪' : 'Recupera'}</p>
+              </div>
+            </button>
+            {r ? (
+              <button type="button" onClick={() => onTrain(r, p.version)} className={`flex items-center justify-center gap-1 border-t border-white/10 py-1.5 text-[11px] font-bold ${isToday ? 'bg-red-500 text-[#fff] hover:bg-red-400' : 'text-red-200 hover:bg-red-500/15'}`}>
+                <Play className="h-3 w-3" /> Entrenar
+              </button>
+            ) : (
+              <span className="border-t border-white/5 py-1.5 text-center text-[11px] text-zinc-600">—</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </section>
+);
+
 /* ── Vista ────────────────────────────────────────────────────────────────────────── */
 
 export const WorkoutProView: React.FC = () => {
   const api = useWorkoutPro();
+  return <WorkoutProScreen api={api} />;
+};
+
+/** La pantalla con su `api` (separada para poder mostrarla con datos de prueba). */
+export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const confirm = useConfirm();
   const [editing, setEditing] = useState<string | null>(null);
   const [dayOpen, setDayOpen] = useState<number | null>(null);
@@ -93,40 +164,21 @@ export const WorkoutProView: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl">
       <h1 className="font-display text-3xl font-semibold text-white">🏋️ Workout Pro</h1>
-      <p className="mb-4 mt-1 text-sm text-zinc-400">Entrena bien, no hasta hacerte papilla: la calidad es hacer los ejercicios clave. Corto también vale.</p>
+      <p className="mb-5 mt-1 text-sm text-zinc-400">Entrena bien, no hasta hacerte papilla: la calidad es hacer los ejercicios clave. Corto también vale.</p>
 
-      <div className={`mb-5 rounded-2xl px-4 py-3 text-sm font-semibold ring-1 ${status.met ? 'bg-emerald-500/10 text-emerald-100 ring-emerald-400/30' : 'bg-white/[0.04] text-zinc-100 ring-white/10'}`}>{status.text}</div>
+      <WeekBlock
+        api={api}
+        week={week}
+        today={today}
+        monday={monday}
+        status={status}
+        doneOn={doneOn}
+        onMode={setMode}
+        onDay={setDayOpen}
+        onTrain={(r, v) => setTrain({ r, v })}
+      />
 
-      <section>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 className="mr-2 font-display text-xl font-semibold text-white">🗓️ Tu semana</h2>
-          {MODES.map((m) => (
-            <button key={m.id} type="button" data-help={m.help} onClick={() => setMode(m.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15 hover:bg-white/[0.06]'}`}>{m.emoji} {m.label}</button>
-          ))}
-        </div>
-        <div className="-mx-1 grid snap-x snap-mandatory auto-cols-[minmax(150px,1fr)] grid-flow-col gap-3 overflow-x-auto px-1 pb-2 lg:auto-cols-fr">
-          {WEEK.map((w, wd) => {
-            const p = week[String(wd)] ?? { routine: null, version: 'completa' as Version };
-            const r = api.routines.find((x) => x.id === p.routine);
-            return (
-              <div key={wd} className="snap-start">
-                <p className={`mb-1 text-xs font-semibold ${wd === today ? 'text-red-300' : 'text-zinc-400'}`}>{w}{wd === today ? ' · hoy' : ''}</p>
-                {r ? (
-                  <RoutineCard r={r} version={p.version} done={doneOn(wd)} sub={`${p.version === 'corta' ? '⚡ Corta' : '🏋️ Completa'} · ~${minutesOf(r, p.version)} min`} onOpen={() => setDayOpen(wd)} onTrain={() => setTrain({ r, v: p.version })} />
-                ) : (
-                  <button type="button" onClick={() => setDayOpen(wd)} className={`flex h-[196px] w-full flex-col items-center justify-center gap-1 rounded-2xl ring-1 ${doneOn(wd) ? 'bg-emerald-500/10 ring-emerald-400/40' : 'bg-white/[0.02] ring-white/10 hover:ring-white/25'}`}>
-                    <span className="text-3xl">🌿</span>
-                    <span className="text-sm font-semibold text-zinc-300">Descanso</span>
-                    <span className="text-[11px] text-zinc-500">{doneOn(wd) ? '✓ Igual entrenaste' : 'Toca para cambiar'}</span>
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
@@ -139,9 +191,9 @@ export const WorkoutProView: React.FC = () => {
           </section>
         </div>
 
-        <aside className="space-y-5 lg:sticky lg:top-4 lg:self-start">
-          <section className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10">
-            <h2 className="mb-3 text-sm font-semibold text-white">🧍 Lo que entrenaste</h2>
+        <aside className="min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
+          <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
+            <h2 className="mb-1 font-display text-xl font-semibold text-white">🧍 Lo que entrenaste</h2>
             <BodyMap3D counts={api.counts} picked={muscle} onPick={setMuscle} />
             {muscle && (
               <div className="mt-3 rounded-xl bg-black/25 p-3 text-xs text-zinc-300">
@@ -151,7 +203,7 @@ export const WorkoutProView: React.FC = () => {
               </div>
             )}
           </section>
-          <section className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10">
+          <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <h2 className="mb-2 text-sm font-semibold text-white">📈 Fuerza</h2>
             {progress.length ? (
               <ul className="space-y-1">
@@ -169,7 +221,7 @@ export const WorkoutProView: React.FC = () => {
             )}
           </section>
           {api.logs.length > 0 && (
-            <section className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10">
+            <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
               <h2 className="mb-2 text-sm font-semibold text-white">🗒️ Últimos entrenos</h2>
               <ul className="space-y-1">
                 {api.logs.slice(0, 6).map((l) => (

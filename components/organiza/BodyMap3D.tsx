@@ -40,6 +40,8 @@ export const BodyMap3D: React.FC<Props> = ({ counts, picked, onPick }) => {
     const canvas = renderer.domElement;
     canvas.style.touchAction = 'none';
     canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
     canvas.setAttribute('aria-label', 'Cuerpo en 3D: arrastra para girar, pellizca o usa la rueda para acercar');
     el.appendChild(canvas);
     const scene = new THREE.Scene();
@@ -73,8 +75,6 @@ export const BodyMap3D: React.FC<Props> = ({ counts, picked, onPick }) => {
       const w = el.clientWidth || 300;
       const h = el.clientHeight || 420;
       renderer.setSize(w, h, false);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
       render();
@@ -150,9 +150,9 @@ export const BodyMap3D: React.FC<Props> = ({ counts, picked, onPick }) => {
 
   if (state === 'flat') return <BodyMap body={null} counts={counts} onPick={onPick} />;
   return (
-    <div>
+    <div className="min-w-0">
       <div className="relative">
-        <div ref={box} className="h-[440px] w-full cursor-grab select-none active:cursor-grabbing" />
+        <div ref={box} className="h-[440px] w-full overflow-hidden cursor-grab select-none active:cursor-grabbing" />
         {state === 'loading' && <p className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">Cargando tu cuerpo en 3D…</p>}
         {hover && <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-[#fff]">{muscleLabel(hover)} · {counts[hover] ?? 0} en 7 días</span>}
         {state === 'ok' && (
