@@ -147,8 +147,8 @@ export const FocusTimer: React.FC<{ item: Item; checks: ReturnType<typeof useChe
   return (
     <BodyPortal>
       <div role="dialog" aria-label={`Focus: ${item.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col items-center overflow-y-auto bg-[#09090b] p-6 text-center">
-        <div className="absolute inset-0 opacity-25" style={coverCss(item.cover_url)} />
-        {late && !allDone && <div className="pointer-events-none absolute inset-0 animate-pulse bg-rose-600/20" />}
+        <div className="pointer-events-none fixed inset-0 opacity-25" style={coverCss(item.cover_url)} />
+        {late && !allDone && <div className="pointer-events-none fixed inset-0 animate-pulse bg-rose-600/20" />}
         <button type="button" onClick={leave} aria-label="Salir del modo focus" className="absolute right-4 top-4 z-10 rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
 
         <div className="relative my-auto w-full max-w-md py-10">
