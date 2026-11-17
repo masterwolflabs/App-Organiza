@@ -191,7 +191,7 @@ const MealPanel: React.FC<{ meal: Meal; plan: PlanApi; onClose: () => void }> = 
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{slot?.emoji} {slot?.label} · {WEEK[m.weekday]}</p>
       {m.slot !== 'ayuno' && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-orange-500/10 p-2.5 ring-1 ring-orange-400/25">
-          <select value={m.recipe_id ?? ''} onChange={(e) => { const r = recipes.rows.find((x) => x.id === e.target.value); if (r) set(mealFromRecipe(r) as Partial<Meal>); else set({ recipe_id: null }); }} aria-label="Receta del recetario" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10">
+          <select value={m.recipe_id ?? ''} onChange={(e) => { const r = recipes.rows.find((x) => x.id === e.target.value); if (r) set(mealFromRecipe(r, m.weekday) as Partial<Meal>); else set({ recipe_id: null }); }} aria-label="Receta del recetario" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10">
             <option value="">🥗 Elegir del recetario…</option>
             {options.map((r) => <option key={r.id} value={r.id}>{r.title || 'Sin nombre'}</option>)}
           </select>
@@ -294,8 +294,8 @@ const RecipeOfDay: React.FC<{ plan: PlanApi; day: number; slot: string | null; w
     if (!r) return;
     for (const d of days) {
       const there = plan.rows.find((x) => x.weekday === d && x.slot === s);
-      if (there) await plan.patch(there.id, mealFromRecipe(r) as Partial<Meal & Workout>);
-      else await plan.add(d, s, { ...mealFromRecipe(r), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
+      if (there) await plan.patch(there.id, mealFromRecipe(r, d) as Partial<Meal & Workout>);
+      else await plan.add(d, s, { ...mealFromRecipe(r, d), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
     }
   };
   const others = weekdays.filter((d) => d !== day);
@@ -360,8 +360,8 @@ const UseInWeek: React.FC<{ r: Recipe; plan: PlanApi; onClose: () => void }> = (
     for (const d of days) {
       const there = plan.rows.find((x) => x.weekday === d && x.slot === slot);
       // Ese momento ya tenía un plato: lo cambia por la receta (uno por momento y día).
-      if (there) await plan.patch(there.id, mealFromRecipe(r) as Partial<Meal & Workout>);
-      else await plan.add(d, slot, { ...mealFromRecipe(r), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
+      if (there) await plan.patch(there.id, mealFromRecipe(r, d) as Partial<Meal & Workout>);
+      else await plan.add(d, slot, { ...mealFromRecipe(r, d), steps: '', notes: '', fast_hours: null } as Partial<Meal & Workout>);
     }
     setBusy(false);
     onClose();

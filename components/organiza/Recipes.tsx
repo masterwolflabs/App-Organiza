@@ -5,12 +5,12 @@ import { Check, ChefHat, ChevronDown, Eye, EyeOff, Minus, Pause, Play, Plus, Ski
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
-import { coverCss } from '@/components/organiza/model';
+import { coverCss, weekdayOf } from '@/components/organiza/model';
 import { parseYouTube } from '@/components/organiza/YouTubeList';
 import { playOnce } from '@/components/organiza/sounds';
 import { notify } from '@/components/organiza/notify';
 import {
-  CATEGORIES, NEEDS, UNIT_MODES, needOf, showQty, totalMinutes,
+  CATEGORIES, NEEDS, UNIT_MODES, choiceFor, needOf, showQty, stepSpan, totalMinutes,
   type Recipe, type RecipeCategory, type RecipeIngredient, type RecipeStep, type RecipesApi, type UnitMode,
 } from '@/components/organiza/recipeData';
 import { SPOTIFY_ID, spotifyConnect, spotifyConnected, spotifyDisconnect, spotifyNext, spotifyNow, spotifyPause, spotifyPlay, spotifyPrev, spotifyVolume, type NowPlaying } from '@/lib/spotify';
@@ -133,11 +133,11 @@ export const Timeline: React.FC<{ steps: RecipeStep[]; now?: number | null; done
             {steps.filter((s) => s.track === t).map((s) => (
               <div
                 key={s.id}
-                data-help={`${s.text} · min ${s.at}${s.minutes ? `–${s.at + s.minutes}` : ''}`}
+                data-help={`${s.text} · min ${s.at}${s.minutes ? `–${s.at + stepSpan(s)}` : ''}${s.repeat && s.repeat > 1 ? ` (${s.repeat} tandas de ${s.minutes} min)` : ''}`}
                 className={`absolute inset-y-0.5 flex items-center overflow-hidden rounded px-1.5 text-[10px] font-semibold text-[#fff] ${TRACK_CLS[t % 3]} ${done.includes(s.id) ? 'opacity-35' : ''}`}
-                style={{ left: `${(s.at / total) * 100}%`, width: `${Math.max(2, ((s.minutes ?? 1) / total) * 100)}%` }}
+                style={{ left: `${(s.at / total) * 100}%`, width: `${Math.max(2, (stepSpan(s) / total) * 100)}%` }}
               >
-                <span className="truncate">{s.minutes ? `⏱ ${s.text}` : s.text}</span>
+                <span className="truncate">{s.minutes ? `⏱${s.repeat && s.repeat > 1 ? `×${s.repeat}` : ''} ${s.text}` : s.text}</span>
               </div>
             ))}
           </div>
@@ -208,7 +208,7 @@ const RecipeSheet: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => void; o
               </div>
               <ul className="space-y-1">
                 {r.ingredients.map((x, i) => (
-                  <li key={`${r.id}-${i}-${x.name}`} className="flex items-center gap-1.5 text-sm">
+                  <li key={`${r.id}-${i}-${x.name}`} className="flex flex-wrap items-center gap-1.5 text-sm">
                     {mode === 'original' ? (
                       <>
                         <input defaultValue={x.qty ?? ''} placeholder="—" aria-label="Cantidad" onBlur={(e) => setIngredient(i, { qty: num(e.target.value) })} className="w-12 rounded-md bg-white/[0.04] px-1.5 py-1 text-center text-xs text-zinc-200 outline-none" />
@@ -218,7 +218,11 @@ const RecipeSheet: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => void; o
                       <span className="w-32 shrink-0 text-xs font-semibold text-orange-200">{showQty(x, mode)}</span>
                     )}
                     <input defaultValue={x.name} aria-label="Ingrediente" onBlur={(e) => e.target.value.trim() && setIngredient(i, { name: e.target.value.trim() })} className="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-zinc-100 outline-none focus:bg-white/[0.05]" />
+                    <button type="button" onClick={() => setIngredient(i, { choices: x.choices?.length ? [] : [x.name] })} data-help="A elección: cada día te sugiere una opción distinta (ej. la fruta)" className={`rounded-md px-1 text-xs ${x.choices?.length ? 'bg-orange-500/20 text-orange-200' : 'text-zinc-600 hover:text-zinc-300'}`}>🎲</button>
                     <button type="button" aria-label={`Quitar ${x.name}`} onClick={() => set({ ingredients: r.ingredients.filter((_, j) => j !== i) })} className="p-1 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                    {!!x.choices?.length && (
+                      <input defaultValue={x.choices.join(', ')} aria-label="Opciones" placeholder="Opciones separadas por coma" onBlur={(e) => setIngredient(i, { choices: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} className="basis-full rounded-md bg-orange-500/10 px-2 py-1 text-xs text-orange-100 outline-none ring-1 ring-orange-400/20" />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -241,6 +245,7 @@ const RecipeSheet: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => void; o
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
                       <label className="flex items-center gap-1">Parte en el min <input key={`a${s.id}${s.at}`} type="number" min={0} defaultValue={s.at} onBlur={(e) => setStep(s.id, { at: Math.max(0, num(e.target.value) ?? 0) })} className="w-12 rounded bg-white/[0.06] px-1 text-center text-zinc-100 outline-none" /></label>
                       <label className="flex items-center gap-1">⏱ Timer <input key={`m${s.id}${s.minutes}`} type="number" min={0} defaultValue={s.minutes ?? ''} placeholder="no" onBlur={(e) => setStep(s.id, { minutes: num(e.target.value) || null })} className="w-12 rounded bg-white/[0.06] px-1 text-center text-zinc-100 outline-none" /> min</label>
+                      {s.minutes ? <label className="flex items-center gap-1" data-help="Por tandas: el timer se repite y suena en cada una (ej. 10 panqueques)">× <input key={`r${s.id}${s.repeat}`} type="number" min={1} defaultValue={s.repeat ?? 1} onBlur={(e) => setStep(s.id, { repeat: Math.max(1, Math.round(num(e.target.value) ?? 1)) })} className="w-10 rounded bg-white/[0.06] px-1 text-center text-zinc-100 outline-none" /> tandas</label> : null}
                       <span className="flex items-center gap-0.5">Carril {TRACKS.map((t, k) => <button key={t} type="button" onClick={() => setStep(s.id, { track: k })} className={`h-5 w-5 rounded text-[10px] font-bold ${s.track === k ? `${TRACK_CLS[k]} text-[#fff]` : 'bg-white/[0.06] text-zinc-400'}`}>{t}</button>)}</span>
                       <button type="button" aria-label="Quitar paso" onClick={() => set({ steps: r.steps.filter((x) => x.id !== s.id) })} className="ml-auto p-0.5 text-zinc-600 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
                     </div>
@@ -349,6 +354,8 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
   const [split, setSplit] = useState(() => Number(lsGet('mp-cocina-split')) || 70);
   const [mode, setMode] = useState<UnitMode>('original');
   const [have, setHave] = useState<number[]>([]);
+  const [skips, setSkips] = useState<Record<number, number>>({});
+  const weekday = weekdayOf(new Date());
   const [done, setDone] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
@@ -364,11 +371,15 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
   // Suena cuando un timer termina (una vez por paso).
   useEffect(() => {
     for (const s of steps) {
-      if (!s.minutes || done.includes(s.id) || rang.current.includes(s.id)) continue;
-      if (elapsed >= (s.at + s.minutes) * 60) {
-        rang.current.push(s.id);
+      if (!s.minutes || done.includes(s.id)) continue;
+      // Por tandas: suena al final de cada una (pim, pim, pim…).
+      const n = Math.max(1, s.repeat ?? 1);
+      for (let k = 1; k <= n; k++) {
+        const key = `${s.id}:${k}`;
+        if (rang.current.includes(key) || elapsed < (s.at + s.minutes * k) * 60) continue;
+        rang.current.push(key);
         playOnce('alarma');
-        void notify(`⏱ ¡Listo! ${s.text}`, r.title);
+        void notify(n > 1 ? `⏱ Tanda ${k} de ${n} lista` : `⏱ ¡Listo! ${s.text}`, n > 1 ? `${s.text} · ${r.title}` : r.title);
       }
     }
   }, [elapsed, steps, done, r.title]);
@@ -383,7 +394,7 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
     if (done.includes(s.id)) return 'hecho';
     if (!running && elapsed === 0) return 'espera';
     if (nowMin < s.at) return 'pronto';
-    if (s.minutes && nowMin >= s.at + s.minutes) return 'listo';
+    if (s.minutes && nowMin >= s.at + stepSpan(s)) return 'listo';
     return 'ahora';
   };
   return (
@@ -427,8 +438,9 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
                       <button type="button" onClick={() => setHave((l) => (on ? l.filter((k) => k !== i) : [...l, i]))} className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/[0.04] ${on ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
                         <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ring-1 ${on ? 'bg-emerald-500 ring-emerald-400' : 'ring-white/25'}`}>{on && <Check className="h-3.5 w-3.5 text-[#fff]" />}</span>
                         <span className="w-28 shrink-0 text-xs font-semibold text-orange-200">{showQty(x, mode)}</span>
-                        <span className="min-w-0 flex-1">{x.name}</span>
+                        <span className="min-w-0 flex-1">{x.choices?.length ? <>{choiceFor(x, weekday, skips[i] ?? 0, r.title)} <span className="text-[10px] text-zinc-500">· sugerencia de hoy</span></> : x.name}</span>
                       </button>
+                      {!!x.choices?.length && x.choices.length > 1 && <button type="button" onClick={() => setSkips((k) => ({ ...k, [i]: (k[i] ?? 0) + 1 }))} className="ml-[3.25rem] text-[11px] font-semibold text-orange-300 hover:text-orange-200">↻ No tengo, otra</button>}
                     </li>
                   );
                 })}
@@ -440,7 +452,9 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
               <ul className="space-y-1.5">
                 {steps.map((s) => {
                   const state = stateOf(s);
-                  const left = s.minutes ? (s.at + s.minutes) * 60 - elapsed : null;
+                  const n = Math.max(1, s.repeat ?? 1);
+                  const batch = s.minutes && n > 1 ? Math.min(n, Math.floor((elapsed / 60 - s.at) / s.minutes) + 1) : null;
+                  const left = s.minutes ? (s.at + s.minutes * (batch ?? 1)) * 60 - elapsed : null;
                   return (
                     <li key={s.id}>
                       <button type="button" onClick={() => toggleDone(s.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ring-1 transition ${state === 'ahora' ? 'bg-orange-500/15 ring-orange-400/60' : state === 'listo' ? 'animate-pulse bg-emerald-500/15 ring-emerald-400/60' : state === 'hecho' ? 'bg-white/[0.02] opacity-50 ring-white/5' : 'bg-white/[0.03] ring-white/10'}`}>
@@ -449,8 +463,8 @@ export const CookMode: React.FC<{ r: Recipe; api: RecipesApi; onClose: () => voi
                         <span className={`min-w-0 flex-1 text-sm ${state === 'hecho' ? 'line-through' : 'text-zinc-100'} ${state === 'ahora' ? 'font-semibold' : ''}`}>{s.text}</span>
                         <span className="shrink-0 text-right text-xs tabular-nums">
                           {state === 'pronto' && <span className="text-zinc-500">en {mmss(s.at * 60 - elapsed)}</span>}
-                          {state === 'espera' && <span className="text-zinc-500">min {s.at}{s.minutes ? ` · ⏱ ${s.minutes}′` : ''}</span>}
-                          {state === 'ahora' && left !== null && <span className="font-bold text-orange-200">⏱ {mmss(left)}</span>}
+                          {state === 'espera' && <span className="text-zinc-500">min {s.at}{s.minutes ? ` · ⏱ ${s.minutes}′${n > 1 ? ` ×${n}` : ''}` : ''}</span>}
+                          {state === 'ahora' && left !== null && <span className="font-bold text-orange-200">{batch ? `${batch}/${n} · ` : ''}⏱ {mmss(left)}</span>}
                           {state === 'ahora' && left === null && <span className="font-semibold text-orange-200">ahora</span>}
                           {state === 'listo' && <span className="font-bold text-emerald-200">¡listo!</span>}
                         </span>
@@ -478,9 +492,10 @@ const TimesReview: React.FC<{ r: Recipe; api: RecipesApi; onCancel: () => void; 
     // Un timer más corto o más largo corre lo que venía después de él (ej. «pasa los huevos a agua fría»).
     let steps = r.steps.map((s) => ({ ...s }));
     for (const t of timed) {
-      const delta = Math.max(1, mins[t.id]) - (t.minutes ?? 0);
+      const reps = Math.max(1, t.repeat ?? 1);
+      const delta = (Math.max(1, mins[t.id]) - (t.minutes ?? 0)) * reps;
       if (!delta) continue;
-      const end = t.at + (t.minutes ?? 0);
+      const end = t.at + stepSpan(t);
       steps = steps.map((s) => (s.id === t.id ? { ...s, minutes: Math.max(1, mins[t.id]) } : s.at >= end ? { ...s, at: Math.max(0, s.at + delta) } : s));
     }
     const notes = note.trim() ? `${r.notes ? `${r.notes}\n` : ''}${new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}: ${note.trim()}` : r.notes;
@@ -497,7 +512,7 @@ const TimesReview: React.FC<{ r: Recipe; api: RecipesApi; onCancel: () => void; 
           <ul className="space-y-1.5">
             {timed.map((s) => (
               <li key={s.id} className="flex items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-sm text-zinc-100">
-                <span className="min-w-0 flex-1 truncate">{s.text}</span>
+                <span className="min-w-0 flex-1 truncate">{s.text}{s.repeat && s.repeat > 1 ? <span className="text-zinc-500"> · por tanda</span> : null}</span>
                 <button type="button" aria-label="Un minuto menos" onClick={() => setMins((m) => ({ ...m, [s.id]: Math.max(1, m[s.id] - 1) }))} className="rounded-lg bg-white/[0.08] p-1 hover:bg-white/[0.14]"><Minus className="h-3.5 w-3.5" /></button>
                 <span className={`w-14 text-center tabular-nums ${mins[s.id] !== s.minutes ? 'font-bold text-orange-200' : ''}`}>{mins[s.id]} min</span>
                 <button type="button" aria-label="Un minuto más" onClick={() => setMins((m) => ({ ...m, [s.id]: m[s.id] + 1 }))} className="rounded-lg bg-white/[0.08] p-1 hover:bg-white/[0.14]"><Plus className="h-3.5 w-3.5" /></button>
