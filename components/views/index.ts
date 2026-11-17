@@ -18,6 +18,7 @@ import { ConexionesView } from '@/components/views/ConexionesView';
 import { ConceptosView } from '@/components/views/ConceptosView';
 import { AlimentacionView } from '@/components/organiza/Planner';
 import { WorkoutProView } from '@/components/organiza/WorkoutPro';
+import { ComprasView } from '@/components/organiza/Compras';
 import { AvisosView } from '@/components/views/AvisosView';
 import { TiempoView } from '@/components/views/TiempoView';
 
@@ -37,6 +38,7 @@ export const VIEWS: Record<SectionKey, React.FC<ViewProps>> = {
   conexiones: ConexionesView,
   alimentacion: AlimentacionView,
   entrenamiento: WorkoutProView,
+  compras: ComprasView,
 };
 
 /** Páginas propias de Organiza dentro de Configuración. */
