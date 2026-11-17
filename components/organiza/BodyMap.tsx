@@ -11,8 +11,8 @@ import { muscleLabel, type MuscleId } from '@/components/organiza/workoutData';
 
 type Shape = { m: MuscleId; d?: string; e?: [number, number, number, number, number?] };
 
-const fill = (n: number) => (n >= 2 ? 'rgba(239,68,68,0.92)' : n === 1 ? 'rgba(248,113,113,0.42)' : 'rgba(255,255,255,0.03)');
-const stroke = (n: number) => (n >= 2 ? 'rgba(254,202,202,0.9)' : n === 1 ? 'rgba(252,165,165,0.7)' : 'rgba(255,255,255,0.22)');
+const fill = (n: number) => (n >= 2 ? 'rgba(239,68,68,0.92)' : n === 1 ? 'rgba(248,113,113,0.42)' : 'rgba(140,140,155,0.10)');
+const stroke = (n: number) => (n >= 2 ? 'rgba(254,202,202,0.9)' : n === 1 ? 'rgba(252,165,165,0.7)' : 'rgba(140,140,155,0.55)');
 
 /** Medidas de la silueta (en unidades del dibujo, centro x = 100). */
 const BUILD = {
@@ -61,7 +61,7 @@ function shapes(view: 'frente' | 'espalda', b: (typeof BUILD)['hombre']): Shape[
 
 const Figure: React.FC<{ view: 'frente' | 'espalda'; body: 'hombre' | 'mujer'; counts: Record<string, number>; onPick?: (m: MuscleId) => void }> = ({ view, body, counts, onPick }) => {
   const b = BUILD[body];
-  const base = 'rgba(255,255,255,0.07)';
+  const base = 'rgba(140,140,155,0.26)'; // gris que se ve en tema claro y oscuro: el mono está SIEMPRE, aunque no haya entrenos
   const arm = b.sh + 9;
   return (
     <figure className="flex flex-col items-center">
@@ -100,7 +100,7 @@ export const BodyMap: React.FC<{ body: 'hombre' | 'mujer' | null; counts: Record
     <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] text-zinc-400">
       <span className="flex items-center gap-1"><i className="h-3 w-3 rounded-full" style={{ background: fill(2) }} /> 2 o más</span>
       <span className="flex items-center gap-1"><i className="h-3 w-3 rounded-full" style={{ background: fill(1) }} /> 1 vez</span>
-      <span className="flex items-center gap-1"><i className="h-3 w-3 rounded-full ring-1 ring-white/30" /> sin entrenar</span>
+      <span className="flex items-center gap-1"><i className="h-3 w-3 rounded-full ring-1 ring-zinc-400/70" /> sin entrenar</span>
       <span className="w-full text-center text-zinc-500">Últimos 7 días, solo entrenos terminados.</span>
     </div>
   </div>
