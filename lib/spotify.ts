@@ -121,6 +121,8 @@ export function parseSpotify(link: string): string | null {
   }
 }
 export const spotifyKind = (uri: string) => uri.split(':')[1] as SpotifyKind;
+/** ¿Suena en la app de Spotify? Lo que elegiste; si no elegiste, playlists y álbumes sí (Automix de Spotify). */
+export const spotifyInApp = (uri: string, choice?: boolean) => choice ?? (spotifyKind(uri) === 'playlist' || spotifyKind(uri) === 'album');
 /** La URI → su link limpio de open.spotify.com (sin ?si=… de compartir). */
 export const spotifyUrl = (uri: string) => `https://open.spotify.com/${uri.split(':')[1]}/${uri.split(':')[2]}`;
 /** ¿Es un link de Spotify (aunque no sea de algo que suene)? Nunca se trata como «audio». */

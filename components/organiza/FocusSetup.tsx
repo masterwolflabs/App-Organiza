@@ -10,7 +10,7 @@ import type { Item, Module, Video } from '@/components/organiza/model';
 import { audioFromLink, isAudioLink, isCloudLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
 import { authFetch } from '@/lib/authFetch';
-import { isSpotifyLink, parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyKind, spotifyMeta, spotifyUrl } from '@/lib/spotify';
+import { isSpotifyLink, parseSpotify, SPOTIFY_ID, spotifyCanStream, spotifyConnect, spotifyConnected, spotifyInApp, spotifyKind, spotifyMeta, spotifyUrl } from '@/lib/spotify';
 
 const mid = () => Math.random().toString(36).slice(2, 9);
 
@@ -326,7 +326,15 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                     <button type="button" aria-label="Quitar" onClick={() => setVideos((l) => l.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   {sp ? (
-                    <SpotifyStatus />
+                    <>
+                      {/* 🖥️ Dónde suena: tu app de Spotify (su crossfade/Automix) o dentro de Master Planner. */}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        {([[true, '🖥️ En la app de Spotify (Automix)', 'Suena en tu app de Spotify con su crossfade/Automix; si está cerrada, se abre'], [false, '🔊 En Master Planner', 'Suena dentro de Master Planner (se funde con YouTube y Drive)']] as const).map(([app, label, help]) => (
+                          <button key={label} type="button" data-help={help} onClick={() => set(i, { spotifyApp: app })} className={`rounded-full px-2 py-1 font-semibold ring-1 ${spotifyInApp(sp, v.spotifyApp) === app ? 'bg-[#1ed760]/20 text-[#1ed760] ring-[#1ed760]/50' : 'text-zinc-400 ring-white/15'}`}>{label}</button>
+                        ))}
+                      </div>
+                      <SpotifyStatus />
+                    </>
                   ) : v.audio ? (
                     <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-200 ring-1 ring-emerald-400/20">
                       <span className="min-w-0 flex-1 truncate">🎵 Suena tu audio: <b className="font-semibold">{v.audioName || 'Mi audio'}</b></span>

@@ -5,7 +5,7 @@ import { ListMusic, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX
 import type { Video } from '@/components/organiza/model';
 import { audioNames, forgetAudio, resolveAudio, warmAudio } from '@/components/organiza/musicAudio';
 import { desktop, isDesktop, onYtState } from '@/lib/desktop';
-import { access as spotifyAccess, parseSpotify, spotifyApi, spotifyKind, spotifyMeta } from '@/lib/spotify';
+import { access as spotifyAccess, parseSpotify, spotifyApi, spotifyInApp, spotifyKind, spotifyMeta } from '@/lib/spotify';
 
 /**
  * Música del modo focus (Emanuel, 2026-11-03): la lista de YouTube de una acción suena sola, cada
@@ -325,7 +325,35 @@ function spotifyDevice(): Promise<SpotifyDevice> {
   return sdkDevice;
 }
 
-function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlayer & { lazy: true; slow: true } {
+/**
+ * 🖥️ Tu app de Spotify (computador o teléfono) como parlante: la abierta; si no hay ninguna, se abre Spotify
+ * (en el navegador) y se espera hasta 20 s a que aparezca. Devuelve su id o null.
+ */
+async function spotifyAppDevice(uri: string): Promise<string | null> {
+  const pick = async () => {
+    const r = await spotifyApi('/devices', 'GET');
+    const j = (r?.ok ? await r.json().catch(() => null) : null) as { devices?: { id: string; name: string; type: string; is_active: boolean }[] } | null;
+    const list = (j?.devices ?? []).filter((d) => d.name !== 'Master Planner');
+    return (list.find((d) => d.type === 'Computer') ?? list.find((d) => d.is_active) ?? list[0])?.id ?? null;
+  };
+  const found = await pick();
+  if (found || isDesktop()) return found;
+  // Spotify cerrado: se abre la app (el navegador puede preguntar «¿Abrir Spotify?» la primera vez).
+  const a = document.createElement('a');
+  a.href = uri;
+  a.rel = 'noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const d = await pick();
+    if (d) return d;
+  }
+  return null;
+}
+
+function spotifyPlayer(uri: string, start: number, events: PlayerEvents, inApp = false): YTPlayer & { lazy: true; slow: true } {
   // Canción o episodio suenan solos; podcast, álbum, playlist o artista suenan enteros (en orden) hasta tu «hasta».
   const kind = spotifyKind(uri);
   const id = uri.split(':')[2];
@@ -405,7 +433,16 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
     started = true;
     emit(3);
     await dev?.player.activateElement?.().catch(() => {});
-    const r = await spotifyApi(dev ? `/play?device_id=${dev.deviceId}` : '/play', 'PUT', { ...(single ? { uris: [uri] } : { context_uri: uri }), ...(kind === 'track' || base > 0 ? { position_ms: Math.round(base * 1000) } : {}) });
+    // En tu app de Spotify: se busca (o se abre) y se le pide sonar ahí.
+    const appId = inApp ? await spotifyAppDevice(uri) : null;
+    if (gone) return;
+    if (inApp && !appId) {
+      spotifyOwner = null;
+      started = false;
+      return events.onError?.({ data: 404, target: p });
+    }
+    const target = appId ?? dev?.deviceId;
+    const r = await spotifyApi(target ? `/play?device_id=${target}` : '/play', 'PUT', { ...(single ? { uris: [uri] } : { context_uri: uri }), ...(kind === 'track' || base > 0 ? { position_ms: Math.round(base * 1000) } : {}) });
     if (gone) return;
     if (!r || !r.ok) {
       // Sin parlante aquí y sin Spotify abierto en ningún equipo (404), o sin Premium (403).
@@ -474,7 +511,8 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
     if (gone) return;
     if (!token) return events.onError?.({ data: 401, target: p });
     const [d, info, m] = await Promise.all([
-      spotifyDevice(),
+      // En tu app de Spotify no se usa el parlante de Master Planner (se controla tu app con Spotify Connect).
+      inApp ? Promise.resolve(null) : spotifyDevice(),
       // Cuánto dura (canción o episodio). Un podcast/álbum/playlist entero no tiene largo: manda tu «hasta».
       (single ? fetch(`https://api.spotify.com/v1/${kind}s/${id}${kind === 'episode' ? '?market=from_token' : ''}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)) as Promise<{ duration_ms?: number; name?: string; artists?: { name: string }[]; show?: { name?: string } } | null>,
       spotifyMeta(uri),
@@ -494,7 +532,7 @@ function spotifyPlayer(uri: string, start: number, events: PlayerEvents): YTPlay
 function makePlayer(YT: YTNamespace, host: HTMLElement, v: Video, opts: { videoId?: string; playerVars: Record<string, unknown>; events: PlayerEvents }): YTPlayer {
   if (v.audio) return audioPlayer(host, v.audio, v.audioName || 'Mi audio', Number(opts.playerVars.start) || 0, opts.events);
   const sp = parseSpotify(v.url);
-  if (sp) return spotifyPlayer(sp, Number(opts.playerVars.start) || 0, opts.events);
+  if (sp) return spotifyPlayer(sp, Number(opts.playerVars.start) || 0, opts.events, spotifyInApp(sp, v.spotifyApp));
   if (opts.videoId && isDesktop() && blockedVideos.has(opts.videoId)) return macPlayer(opts.videoId, Number(opts.playerVars.start) || 0, opts.events);
   return new YT.Player(host, { width: 200, height: 112, videoId: opts.videoId, playerVars: opts.playerVars, events: opts.events });
 }

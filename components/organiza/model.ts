@@ -13,7 +13,8 @@ export type ModuleType = 'habitos' | 'reglas' | 'sueno' | 'tabla' | 'base' | 'yo
 /** `resume` = «Seguir donde quedé» (Emanuel, 2026-11-16): cada día suena lo que dura su desde–hasta, pero desde donde
  * quedaste la última vez (mentoría / audiolibro por partes). Dónde quedó se guarda en el registro del día (`Check.value.music`). */
 /** `audio`: audio propio de la canción (archivo subido `storage:<ruta>` o link de Drive/Dropbox/MP3); si está, suena ese en vez de YouTube. */
-export type Video = { url: string; from?: number; to?: number; loop?: boolean; resume?: boolean; audio?: string; audioName?: string };
+/** `spotifyApp`: Spotify suena en TU app de Spotify (su crossfade/Automix) en vez de dentro de Master Planner; sin valor = playlists y álbumes en la app. */
+export type Video = { url: string; from?: number; to?: number; loop?: boolean; resume?: boolean; audio?: string; audioName?: string; spotifyApp?: boolean };
 
 export type Module = {
   id: string;
