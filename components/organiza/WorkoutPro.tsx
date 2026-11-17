@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Dumbbell, Pause, Play, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
+import { AssessmentModal } from '@/components/organiza/Assessment';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
@@ -111,34 +112,6 @@ const PersonalizeCTA: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
     <ChevronRight className="relative h-5 w-5 shrink-0 text-[#fff] transition group-hover:translate-x-1" />
   </button>
 );
-
-/** Espacio preparado para la evaluación (las preguntas se diseñan después). */
-const PersonalizeModal: React.FC<{ place: Place | null; onClose: () => void }> = ({ place, onClose }) => {
-  const p = PLACES.find((x) => x.id === place);
-  return (
-    <BodyPortal>
-      <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={onClose}>
-        <div role="dialog" aria-label="Crear mi rutina personalizada" onClick={(e) => e.stopPropagation()} className="w-full max-w-md overflow-hidden rounded-3xl bg-[#14161b] ring-1 ring-white/10">
-          <div className="theme-fixed relative bg-gradient-to-r from-[#7f1d1d] via-[#b91c1c] to-[#ea580c] px-5 py-6">
-            <button type="button" aria-label="Cerrar" onClick={onClose} className="absolute right-3 top-3 rounded-lg bg-black/30 p-1.5 text-[#fff] hover:bg-black/45"><X className="h-4 w-4" /></button>
-            <Sparkles className="h-8 w-8 text-[#fff]" />
-            <p className="mt-2 font-display text-2xl font-semibold text-[#fff]">Tu rutina personalizada</p>
-            <p className="mt-1 text-sm text-[#fee2e2]">Una evaluación corta para armar tus entrenamientos según tus objetivos y tu tiempo.</p>
-          </div>
-          <div className="space-y-3 p-5">
-            <div className="rounded-2xl bg-white/[0.04] p-4 text-center ring-1 ring-white/10">
-              <p className="text-3xl">🧪</p>
-              <p className="mt-1 font-semibold text-white">Estamos preparando tu evaluación</p>
-              <p className="mt-1 text-xs text-zinc-400">Muy pronto podrás responderla aquí mismo.</p>
-            </div>
-            {p && <p className="text-center text-xs text-zinc-400">Entrenas: <b className="text-zinc-200">{p.emoji} {p.label}</b></p>}
-            <button type="button" onClick={onClose} className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-bold text-[#fff] hover:bg-red-400">Entendido</button>
-          </div>
-        </div>
-      </div>
-    </BodyPortal>
-  );
-};
 
 /* ── La semana: un bloque con 7 días parejos ─────────────────────────────────────── */
 
@@ -324,7 +297,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
 
       {dayOpen !== null && <DayChooser wd={dayOpen} api={api} plan={week[String(dayOpen)] ?? { routine: null, version: 'completa' }} onSave={(p) => { setDay(dayOpen, p); setDayOpen(null); }} onEdit={(id) => { setDayOpen(null); setEditing(id); }} onClose={() => setDayOpen(null)} />}
       {editingRoutine && <RoutineEditor r={editingRoutine} api={api} onTrain={(v) => { setEditing(null); setTrain({ r: editingRoutine, v }); }} onClose={() => setEditing(null)} />}
-      {personalize && <PersonalizeModal place={api.training.place ?? null} onClose={() => setPersonalize(false)} />}
+      {personalize && <AssessmentModal place={api.training.place ?? null} onPlace={(p) => PLACES.some((x) => x.id === p) && api.saveTraining({ ...api.training, place: p as Place })} onClose={() => setPersonalize(false)} />}
       {train && <TrainMode r={train.r} version={train.v} api={api} onClose={() => setTrain(null)} />}
     </div>
   );
