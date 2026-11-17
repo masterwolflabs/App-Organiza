@@ -377,6 +377,11 @@ const Supplements: React.FC<{ api: FoodApi; day: string }> = ({ api, day }) => {
       ) : (
         <p className="text-xs text-zinc-500">Agrega lo que tomas (o saca foto a la etiqueta del frasco) y márcalo cada día: lo que aporta se suma a tus vitaminas.</p>
       )}
+      {api.supplements.some((s) => !s.active) && (
+        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[11px] text-zinc-500">⏸️ Pausados:
+          {api.supplements.filter((s) => !s.active).map((s) => <button key={s.id} type="button" onClick={() => setEditing(s.id)} data-help="Abrir para reactivarlo" className="font-semibold text-zinc-400 underline decoration-dotted hover:text-zinc-200">{s.name}</button>)}
+        </p>
+      )}
       {api.supplements.some((s) => s.buy) && (
         <div className="mt-2 rounded-xl bg-black/20 p-2 text-xs text-zinc-300">
           <p className="flex items-center gap-2 font-semibold text-zinc-200">🛒 Para comprar <span className="flex-1" />

@@ -117,7 +117,11 @@ export const ComprasView: React.FC = () => {
     const have = new Map(api.rows.map((p) => [norm(p.name), p]));
     for (const l of shoppingList(meals.rows, [0, 1, 2, 3, 4, 5, 6])) {
       const p = have.get(norm(l.name));
-      if (p && (p.stock > p.min || out.some((o) => o.item?.id === p.id))) continue;
+      if (p && out.some((o) => o.item?.id === p.id)) continue;
+      // ¿Lo tienes? Si le pusiste mínimo, manda tu stock; si no (la app no sabe cuándo te lo comiste), cuenta
+      // como «hay» solo si lo compraste en los últimos 7 días: así la semana siguiente vuelve a la lista.
+      const fresh = !!p?.last_bought && p.last_bought > iso(new Date(Date.now() - 7 * 86400000));
+      if (p && p.stock > p.min && (p.min > 0 || fresh)) continue;
       out.push({ key: `m:${l.key}`, name: l.name, qty: l.qty, why: `Tu semana: ${l.meals.slice(0, 2).join(', ')}${l.meals.length > 2 ? '…' : ''}`, priority: 'importante', category: 'comida', item: p });
     }
     for (const s of api.supps.filter((x) => x.buy && x.active)) out.push({ key: `s:${s.id}`, name: s.name, qty: s.dose, why: 'Tu plan de suplementos', priority: 'importante', category: 'suplementos', suppId: s.id });
@@ -258,10 +262,20 @@ export const ComprasView: React.FC = () => {
   );
 };
 
+/** Número con coma: se escribe libre («1,5») y se guarda al salir del campo. */
+const NumField: React.FC<{ value: number | null; empty: number | null; placeholder?: string; onCommit: (n: number | null) => void }> = ({ value, empty, placeholder, onCommit }) => {
+  const [t, setT] = useState(value ? nice(value) : value === 0 && empty === 0 && !placeholder ? '0' : '');
+  const commit = () => {
+    const n = t.trim() === '' ? empty : Math.max(0, Number(t.replace(',', '.')) || 0);
+    if (n !== value) onCommit(n);
+    setT(n ? nice(n) : n === 0 && !placeholder ? '0' : '');
+  };
+  return <input inputMode="decimal" value={t} placeholder={placeholder} onChange={(e) => setT(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={`${field} mt-1`} />;
+};
+
 const ItemEditor: React.FC<{ p: PantryItem; api: PantryApi; onClose: () => void }> = ({ p, api, onClose }) => {
   const confirm = useConfirm();
   const set = (x: Partial<PantryItem>) => api.patch(p.id, x);
-  const numOr = (v: string, fb: number | null) => (v.trim() === '' ? fb : Math.max(0, Number(v.replace(',', '.')) || 0));
   return (
     <BodyPortal>
       <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -272,10 +286,10 @@ const ItemEditor: React.FC<{ p: PantryItem; api: PantryApi; onClose: () => void 
             {CATEGORIES.map((c) => <button key={c.id} type="button" onClick={() => set({ category: c.id })} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${p.category === c.id ? 'bg-emerald-500 text-[#09090b] ring-emerald-400' : 'text-zinc-300 ring-white/15'}`}>{c.emoji} {c.label}</button>)}
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs text-zinc-400">
-            <label>Hay<input inputMode="decimal" value={nice(p.stock)} onChange={(e) => set({ stock: numOr(e.target.value, 0) ?? 0 })} className={`${field} mt-1`} /></label>
+            <label>Hay<NumField value={p.stock} empty={0} onCommit={(n) => set({ stock: n ?? 0 })} /></label>
             <label>Unidad<input value={p.unit} onChange={(e) => set({ unit: e.target.value })} className={`${field} mt-1`} /></label>
-            <label>Reponer bajo<input inputMode="decimal" value={p.min ? nice(p.min) : ''} placeholder="0" onChange={(e) => set({ min: numOr(e.target.value, 0) ?? 0 })} className={`${field} mt-1`} /></label>
-            <label>Se compran<input inputMode="decimal" value={p.buy_qty ? nice(p.buy_qty) : ''} placeholder="1" onChange={(e) => set({ buy_qty: numOr(e.target.value, null) })} className={`${field} mt-1`} /></label>
+            <label>Reponer bajo<NumField value={p.min} empty={0} placeholder="0" onCommit={(n) => set({ min: n ?? 0 })} /></label>
+            <label>Se compran<NumField value={p.buy_qty} empty={null} placeholder="1" onCommit={(n) => set({ buy_qty: n || null })} /></label>
             <label>Dura (días)<input inputMode="numeric" value={p.lasts_days ?? ''} placeholder="—" onChange={(e) => set({ lasts_days: e.target.value.trim() ? Math.max(1, Math.round(Number(e.target.value)) || 1) : null, last_bought: p.last_bought ?? iso() })} className={`${field} mt-1`} /></label>
             <label>Última compra<input type="date" value={p.last_bought ?? ''} onChange={(e) => set({ last_bought: e.target.value || null })} className={`${field} mt-1 px-1.5`} /></label>
           </div>

@@ -721,7 +721,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
           ) : (
             <>⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube. Para que suene aquí: ⚙️ Configurar → 🎵 Usar mi audio.{' '}</>
           )}
-          <a href={`https://www.youtube.com/watch?v=${parseYouTube(videos[blockedSong].url)?.video ?? ''}&t=${Math.floor(videos[blockedSong].from ?? 0)}s`} target="_blank" rel="noreferrer" className="font-semibold underline">Abrir en YouTube ↗</a>
+          {parseYouTube(videos[blockedSong].url)?.video && <a href={`https://www.youtube.com/watch?v=${parseYouTube(videos[blockedSong].url)?.video}&t=${Math.floor(videos[blockedSong].from ?? 0)}s`} target="_blank" rel="noreferrer" className="font-semibold underline">Abrir en YouTube ↗</a>}
         </p>
       )}
       {showList && (

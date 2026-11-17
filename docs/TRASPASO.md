@@ -209,6 +209,14 @@ La sección `alimentacion` se llama **Nutrition Pro** (`AlimentacionView` en Pla
 - **Recetas de Emanuel (2026-11-16, Daily nutrition-recetas-emanuel)**: las de fábrica ahora son las suyas (Desayuno A huevos duros + jugo + café + fruta; huevo frito con tostadas con queso; perico con marraqueta y café helado; onces/cenas: panes con atún, doble jamón y queso, panqueques, shawarma, asadito, completos; meriendas; almuerzos: arroz con pollo completo, fettuccine con champiñones, chuleta) + 5 almuerzos de la IA (⚡ prácticos / ✨ especiales). **A elección** (`RecipeIngredient.choices`, 🎲 en el editor): `choiceFor` sugiere una opción distinta cada día de la semana (y «↻ No tengo, otra» en el modo cocina); `mealFromRecipe(r, weekday)` la deja decidida en el plato, así la lista de compras reparte la fruta en la semana. **Por tandas** (`RecipeStep.repeat`, «× tandas» en el editor): el timer se repite y suena en cada una («Tanda 3 de 8 lista»); `stepSpan` = minutos × tandas.
 
 ## 🌙 Jornada del 17 nov 2026 (hecha, todo publicado y en 🔍 En revisión)
+
+**🔎 Revisión de Claude (misma noche, Daily `revision-jornada-17nov`)** — afinado y publicado:
+- Música: si falla tu audio propio y la canción no tiene link de YouTube, ya no muestra «Abrir en YouTube» vacío.
+- Workout Pro: el plan de fábrica se crea una sola vez aunque dos pantallas abran a la vez (antes podía duplicarse).
+- Comidas (nube `/api/organiza/food`): tope físico por 100 g (≤900 kcal, ≤100 g de cada macro) para que un error de la IA no infle el día.
+- Test de suplementos: «Armar mi plan» ya no borra tu hora/dosis si la IA no las trae, no te quita el 🛒, no se duplica con doble toque y avisa qué pausó por «no conviene». Los suplementos pausados se ven en «⏸️ Pausados» y se reactivan desde su ficha.
+- Master Compras: un ingrediente de tu semana cuenta como «hay» solo si lo compraste hace ≤7 días (o si le pusiste mínimo en la bodega); antes, una vez comprado no volvía nunca a la lista. Los números de la ficha aceptan coma («1,5») y se guardan al salir del campo.
+- Pendiente conocido: al «Quitar» tu audio el archivo sigue en el bucket (no se borra solo); «Usar esta» (otra subida) conserva el desde/hasta de la original, que puede no calzar.
 Las 5 tareas aprobadas, en orden. SQL 43–47 aplicadas en Supabase (copias en `docs/sql/`).
 1. **🎵 Música bloqueada** (`focus-musica-bloqueada-solucion`)
    - `Video.audio` (`storage:<uid>/<id>.<ext>` en el bucket privado `organiza-music`, SQL 43, 25 MB; o link de Drive/Dropbox/MP3) + `audioName`. `components/organiza/musicAudio.ts` (subir, firmar 1 día, convertir links de Drive/Dropbox).

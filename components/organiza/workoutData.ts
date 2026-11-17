@@ -348,6 +348,8 @@ export function strength(logs: WorkoutLog[], today = new Date()) {
 /* ── Datos ─────────────────────────────────────────────────────────────────────────── */
 
 const SEEDED = (space: string) => `workout-pro-de-fabrica:${space}`;
+// Si dos pantallas abren Workout Pro a la vez la primera vez, el plan de fábrica se crea UNA sola vez.
+const seeding = new Map<string, Promise<Routine[]>>();
 
 export function useWorkoutPro() {
   const db = useDb();
@@ -366,7 +368,11 @@ export function useWorkoutPro() {
       seeded = !!localStorage.getItem(SEEDED(space));
     } catch {}
     // La primera vez: el plan de fábrica (si borras todas, no vuelven).
-    if (!r.length && !seeded) r = await db.insert<Routine>('organiza_routines', DEFAULT_ROUTINES.map((x, i) => ({ ...x, space, sort: i })));
+    if (!r.length && !seeded) {
+      const k = `${uid}:${space}`;
+      if (!seeding.has(k)) seeding.set(k, db.insert<Routine>('organiza_routines', DEFAULT_ROUTINES.map((x, i) => ({ ...x, space, sort: i }))));
+      r = [...(await seeding.get(k)!)];
+    }
     try {
       localStorage.setItem(SEEDED(space), '1');
     } catch {}

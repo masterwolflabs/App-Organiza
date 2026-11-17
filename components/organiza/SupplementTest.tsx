@@ -94,6 +94,8 @@ export const SupplementTest: React.FC<{ api: FoodApi; onClose: () => void }> = (
   const [result, setResult] = useState<Analysis | null>(null);
   const [chosen, setChosen] = useState<number[]>([]);
   const [applied, setApplied] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [paused, setPaused] = useState<string[]>([]);
   const full = (i: number) => [answers[i], extraText[i]].filter((x) => x.trim()).join(' — ');
   const SUMMARY = QUESTIONS.length;
   const PROPOSAL = QUESTIONS.length + 1;
@@ -117,21 +119,29 @@ export const SupplementTest: React.FC<{ api: FoodApi; onClose: () => void }> = (
 
   /** Plan final: cada uno elegido queda en tus suplementos con hora, hasta cuándo, por qué y 🛒. */
   const apply = async () => {
-    if (!result) return;
+    if (!result || applying) return;
+    setApplying(true);
     for (const i of chosen) {
       const it = result.items[i];
       const until = it.weeks ? iso(new Date(Date.now() + it.weeks * 7 * 86400000)) : null;
-      const there = api.supplements.find((s) => s.name.toLowerCase() === it.name.toLowerCase());
-      const p = { dose: it.dose || '1 dosis', time: it.time || null, until, reason: it.why.slice(0, 300), active: true, buy: !there };
+      const there = api.supplements.find((s) => s.name.trim().toLowerCase() === it.name.trim().toLowerCase());
+      // Si ya lo tenías: lo que la IA no dice (dosis, hora) queda como estaba y el 🛒 no se te quita.
+      const p = { dose: it.dose || there?.dose || '1 dosis', time: it.time || there?.time || null, until, reason: it.why.slice(0, 300), active: true, buy: there ? !!there.buy || !there.active : true };
       if (there) await api.patchSupplement(there.id, p);
       else await api.addSupplement({ name: it.name, per_day: 1, nutrients: {}, ...p });
     }
-    // Lo que «no conviene» y ya tomabas queda marcado para dejarlo (se oculta).
+    // Lo que «no conviene» y ya tomabas queda pausado (no se borra: lo reactivas en su ficha).
+    const off: string[] = [];
     for (const it of result.items.filter((x) => x.verdict === 'no_conviene')) {
-      const there = api.supplements.find((s) => s.name.toLowerCase() === it.name.toLowerCase());
-      if (there) await api.patchSupplement(there.id, { active: false });
+      const there = api.supplements.find((s) => s.active && s.name.trim().toLowerCase() === it.name.trim().toLowerCase());
+      if (there) {
+        await api.patchSupplement(there.id, { active: false });
+        off.push(there.name);
+      }
     }
+    setPaused(off);
     setApplied(true);
+    setApplying(false);
   };
 
   const q = QUESTIONS[step];
@@ -170,9 +180,9 @@ export const SupplementTest: React.FC<{ api: FoodApi; onClose: () => void }> = (
               {result.habits && <p className="rounded-xl bg-white/[0.04] p-3 text-xs text-zinc-300">🌱 {result.habits}</p>}
               {result.sueroterapia && <p className="rounded-xl bg-white/[0.04] p-3 text-xs text-zinc-300">💧 Sueroterapia (solo información, siempre con profesional): {result.sueroterapia}</p>}
               {applied ? (
-                <p className="rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-100">✅ Listo: quedaron en tus suplementos con su hora y hasta cuándo. Los nuevos están marcados 🛒 para comprar.</p>
+                <p className="rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-100">✅ Listo: quedaron en tus suplementos con su hora y hasta cuándo. Los nuevos están marcados 🛒 para comprar.{paused.length ? ` Pausé ${paused.join(', ')} porque no conviene (no lo borré: lo reactivas en su ficha).` : ''}</p>
               ) : (
-                <button type="button" disabled={!chosen.length} onClick={apply} className="w-full rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-bold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Armar mi plan con {chosen.length} {chosen.length === 1 ? 'suplemento' : 'suplementos'}</button>
+                <button type="button" disabled={!chosen.length || applying} onClick={apply} className="w-full rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-bold text-[#fff] hover:bg-sky-500 disabled:opacity-50">Armar mi plan con {chosen.length} {chosen.length === 1 ? 'suplemento' : 'suplementos'}</button>
               )}
               <p className="text-[10px] text-zinc-500">No es indicación médica. Es una orientación general para personas sanas; lo recetado lo maneja tu médico.</p>
             </div>
