@@ -344,7 +344,7 @@ export const DailyBoard: React.FC<{
                 const id = e.dataTransfer.getData('text/daily-task');
                 if (id) drop(lane.id, id);
               }}
-              className={`group/lane flex w-[290px] shrink-0 flex-col gap-2 rounded-2xl p-2.5 ring-1 transition xl:w-auto xl:min-w-0 xl:flex-1 ${lane.col} ${over === lane.id ? 'ring-2 ring-sky-400/60' : ''}`}
+              className={`group/lane flex w-[290px] shrink-0 flex-col gap-2 rounded-2xl p-2.5 ring-1 transition xl:w-auto xl:min-w-[270px] xl:flex-1 ${lane.col} ${over === lane.id ? 'ring-2 ring-sky-400/60' : ''}`}
             >
               <div className="flex items-center gap-2 px-1 pt-0.5" data-help={lane.hint}>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold ${lane.head}`}>
