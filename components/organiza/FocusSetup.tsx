@@ -7,7 +7,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { canEmbed, fmtSeconds, parseYouTube, playlistIds, previewVolume, toSeconds } from '@/components/organiza/YouTubeList';
 import { useGuardedClose } from '@/components/organiza/UnsavedGuard';
 import type { Item, Module, Video } from '@/components/organiza/model';
-import { isAudioLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
+import { audioFromLink, isAudioLink, isCloudLink, linkName, MUSIC_ACCEPT, uploadMusic } from '@/components/organiza/musicAudio';
 import { isDesktop } from '@/lib/desktop';
 import { authFetch } from '@/lib/authFetch';
 
@@ -93,7 +93,7 @@ const UploadSong: React.FC<{ onAdd: (audio: string, name: string) => void; onErr
   return (
     <>
       <input ref={ref} type="file" accept={MUSIC_ACCEPT} className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
-      <button type="button" disabled={busy} onClick={() => ref.current?.click()} data-help="Subir el archivo de la canción (MP3, M4A o WAV hasta 25 MB)" className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '🎵'} Subir archivo</button>
+      <button type="button" disabled={busy} onClick={() => ref.current?.click()} data-help="Subir el archivo de la canción (MP3, M4A o WAV hasta 50 MB)" className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '🎵'} Subir archivo</button>
     </>
   );
 };
@@ -132,13 +132,13 @@ const AudioPicker: React.FC<{ onPick: (audio: string, name: string) => void; str
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Subir archivo
         </button>
         <span className="text-[11px] text-zinc-500">o</span>
-        <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={(e) => { e.preventDefault(); if (!isAudioLink(link)) return setErr('Pega un link de Google Drive, Dropbox o de un MP3.'); onPick(link.trim(), 'Audio de link'); setOpen(false); }}>
+        <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={async (e) => { e.preventDefault(); setErr(''); setBusy(true); const r = await audioFromLink(link); setBusy(false); if ('error' in r) return setErr(r.error); onPick(r.audio, r.name); setOpen(false); }}>
           <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link de Drive, Dropbox o MP3" aria-label="Link del audio" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
           <button type="submit" className="rounded-lg bg-white/[0.08] px-2 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">Usar</button>
         </form>
         <button type="button" aria-label="Cancelar" onClick={() => setOpen(false)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-500">MP3, M4A o WAV hasta 25 MB. Queda solo en tu cuenta. Un link de Drive tiene que estar compartido «cualquiera con el link».</p>
+      <p className="mt-1 text-[11px] text-zinc-500">MP3, M4A o WAV hasta 50 MB. Queda solo en tu cuenta. Un link de Drive tiene que estar compartido «cualquiera con el link».</p>
       {err && <p className="mt-1 text-[11px] text-rose-300">{err}</p>}
     </div>
   );
@@ -180,7 +180,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   const [draft, setDraft] = useState('');
 
   // Un link pegado sin tocar «Agregar» también se guarda.
-  const pending: Video[] = parseYouTube(url) ? (!parseYouTube(url)?.list ? [{ url: url.trim() }] : []) : url.trim() && isAudioLink(url) ? [{ url: '', audio: url.trim(), audioName: linkName(url) }] : [];
+  const pending: Video[] = parseYouTube(url) ? (!parseYouTube(url)?.list ? [{ url: url.trim() }] : []) : url.trim() && isAudioLink(url) && !isCloudLink(url) ? [{ url: '', audio: url.trim(), audioName: linkName(url) }] : [];
   const dirty = pending.length > 0 || JSON.stringify({ videos, crossfade, loopAll, volume }) !== JSON.stringify({ videos: current?.videos ?? [], crossfade: current?.crossfade ?? 3, loopAll: current?.loopAll ?? false, volume: current?.volume ?? 100 });
   const save = () => {
     const music: Module = { ...(current ?? { id: mid(), type: 'youtube', title: 'Música del focus' }), videos: [...videos, ...pending], crossfade, loopAll, volume };
@@ -196,12 +196,18 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
   // Link de una playlist: se pregunta si van sus canciones por separado, la playlist entera o solo esa canción.
   const [askList, setAskList] = useState<{ list: string; video?: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const add = () => {
+  const [importing, setImporting] = useState(false);
+  const add = async () => {
     const p = parseYouTube(url);
-    // 🎵 Link de Google Drive, Dropbox o un MP3: entra igual que una de YouTube (suena ese audio).
+    // 🎵 Link de Google Drive, Dropbox o un MP3: entra igual que una de YouTube. Drive y Dropbox se traen a
+    // tu cuenta una vez (así suenan en cualquier navegador y en la app de Mac).
     if (!p && isAudioLink(url)) {
       setError('');
-      setVideos((l) => [...l, { url: '', audio: url.trim(), audioName: linkName(url) }]);
+      setImporting(true);
+      const r = await audioFromLink(url);
+      setImporting(false);
+      if ('error' in r) return setError(r.error);
+      setVideos((l) => [...l, { url: '', audio: r.audio, audioName: r.name }]);
       return setUrl('');
     }
     if (!p) return setError('Ese link no es de YouTube, Google Drive, Dropbox ni de un MP3.');
@@ -254,7 +260,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
                       <span className="flex h-11 w-20 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-xs text-zinc-400">{v.audio ? '🎵' : 'Playlist'}</span>
                     )}
                     {editing === i ? (
-                      <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={(e) => { e.preventDefault(); const p2 = parseYouTube(draft); if (!p2 && isAudioLink(draft)) { setError(''); set(i, { audio: draft.trim(), audioName: linkName(draft) }); return setEditing(null); } if (!p2 || p2.list && !p2.video) return setError('Pega el link de una canción de YouTube, Google Drive, Dropbox o un MP3.'); setError(''); set(i, { url: draft.trim(), audio: undefined, audioName: undefined }); setEditing(null); }}>
+                      <form className="flex min-w-0 flex-1 gap-1.5" onSubmit={async (e) => { e.preventDefault(); const p2 = parseYouTube(draft); if (!p2 && isAudioLink(draft)) { setError(''); setImporting(true); const r = await audioFromLink(draft); setImporting(false); if ('error' in r) return setError(r.error); set(i, { audio: r.audio, audioName: r.name }); return setEditing(null); } if (!p2 || p2.list && !p2.video) return setError('Pega el link de una canción de YouTube, Google Drive, Dropbox o un MP3.'); setError(''); set(i, { url: draft.trim(), audio: undefined, audioName: undefined }); setEditing(null); }}>
                         <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Pega el link nuevo" aria-label="Link nuevo" className="min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 py-1 text-xs text-white outline-none ring-1 ring-sky-400/50" />
                         <button type="submit" className="rounded-lg bg-sky-600 px-2 text-xs font-semibold text-[#fff]">Listo</button>
                         <button type="button" onClick={() => setEditing(null)} className="rounded-lg px-1.5 text-xs text-zinc-400 hover:text-white">✕</button>
@@ -300,7 +306,7 @@ export const FocusSetup: React.FC<{ item: Item; onSave: (modules: Module[]) => v
 
           <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Pega un link de YouTube, Google Drive, Dropbox o MP3" className="min-w-0 flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-sky-400/50" />
-            <button type="submit" className="inline-flex items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14]"><Plus className="h-4 w-4" /> Agregar</button>
+            <button type="submit" disabled={importing} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/[0.08] px-3 text-sm font-semibold text-white hover:bg-white/[0.14] disabled:opacity-60">{importing ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : <><Plus className="h-4 w-4" /> Agregar</>}</button>
             <UploadSong onAdd={(audio, audioName) => setVideos((l) => [...l, { url: '', audio, audioName }])} onError={setError} />
           </form>
           {askList && (

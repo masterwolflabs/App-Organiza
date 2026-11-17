@@ -717,7 +717,7 @@ export const YouTubeList: React.FC<{ videos: Video[]; crossfade?: number; loopAl
       {blockedSong !== null && videos[blockedSong] && (
         <p className="border-t border-white/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
           {videos[blockedSong].audio ? (
-            <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox, revisa que esté compartido «cualquiera con el link»; o súbelo como archivo en ⚙️ Configurar.{' '}</>
+            <>⚠️ No pude tocar tu audio de la canción {blockedSong + 1}. Si es un link de Drive o Dropbox: en ⚙️ Configurar bórrala y vuelve a pegar el link (ahora se guarda en tu cuenta y suena siempre), o usa 🎵 Subir archivo.{' '}</>
           ) : (
             <>⚠️ La canción {blockedSong + 1} no se puede tocar aquí: su dueño solo deja escucharla en YouTube. Para que suene aquí: ⚙️ Configurar → 🎵 Usar mi audio.{' '}</>
           )}

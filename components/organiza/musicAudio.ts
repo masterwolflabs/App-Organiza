@@ -7,9 +7,10 @@
  * `Video.audio` guarda `storage:<uid>/<id>.<ext>` (bucket privado «organiza-music», SQL 43) o el link pegado.
  */
 import { supabase } from '@/lib/supabaseClient';
+import { authFetch } from '@/lib/authFetch';
 
 const BUCKET = 'organiza-music';
-export const MAX_MUSIC_BYTES = 25 * 1024 * 1024;
+export const MAX_MUSIC_BYTES = 50 * 1024 * 1024;
 export const MUSIC_ACCEPT = 'audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac,.mp3,.m4a,.wav,.aac,.ogg,.flac';
 
 /** Link pegado → uno que el reproductor pueda tocar directo (Drive y Dropbox se convierten a descarga). */
@@ -45,6 +46,25 @@ export function linkName(link: string): string {
   }
 }
 
+/** Drive o Dropbox: no se tocan directo (Drive no le entrega el audio al reproductor); se traen a tu cuenta. */
+export const isCloudLink = (link: string) => /^https:\/\/(drive\.google\.com|docs\.google\.com|(www\.)?dropbox\.com)\//i.test(link.trim());
+
+/**
+ * Un link pegado → el audio de la canción. Drive y Dropbox se bajan UNA vez y quedan guardados en tu
+ * cuenta (`/api/music/import`, 2026-11-18); un MP3 de otra página se toca directo.
+ */
+export async function audioFromLink(link: string): Promise<{ audio: string; name: string } | { error: string }> {
+  if (!isCloudLink(link)) return isAudioLink(link) ? { audio: link.trim(), name: linkName(link) } : { error: 'Pega un link de Google Drive, Dropbox o de un MP3.' };
+  try {
+    const r = await authFetch('/api/music/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link: link.trim() }) });
+    const j = (await r.json().catch(() => ({}))) as { audio?: string; name?: string; error?: string };
+    if (!r.ok || !j.audio) return { error: j.error || 'No pude traer el archivo. Intenta de nuevo.' };
+    return { audio: j.audio, name: j.name || linkName(link) };
+  } catch {
+    return { error: 'No pude traer el archivo. Revisa tu internet.' };
+  }
+}
+
 /** ¿Es un link que vale la pena probar? (Drive, Dropbox o cualquier http). */
 export const isAudioLink = (link: string) => directAudioUrl(link) !== null;
 
@@ -65,7 +85,7 @@ export async function resolveAudio(audio: string): Promise<string | null> {
 /** Sube un archivo de audio a la cuenta. Devuelve el valor para `Video.audio` o el error en palabras simples. */
 export async function uploadMusic(file: File): Promise<{ audio: string; name: string } | { error: string }> {
   if (!file.type.startsWith('audio/') && !/\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(file.name)) return { error: 'Ese archivo no es de audio. Prueba con un MP3, M4A o WAV.' };
-  if (file.size > MAX_MUSIC_BYTES) return { error: `Pesa ${(file.size / 1048576).toFixed(1)} MB: el máximo es 25 MB.` };
+  if (file.size > MAX_MUSIC_BYTES) return { error: `Pesa ${(file.size / 1048576).toFixed(1)} MB: el máximo es 50 MB.` };
   const { data } = await supabase.auth.getUser();
   const uid = data.user?.id;
   if (!uid) return { error: 'Inicia sesión para subir tu audio.' };
