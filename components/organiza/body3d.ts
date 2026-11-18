@@ -193,3 +193,145 @@ export function coverFor(muscles: MuscleId[], w = 480, h = 240): Promise<string>
   job.catch(() => covers.delete(key));
   return job;
 }
+
+/* ── MOD 09: pintar por color libre y dar tus proporciones ────────────────────────────── */
+
+/** Pinta cada músculo con el color que se le pase (hex); los que no vienen quedan neutros. */
+export function paintColors(root: THREE.Object3D, colors: Record<string, string | null | undefined>, picked?: MuscleId | null) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    const id = m.userData?.muscle as MuscleId | null;
+    if (!m.isMesh || !id) return;
+    const mat = m.material as THREE.MeshStandardMaterial;
+    const hex = colors[id];
+    if (picked === id) {
+      mat.color.copy(C.pick);
+      mat.emissive.copy(C.pick);
+      mat.emissiveIntensity = 0.35;
+    } else if (hex) {
+      mat.color.set(hex);
+      mat.emissive.set(hex);
+      mat.emissiveIntensity = 0.16;
+    } else {
+      mat.color.copy(C.idle);
+      mat.emissive.set(0);
+      mat.emissiveIntensity = 0;
+    }
+  });
+}
+
+export type BodyRatios = { chest: number; waist: number; hip: number; arm: number; leg: number };
+
+const ARM_Z = new Set(['anterior_delt', 'lateral_delt', 'posterior_delt', 'biceps', 'brachialis', 'triceps_lateral', 'triceps_long', 'triceps_medial', 'brachioradialis', 'forearm_extensors', 'forearm_flexors', 'hand_muscles']);
+const LEG_Z = new Set(['rectus_femoris', 'vastus_group', 'lateral_hamstrings', 'medial_hamstrings', 'adductors', 'gastrocnemius', 'soleus', 'tibialis_anterior', 'fibularis', 'foot_muscles']);
+type Part = 'arm' | 'leg' | 'torso' | 'head';
+
+/** Zona del cuerpo de un vértice (coordenadas del modelo: alto ≈ -0,9 a 0,9; izquierda y derecha juntas). */
+function partOf(zone: string, x: number, y: number): Part {
+  if (ARM_Z.has(zone)) return 'arm';
+  if (LEG_Z.has(zone)) return 'leg';
+  if (zone.startsWith('context_')) {
+    if (y > 0.66) return 'head';
+    if (Math.abs(x) > 0.215 && y > -0.2) return 'arm';
+    if (y < -0.12) return 'leg';
+    return 'torso';
+  }
+  if (zone === 'body_context' || zone.startsWith('neck_')) return 'head';
+  return 'torso';
+}
+
+/** Eje de cada brazo y pierna por altura (promedio x,z de sus músculos por franjas de 0,04), calculado una vez. */
+type Axis = Map<string, { x: number; z: number }>;
+let axes: { arm: Axis; leg: Axis } | null = null;
+const BIN = 0.04;
+const binOf = (y: number) => Math.round(y / BIN);
+function buildAxes(root: THREE.Object3D) {
+  const acc = { arm: new Map<string, { x: number; z: number; n: number }>(), leg: new Map<string, { x: number; z: number; n: number }>() };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const zone = m.userData.zone as string;
+    const part = ARM_Z.has(zone) ? 'arm' : LEG_Z.has(zone) ? 'leg' : null;
+    if (!part) return;
+    const p = (m.userData.orig as Float32Array | undefined) ?? (m.geometry.getAttribute('position').array as Float32Array);
+    for (let i = 0; i < p.length; i += 3) {
+      const key = `${p[i] < 0 ? -1 : 1}:${binOf(p[i + 1])}`;
+      const a = acc[part].get(key) ?? { x: 0, z: 0, n: 0 };
+      a.x += p[i]; a.z += p[i + 2]; a.n++;
+      acc[part].set(key, a);
+    }
+  });
+  const fin = (m: Map<string, { x: number; z: number; n: number }>): Axis => new Map([...m].map(([k, a]) => [k, { x: a.x / a.n, z: a.z / a.n }]));
+  axes = { arm: fin(acc.arm), leg: fin(acc.leg) };
+}
+function axisAt(ax: Axis, side: number, y: number) {
+  const b = binOf(y);
+  for (let d = 0; d < 40; d++) {
+    const hit = ax.get(`${side}:${b - d}`) ?? ax.get(`${side}:${b + d}`);
+    if (hit) return hit;
+  }
+  return { x: side * 0.1, z: 0 };
+}
+
+/** Escala del torso según la altura: pecho arriba, cintura al medio, cadera abajo (con transiciones suaves). */
+function torsoAt(y: number, r: BodyRatios) {
+  const pts: [number, number][] = [[0.72, 1], [0.55, r.chest], [0.38, r.chest], [0.2, r.waist], [0.08, r.waist], [-0.04, r.hip], [-0.3, r.hip]];
+  if (y >= pts[0][0]) return 1;
+  for (let i = 1; i < pts.length; i++) {
+    const [y0, v0] = pts[i - 1];
+    const [y1, v1] = pts[i];
+    if (y >= y1) return v1 + ((y - y1) / (y0 - y1)) * (v0 - v1);
+  }
+  return r.hip;
+}
+
+/**
+ * Le da al mono tus proporciones (MOD 09). Deforma los vértices (no la escala de los nodos: el modelo no tiene),
+ * guardando las posiciones originales para volver a aplicar con otras medidas. 1 en todo = el modelo estándar.
+ * Brazos y piernas se ensanchan alrededor de su propio eje (por lado y por altura) y se corren con el torso/cadera.
+ */
+export function shapeBody(root: THREE.Object3D, r: BodyRatios) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (!m.userData.orig) {
+      m.geometry = m.geometry.clone(); // las copias comparten geometría: esta pasa a ser propia
+      m.userData.orig = Float32Array.from(m.geometry.getAttribute('position').array as Float32Array);
+    }
+  });
+  if (!axes) buildAxes(root);
+  const ax = axes!;
+  const shoulder = torsoAt(0.45, r);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const zone = m.userData.zone as string;
+    const src = m.userData.orig as Float32Array;
+    const attr = m.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const p = attr.array as Float32Array;
+    for (let i = 0; i < src.length; i += 3) {
+      const x = src[i], y = src[i + 1], z = src[i + 2];
+      const part = partOf(zone, x, y);
+      if (part === 'head') { p[i] = x; p[i + 1] = y; p[i + 2] = z; continue; }
+      if (part === 'torso') {
+        const k = torsoAt(y, r);
+        p[i] = x * k; p[i + 1] = y; p[i + 2] = z * k;
+        continue;
+      }
+      const side = x < 0 ? -1 : 1;
+      const c = axisAt(part === 'arm' ? ax.arm : ax.leg, side, y);
+      let w = 1;
+      if (part === 'arm') w = y > 0.43 ? 0.5 : y < 0.2 ? 0.55 : 1; // hombro y antebrazo cambian menos que el brazo
+      else w = y < -0.45 ? 0.55 : 1; // pantorrilla menos que el muslo
+      const k = 1 + ((part === 'arm' ? r.arm : r.leg) - 1) * w;
+      // El brazo se corre hacia afuera lo que se ensanchó el torso a la altura del hombro; la pierna, lo de la cadera.
+      const shift = part === 'arm' ? c.x * (shoulder - 1) : c.x * (r.hip - 1) * 0.8;
+      p[i] = c.x + (x - c.x) * k + shift;
+      p[i + 1] = y;
+      p[i + 2] = c.z + (z - c.z) * k;
+    }
+    attr.needsUpdate = true;
+    m.geometry.computeBoundingBox();
+    m.geometry.computeBoundingSphere();
+  });
+}

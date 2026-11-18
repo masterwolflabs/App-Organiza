@@ -14,13 +14,13 @@ import { WeekSuggest } from '@/components/organiza/WeekSuggest';
 import { CheckinModal, RecoveryBlock, useRecovery } from '@/components/organiza/Recovery';
 import type { Option } from '@/components/organiza/recoveryData';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
+import { BodyPanel } from '@/components/organiza/BodyPanel';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
 import dynamic from 'next/dynamic';
 
 // El mono 3D (three.js, ~600 KB) se baja solo al abrir Workout Pro, no con el resto de la app.
-const BodyMap3D = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.BodyMap3D), { ssr: false, loading: () => <div className="h-[440px]" /> });
 const MuscleCover = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.MuscleCover), { ssr: false, loading: () => <span className="absolute inset-0 animate-pulse bg-white/[0.03]" /> });
 import {
   exercisesOf, minutesFor, isoDay, LIBRARY, MODES, PLACES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
@@ -204,7 +204,6 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const [editing, setEditing] = useState<string | null>(null);
   const [dayOpen, setDayOpen] = useState<number | null>(null);
   const [train, setTrain] = useState<{ r: Routine; v: Version; hint?: string } | null>(null);
-  const [muscle, setMuscle] = useState<MuscleId | null>(null);
   const [personalize, setPersonalize] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const today = weekdayOf(new Date());
@@ -292,17 +291,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
         </div>
 
         <aside className="min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
-          <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
-            <h2 className="mb-1 font-display text-xl font-semibold text-white">🧍 Lo que entrenaste</h2>
-            <BodyMap3D counts={api.counts} picked={muscle} onPick={setMuscle} />
-            {muscle && (
-              <div className="mt-3 rounded-xl bg-black/25 p-3 text-xs text-zinc-300">
-                <p className="mb-1 flex items-center justify-between font-semibold text-white">{muscleLabel(muscle)} · {api.counts[muscle] ?? 0} en 7 días <button type="button" aria-label="Cerrar" onClick={() => setMuscle(null)}><X className="h-3.5 w-3.5" /></button></p>
-                <p className="text-zinc-400">Clave: {LIBRARY[muscle].filter((e) => e.key).map((e) => e.name).join(' · ')}</p>
-                <p className="text-zinc-500">Detalle: {LIBRARY[muscle].filter((e) => !e.key).map((e) => e.name).join(' · ') || '—'}</p>
-              </div>
-            )}
-          </section>
+          <BodyPanel api={api} />
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-2 flex items-center gap-2">
               <h2 className="flex-1 text-sm font-semibold text-white">📈 Fuerza</h2>

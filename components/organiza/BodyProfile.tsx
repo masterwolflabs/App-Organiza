@@ -23,7 +23,7 @@ const KEY_METRICS: Metric[] = ['weight', 'waist', 'body_fat', 'muscle_mass', 'ch
 
 /* ── Foto privada ─────────────────────────────────────────────────────────────────── */
 
-const Photo: React.FC<{ path?: string; local?: string | null; show: boolean; label: string; className?: string }> = ({ path, local, show, label, className = '' }) => {
+export const Photo: React.FC<{ path?: string; local?: string | null; show: boolean; label: string; className?: string }> = ({ path, local, show, label, className = '' }) => {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let on = true;
