@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Dumbbell, Pause, Play, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { AssessmentModal } from '@/components/organiza/Assessment';
+import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
@@ -236,7 +237,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
       />
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-5">
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
               <h2 className="flex-1 font-display text-xl font-semibold text-white">📋 Tus rutinas</h2>
@@ -246,6 +247,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
               {api.routines.map((r) => <RoutineCard key={r.id} r={r} onOpen={() => setEditing(r.id)} />)}
             </div>
           </section>
+          <BodyProfileBlock />
         </div>
 
         <aside className="min-w-0 space-y-5 lg:sticky lg:top-4 lg:self-start">
