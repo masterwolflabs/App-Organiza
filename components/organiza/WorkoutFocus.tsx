@@ -10,6 +10,11 @@ import { notify } from '@/components/organiza/notify';
 import { VERSIONS } from '@/components/organiza/planData';
 import { usePlanCtx } from '@/components/organiza/planCtx';
 import { SafetyCheck, ACTION_LABEL } from '@/components/organiza/SafetyCheck';
+import { templateFor } from '@/components/organiza/trainerData';
+import dynamic from 'next/dynamic';
+
+// MOD 10: el entrenador 3D (three.js) se baja solo al tocar «Cómo se hace».
+const TrainerView = dynamic(() => import('@/components/organiza/TrainerView').then((m) => m.TrainerView), { ssr: false });
 import { cautionFor, cautionLabel, incidentText, loadsZone, proposal, withCaution, zoneLabel, type Action, type Report, type Verdict } from '@/components/organiza/safetyData';
 import {
   exercisesOf, isoDay, lastTime, LIBRARY, minutesFor, muscleLabel,
@@ -252,6 +257,10 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
     onClose();
   };
 
+  /* 🎓 MOD 10: cómo se hace */
+  const [coach, setCoach] = useState(false);
+  const tpl = e ? templateFor(e.name) : null;
+
   /* 🛟 MOD 11: «Algo no anda bien» */
   const [safety, setSafety] = useState(false);
   const [pausedBySafety, setPausedBySafety] = useState(false);
@@ -413,6 +422,7 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
                       </p>
                     )}
                   </div>
+                  {tpl && <button type="button" onClick={() => setCoach(true)} className="shrink-0 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-xs font-semibold text-sky-200 ring-1 ring-sky-400/30 hover:bg-sky-500/25">🎓 Cómo se hace</button>}
                   {e.video && <a href={e.video} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-sky-300 hover:bg-white/10">▶ Técnica</a>}
                 </div>
                 <p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-zinc-300">
@@ -501,6 +511,7 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
           </aside>
         </div>
 
+        {coach && tpl && e && <TrainerView t={tpl} exercise={e.name} onClose={() => setCoach(false)} />}
         {safety && <SafetyCheck exercise={e?.name ?? null} variants={variants} onAction={onSafety} onCaution={saveCaution} cautionWhat={cautionWhat} onClose={(lvl) => closeSafety(lvl !== 'alarma')} />}
 
         {finish && (
