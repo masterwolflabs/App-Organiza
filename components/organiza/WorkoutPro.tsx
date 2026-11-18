@@ -15,6 +15,7 @@ import { CheckinModal, RecoveryBlock, useRecovery } from '@/components/organiza/
 import type { Option } from '@/components/organiza/recoveryData';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { BodyPanel } from '@/components/organiza/BodyPanel';
+import { activeCautions, cautionLabel } from '@/components/organiza/safetyData';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
@@ -275,6 +276,12 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
           {restNote && <p className="rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-100 ring-1 ring-sky-400/30">{restNote}</p>}
+          {activeCautions(api.training.caution, isoDay()).map((c) => (
+            <div key={`${c.zone}-${c.muscle ?? ''}`} className="flex items-start gap-3 rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-100 ring-1 ring-sky-400/30">
+              <p className="min-w-0 flex-1">🛟 <b>Cuidando tu {cautionLabel(c, muscleLabel)}</b> hasta el {new Date(`${c.until}T12:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}: en el entreno se marcan los ejercicios que la cargan, para hacerlos livianos o saltarlos. <span className="text-sky-200/70">({c.reason})</span> Si el dolor sigue, que lo vea un profesional.</p>
+              <button type="button" onClick={() => api.saveTraining({ ...api.training, caution: (api.training.caution ?? []).filter((x) => x !== c) })} className="shrink-0 rounded-lg bg-white/[0.08] px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/[0.14]">Ya estoy bien</button>
+            </div>
+          ))}
           <RecoveryBlock api={rec} logs={api.logs} routine={todayRoutine} version={todayPlan?.version ?? 'completa'} onCheckin={() => setCheckin({ r: todayRoutine, v: todayPlan?.version ?? 'completa' })} />
           <GoalsBlock workout={api} />
           <ExperimentsBlock workout={api} />

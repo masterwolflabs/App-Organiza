@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Minus, Music2, Pause, Play, Plus, Star, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, LifeBuoy, Minus, Music2, Pause, Play, Plus, SkipForward, Star, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useConfirm } from '@/components/ui/confirm';
 import { MediaPanel } from '@/components/organiza/Recipes';
@@ -9,8 +9,10 @@ import { playOnce } from '@/components/organiza/sounds';
 import { notify } from '@/components/organiza/notify';
 import { VERSIONS } from '@/components/organiza/planData';
 import { usePlanCtx } from '@/components/organiza/planCtx';
+import { SafetyCheck, ACTION_LABEL } from '@/components/organiza/SafetyCheck';
+import { cautionFor, cautionLabel, incidentText, loadsZone, proposal, withCaution, zoneLabel, type Action, type Report, type Verdict } from '@/components/organiza/safetyData';
 import {
-  exercisesOf, isoDay, lastTime, minutesFor, muscleLabel,
+  exercisesOf, isoDay, lastTime, LIBRARY, minutesFor, muscleLabel,
   type Feel, type LoggedExercise, type Routine, type RoutineExercise, type SetKind, type Version, type WorkoutApi,
 } from '@/components/organiza/workoutData';
 
@@ -37,6 +39,12 @@ type Session = {
   current: number;
   sets: Record<string, FSet[]>;
   rest: Rest | null;
+  /** MOD 11: ejercicios saltados por seguridad, cambiados por una variante y lo que pasó (va a las notas). */
+  skipped?: string[];
+  renamed?: Record<string, string>;
+  incidents?: string[];
+  /** Hubo una señal de alarma: no se ofrece seguir entrenando. */
+  alarm?: boolean;
 };
 
 const KEY = (id: string) => `wp-focus:${id}`;
@@ -168,7 +176,8 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
     };
   }, []);
 
-  const list = exercisesOf(r, s.version);
+  const list = exercisesOf(r, s.version).map((x) => (s.renamed?.[x.id] ? { ...x, name: s.renamed[x.id] } : x));
+  const isSkipped = (x: RoutineExercise) => !!s.skipped?.includes(x.id);
   const idx = Math.min(s.current, Math.max(0, list.length - 1));
   const e = list[idx];
   const sets = (e && s.sets[e.id]) || [];
@@ -186,9 +195,9 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
     void notify('💪 ¡A la siguiente serie!', s.rest.name);
   }, [now, s.rest]);
 
-  const workAll = list.flatMap((x) => (s.sets[x.id] ?? []).filter((y) => y.kind === 'work'));
+  const workAll = list.filter((x) => !isSkipped(x)).flatMap((x) => (s.sets[x.id] ?? []).filter((y) => y.kind === 'work'));
   const workDone = workAll.filter((y) => y.done).length;
-  const exDone = (x: RoutineExercise) => (s.sets[x.id] ?? []).filter((y) => y.kind === 'work').every((y) => y.done);
+  const exDone = (x: RoutineExercise) => isSkipped(x) || (s.sets[x.id] ?? []).filter((y) => y.kind === 'work').every((y) => y.done);
   const failures = list.flatMap((x) => s.sets[x.id] ?? []).filter((y) => y.done && y.rir === 0).length;
   const ref = e ? lastTime(api.logs, e.name) : null;
 
@@ -243,6 +252,78 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
     onClose();
   };
 
+  /* 🛟 MOD 11: «Algo no anda bien» */
+  const [safety, setSafety] = useState(false);
+  const [pausedBySafety, setPausedBySafety] = useState(false);
+  const today = isoDay();
+  const caution = e ? cautionFor(e.muscles, api.training.caution, today) : null;
+  const openSafety = () => {
+    if (!paused) {
+      togglePause();
+      setPausedBySafety(true);
+    } else setPausedBySafety(false);
+    setSafety(true);
+  };
+  const closeSafety = (resume: boolean) => {
+    setSafety(false);
+    if (resume && pausedBySafety && s.pausedAt !== null) togglePause();
+    setPausedBySafety(false);
+  };
+  const variants = e?.muscles[0] ? LIBRARY[e.muscles[0]].map((x) => x.name).filter((n) => n.toLowerCase() !== e.name.toLowerCase()) : [];
+  const onSafety = (a: Action, v: Verdict, rep: Report, variant?: string) => {
+    let chosen = ACTION_LABEL[a].toLowerCase();
+    const nextOpen = (skip: string[]) => {
+      const j = list.findIndex((x, k) => k > idx && !skip.includes(x.id) && !exDone(x));
+      const k = j >= 0 ? j : list.findIndex((x) => !skip.includes(x.id) && !exDone(x));
+      return k;
+    };
+    if (a === 'saltar_zona' && v.zone) {
+      const hit = list.filter((x) => loadsZone(x.muscles, v.zone!, e?.muscles) && !(s.sets[x.id] ?? []).filter((y) => y.kind === 'work').every((y) => y.done)).map((x) => x.id);
+      const skip = [...new Set([...(s.skipped ?? []), ...hit])];
+      const k = nextOpen(skip);
+      chosen = `saltó ${hit.length} ejercicio${hit.length === 1 ? '' : 's'} que cargan ${v.zone === 'musculo' ? 'ese músculo' : `su ${zoneLabel(v.zone)}`}`;
+      update((x) => ({ ...x, skipped: skip, current: k >= 0 ? k : x.current }));
+      setNotice(k >= 0 ? `Saltaste ${hit.length} ejercicio${hit.length === 1 ? '' : 's'}. Sigue solo si lo que queda no duele.` : 'No queda nada que no cargue esa zona: termina aquí, lo hecho cuenta.');
+    } else if (a === 'saltar' && e) {
+      const skip = [...new Set([...(s.skipped ?? []), e.id])];
+      const k = nextOpen(skip);
+      update((x) => ({ ...x, skipped: skip, current: k >= 0 ? k : x.current }));
+    } else if (a === 'bajar_carga' && e) {
+      update((x) => ({ ...x, sets: { ...x.sets, [e.id]: (x.sets[e.id] ?? []).map((y) => (!y.done && y.weight ? { ...y, weight: Math.max(0, Math.round((y.weight * 0.85) / 2.5) * 2.5) } : y)) } }));
+      setNotice('Bajé un 15 % el peso de las series que te faltan en este ejercicio.');
+    } else if (a === 'menos_series' && e) {
+      const cur = s.sets[e.id] ?? [];
+      const last = cur.map((y, k) => ({ y, k })).filter(({ y }) => !y.done && y.kind === 'work').at(-1);
+      if (last && cur.filter((y) => y.kind === 'work').length > 1) update((x) => ({ ...x, sets: { ...x.sets, [e.id]: x.sets[e.id].filter((_, k) => k !== last.k) } }));
+    } else if (a === 'variante' && e && variant) {
+      chosen = `cambió ${e.name} por ${variant}`;
+      update((x) => ({ ...x, renamed: { ...(x.renamed ?? {}), [e.id]: variant }, sets: { ...x.sets, [e.id]: (x.sets[e.id] ?? []).map((y) => (y.done ? y : { ...y, weight: null })) } }));
+      setNotice(`Ahora: ${variant}. Parte liviano y anota tu peso.`);
+    } else if (a === 'descanso_largo' && e) {
+      rang.current = false;
+      update((x) => ({ ...x, rest: x.rest && !('paused' in x.rest) ? { ...x.rest, until: x.rest.until + 60_000, total: x.rest.total + 60 } : x.rest && 'paused' in x.rest ? { ...x.rest, left: x.rest.left + 60, total: x.rest.total + 60 } : { left: (e.rest || 60) + 60, total: (e.rest || 60) + 60, name: e.name, paused: true } }));
+    } else if (a === 'version_recuperacion') {
+      const fresh = freshSets(r, api, 'recuperacion');
+      update((x) => ({ ...x, version: 'recuperacion', current: 0, sets: Object.fromEntries(Object.entries(x.sets).map(([id, l]) => [id, l.some((y) => y.done) ? l : fresh[id] ?? l])) }));
+    }
+    const text = incidentText(rep, v, e?.name ?? null, chosen);
+    update((x) => ({ ...x, incidents: [...(x.incidents ?? []), text], alarm: x.alarm || v.level === 'alarma' }));
+    if (a === 'terminar') {
+      setSafety(false);
+      setPausedBySafety(false);
+      setFinish(true);
+      return;
+    }
+    closeSafety(v.level !== 'alarma');
+  };
+  const saveCaution = async (v: Verdict, rep: Report) => {
+    if (!v.zone) return;
+    const why = [rep.feel ? rep.feel : rep.what, rep.intensity !== null ? `${rep.intensity}/10` : ''].filter(Boolean).join(' ');
+    const c = proposal(v.zone, today, `${e?.name ?? 'entreno'}: ${why}`, e?.muscles[0]);
+    await api.saveTraining({ ...api.training, caution: withCaution(api.training.caution, c, today) });
+  };
+  const cautionWhat = (v: Verdict | null) => (v?.zone ? (v.zone === 'musculo' ? (e?.muscles[0] ? `tu ${muscleLabel(e.muscles[0]).toLowerCase()}` : null) : `tu ${zoneLabel(v.zone)}`) : null);
+
   return (
     <BodyPortal>
       <div role="dialog" aria-label={`Workout Focus: ${r.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col bg-[#0b0c0f] text-left">
@@ -264,6 +345,7 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
             >
               {VERSIONS.map((v) => <option key={v.id} value={v.id}>{v.emoji} {v.label}</option>)}
             </select>
+            <button type="button" onClick={openSafety} data-help="¿Dolor, mareo o algo raro? Toca aquí" className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-400/15 px-2 py-1.5 text-xs font-bold text-amber-200 ring-1 ring-amber-400/40 hover:bg-amber-400/25"><LifeBuoy className="h-4 w-4" /> <span className="hidden min-[400px]:inline">Algo no anda bien</span></button>
             <button type="button" onClick={() => setMusic((m) => !m)} aria-label="Música y video" aria-pressed={music} className={`rounded-lg p-2 md:hidden ${music ? 'bg-white/15 text-white' : 'text-zinc-300 hover:bg-white/10'}`}><Music2 className="h-5 w-5" /></button>
             <button type="button" onClick={exit} aria-label="Salir (tu entreno queda guardado)" data-help="Salir: tu entreno queda guardado para seguir después" className="rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
           </div>
@@ -284,8 +366,8 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
               const d = w.filter((y) => y.done).length;
               return (
                 <button key={x.id} type="button" onClick={() => go(i)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${i === idx ? 'bg-red-500 text-[#fff] ring-red-400' : exDone(x) ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/40' : 'text-zinc-300 ring-white/15'}`}>
-                  {exDone(x) ? <Check className="h-3.5 w-3.5" /> : <span className="tabular-nums opacity-80">{d}/{w.length}</span>}
-                  <span className="max-w-[140px] truncate">{x.name}</span>
+                  {isSkipped(x) ? <SkipForward className="h-3.5 w-3.5" /> : exDone(x) ? <Check className="h-3.5 w-3.5" /> : <span className="tabular-nums opacity-80">{d}/{w.length}</span>}
+                  <span className={`max-w-[140px] truncate ${isSkipped(x) ? 'line-through opacity-70' : ''}`}>{x.name}</span>
                 </button>
               );
             })}
@@ -323,6 +405,13 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
                     <p className="mt-0.5 text-xs text-zinc-400"><span className={`mr-1.5 rounded-full px-1.5 py-px text-[9px] font-bold ${e.role === 'principal' ? 'bg-red-500/25 text-red-100' : 'bg-white/10 text-zinc-300'}`}>{e.role === 'principal' ? 'PRINCIPAL' : 'COMPLEMENTO'}</span>{e.sets} × {e.reps}{e.rest ? ` · descanso ~${e.rest} s` : ''}{e.muscles.length ? ` · ${e.muscles.map(muscleLabel).join(', ')}` : ''}</p>
                     {e.intensity && <p className="mt-0.5 text-[11px] text-sky-300">🎚️ {e.intensity}</p>}
                     {e.warn && <p className="mt-0.5 text-[11px] text-amber-300">⚠️ {e.warn}</p>}
+                    {caution && <p className="mt-0.5 text-[11px] font-semibold text-sky-300">🛟 Estás cuidando tu {cautionLabel(caution, muscleLabel)} (hasta el {new Date(`${caution.until}T12:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}): hazlo liviano y sin dolor, o sáltalo.</p>}
+                    {isSkipped(e) && (
+                      <p className="mt-1.5 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-100 ring-1 ring-amber-400/30">
+                        ⏭️ Saltaste este ejercicio por seguridad.{' '}
+                        <button type="button" onClick={() => update((x) => ({ ...x, skipped: (x.skipped ?? []).filter((id) => id !== e.id) }))} className="font-semibold underline">Deshacer</button>
+                      </p>
+                    )}
                   </div>
                   {e.video && <a href={e.video} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-sky-300 hover:bg-white/10">▶ Técnica</a>}
                 </div>
@@ -412,8 +501,12 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
           </aside>
         </div>
 
+        {safety && <SafetyCheck exercise={e?.name ?? null} variants={variants} onAction={onSafety} onCaution={saveCaution} cautionWhat={cautionWhat} onClose={(lvl) => closeSafety(lvl !== 'alarma')} />}
+
         {finish && (
           <Finish
+            initialNote={(s.incidents ?? []).join('\n')}
+            alarm={!!s.alarm}
             r={r}
             s={s}
             list={list}
@@ -444,9 +537,9 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
 
 /* ── Terminar: resumen, «¿cómo te fue?» y guardar ─────────────────────────────────── */
 
-const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minutes: number; api: WorkoutApi; experimentId?: string; onCancel: () => void; onDiscard: () => void; onDone: (logId?: string | null) => void }> = ({ r, s, list, minutes, api, experimentId, onCancel, onDiscard, onDone }) => {
+const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minutes: number; api: WorkoutApi; experimentId?: string; initialNote?: string; alarm?: boolean; onCancel: () => void; onDiscard: () => void; onDone: (logId?: string | null) => void }> = ({ r, s, list, minutes, api, experimentId, initialNote, alarm, onCancel, onDiscard, onDone }) => {
   const [feel, setFeel] = useState<Feel | null>(null);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(initialNote ?? '');
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
   const stats = useMemo(() => {
@@ -496,10 +589,15 @@ const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minute
           </div>
           <p className="mt-1.5 text-[11px] text-zinc-500">Queda en tu historial. La próxima vez verás tus cargas de hoy como referencia; tú decides si subir.</p>
         </div>
-        <textarea value={note} onChange={(x) => setNote(x.target.value)} rows={2} placeholder="¿Algo que anotar? (molestias, técnica, máquina ocupada…)" className="w-full resize-none rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10" />
+        <textarea value={note} onChange={(x) => setNote(x.target.value)} rows={initialNote ? 4 : 2} placeholder="¿Algo que anotar? (molestias, técnica, máquina ocupada…)" className="w-full resize-none rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10" />
+        {alarm && <p className="rounded-xl bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-100 ring-1 ring-rose-400/40">🚫 Hoy no sigas entrenando. Si los síntomas son fuertes o no se pasan, SAMU 131.</p>}
         <div className="flex gap-2">
-          <button type="button" disabled={busy || !stats.any} onClick={save} className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-sm font-bold text-[#09090b] hover:bg-emerald-400 disabled:opacity-50">{busy ? 'Guardando…' : stats.any ? 'Guardar entreno' : 'Marca al menos una serie'}</button>
-          <button type="button" onClick={onCancel} className="rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/[0.1]">Seguir</button>
+          {alarm && !stats.any ? (
+            <button type="button" onClick={() => onDone(null)} className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-bold text-[#111]">Cerrar (no hiciste series que guardar)</button>
+          ) : (
+            <button type="button" disabled={busy || !stats.any} onClick={save} className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-sm font-bold text-[#09090b] hover:bg-emerald-400 disabled:opacity-50">{busy ? 'Guardando…' : stats.any ? 'Guardar entreno' : 'Marca al menos una serie'}</button>
+          )}
+          {!alarm && <button type="button" onClick={onCancel} className="rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/[0.1]">Seguir</button>}
         </div>
         <button type="button" onClick={onDiscard} className="w-full text-center text-[11px] font-semibold text-zinc-500 hover:text-rose-300">Descartar este entreno</button>
       </div>

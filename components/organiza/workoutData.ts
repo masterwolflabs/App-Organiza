@@ -264,7 +264,8 @@ export const PLACES: { id: Place; label: string; img: string; emoji: string }[] 
   { id: 'aire_libre', label: 'Al aire libre', img: '/workout/aire-libre.webp', emoji: '🌳' },
   { id: 'gimnasio', label: 'Gimnasio', img: '/workout/gimnasio.webp', emoji: '🏋️' },
 ];
-export type Training = { mode?: Mode; week?: Record<string, DayPlan>; place?: Place };
+/** `caution` (MOD 11): zonas que cuidas por unos días, aceptadas desde «Algo no anda bien» del Focus. */
+export type Training = { mode?: Mode; week?: Record<string, DayPlan>; place?: Place; caution?: Caution[] };
 
 export const MODES: { id: Mode; label: string; emoji: string; help: string }[] = [
   { id: 'minimo', label: 'Mínimo', emoji: '🛟', help: '3 días largos (los masivos). Con esto la semana está cumplida.' },
@@ -319,6 +320,8 @@ export type WorkoutLog = {
   /** MOD 07: entreno de un plan experimental (no cuenta como «habitual» al comparar). */
   experiment_id?: string | null;
 };
+
+import type { Caution } from './safetyData';
 
 /** Fecha local «AAAA-MM-DD». */
 export const isoDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
