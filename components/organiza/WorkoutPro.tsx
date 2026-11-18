@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Check, ChevronRight, Play, Plus, Sparkles, Star, Tr
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { AssessmentModal } from '@/components/organiza/Assessment';
 import { TrainMode } from '@/components/organiza/WorkoutFocus';
+import { ProgressCenter } from '@/components/organiza/ProgressCenter';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -193,6 +194,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const [train, setTrain] = useState<{ r: Routine; v: Version } | null>(null);
   const [muscle, setMuscle] = useState<MuscleId | null>(null);
   const [personalize, setPersonalize] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
   const today = weekdayOf(new Date());
   const week = api.training.week ?? {};
   const planned = Object.values(week).filter((d) => d.routine).length;
@@ -261,7 +263,10 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
             )}
           </section>
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
-            <h2 className="mb-2 text-sm font-semibold text-white">📈 Fuerza</h2>
+            <div className="mb-2 flex items-center gap-2">
+              <h2 className="flex-1 text-sm font-semibold text-white">📈 Fuerza</h2>
+              <button type="button" onClick={() => setProgressOpen(true)} className="rounded-lg bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-200 ring-1 ring-red-400/30 hover:bg-red-500/25">Centro de progreso →</button>
+            </div>
             {progress.length ? (
               <ul className="space-y-1">
                 {progress.map((p) => (
@@ -297,6 +302,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
 
       {dayOpen !== null && <DayChooser wd={dayOpen} api={api} plan={week[String(dayOpen)] ?? { routine: null, version: 'completa' }} onSave={(p) => { setDay(dayOpen, p); setDayOpen(null); }} onEdit={(id) => { setDayOpen(null); setEditing(id); }} onClose={() => setDayOpen(null)} />}
       {editingRoutine && <RoutineEditor r={editingRoutine} api={api} onTrain={(v) => { setEditing(null); setTrain({ r: editingRoutine, v }); }} onClose={() => setEditing(null)} />}
+      {progressOpen && <ProgressCenter api={api} onClose={() => setProgressOpen(false)} />}
       {personalize && <AssessmentModal place={api.training.place ?? null} onPlace={(p) => PLACES.some((x) => x.id === p) && api.saveTraining({ ...api.training, place: p as Place })} onClose={() => setPersonalize(false)} />}
       {train && <TrainMode r={train.r} version={train.v} api={api} onClose={() => setTrain(null)} />}
     </div>
