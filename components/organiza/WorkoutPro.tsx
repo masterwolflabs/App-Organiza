@@ -6,6 +6,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { AssessmentModal } from '@/components/organiza/Assessment';
 import { TrainMode } from '@/components/organiza/WorkoutFocus';
 import { ProgressCenter } from '@/components/organiza/ProgressCenter';
+import { GoalsBlock } from '@/components/organiza/Goals';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -238,6 +239,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
+          <GoalsBlock workout={api} />
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
               <h2 className="flex-1 font-display text-xl font-semibold text-white">📋 Tus rutinas</h2>

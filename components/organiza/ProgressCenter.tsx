@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { MUSCLES, muscleLabel, type WorkoutApi } from '@/components/organiza/workoutData';
 import { METRICS, useBodyLogs } from '@/components/organiza/bodyData';
+import { GoalsSummary } from '@/components/organiza/Goals';
 import {
   bodySeries, buckets, change, daysBetween, exercises, iso, muscleStimulus, parse, PERIODS, ranges, recordsIn, totals,
   type PeriodId, type Range,
@@ -204,6 +205,8 @@ export const ProgressCenter: React.FC<{ api: WorkoutApi; onClose: () => void }> 
             <Card title="🗣️ En simple">
               <ul className="space-y-1.5 text-sm text-zinc-200">{story.map((s, i) => <li key={i}>• {s}</li>)}</ul>
             </Card>
+
+            <GoalsSummary logs={logs} body={body.logs} />
 
             {t.workouts > 0 && (
               <div className="grid gap-4 lg:grid-cols-2">
