@@ -29,9 +29,9 @@ const typeOf = (t: GoalType) => GOAL_TYPES.find((x) => x.id === t) ?? GOAL_TYPES
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Las respuestas de la evaluación que le sirven a la IA (en palabras). */
-function profileOf(state: ReturnType<typeof useAssessment>['state']): Record<string, string> {
+export function profileOf(state: ReturnType<typeof useAssessment>['state']): Record<string, string> {
   const all = allAnswers(state);
-  const pick = ['objetivo', 'objetivo_otro', 'experiencia', 'lugar', 'dias', 'duracion', 'prioridades', 'molestias_detalle', 'intensidad', 'progresion', 'recuperacion', 'poco_tiempo'];
+  const pick = ['objetivo', 'objetivo_otro', 'experiencia', 'lugar', 'equipo_casa', 'equipo_gimnasio', 'equipo_aire_libre', 'equipo_extra', 'equipo_detalle', 'dias', 'duracion', 'prioridades', 'molestias_detalle', 'intensidad', 'progresion', 'recuperacion', 'poco_tiempo', 'ejercicios_evitar'];
   return Object.fromEntries(pick.map((id) => {
     const q = QUESTIONS.find((x) => x.id === id);
     return [q?.title ?? id, q && all[id] !== undefined ? answerLabel(q, all[id]) : ''];

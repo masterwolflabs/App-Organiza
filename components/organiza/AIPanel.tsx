@@ -47,7 +47,9 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
   useEffect(() => {
     if (convId) loadMessages(convId).then((m) => setMessages(m.slice(-30))).catch(() => {});
   }, [convId]);
-  useEffect(() => end.current?.scrollIntoView({ block: 'end', behavior: 'instant' as ScrollBehavior }), [messages, busy, results]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end', behavior: 'instant' as ScrollBehavior });
+  }, [messages, busy, results]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);

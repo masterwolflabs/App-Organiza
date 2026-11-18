@@ -7,6 +7,7 @@ import { AssessmentModal } from '@/components/organiza/Assessment';
 import { TrainMode } from '@/components/organiza/WorkoutFocus';
 import { ProgressCenter } from '@/components/organiza/ProgressCenter';
 import { GoalsBlock } from '@/components/organiza/Goals';
+import { ExperimentsBlock } from '@/components/organiza/Experiments';
 import { diffText, versionLabel, VERSIONS, type Version as PlanVersion } from '@/components/organiza/planData';
 import { activePlanCtx, usePlanCtx } from '@/components/organiza/planCtx';
 import { WeekSuggest } from '@/components/organiza/WeekSuggest';
@@ -277,6 +278,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
           {restNote && <p className="rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-100 ring-1 ring-sky-400/30">{restNote}</p>}
           <RecoveryBlock api={rec} logs={api.logs} routine={todayRoutine} version={todayPlan?.version ?? 'completa'} onCheckin={() => setCheckin({ r: todayRoutine, v: todayPlan?.version ?? 'completa' })} />
           <GoalsBlock workout={api} />
+          <ExperimentsBlock workout={api} />
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
               <h2 className="flex-1 font-display text-xl font-semibold text-white">📋 Tus rutinas</h2>

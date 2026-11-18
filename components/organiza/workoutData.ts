@@ -316,6 +316,8 @@ export type WorkoutLog = {
   minutes: number | null;
   feel: Feel | null;
   notes: string;
+  /** MOD 07: entreno de un plan experimental (no cuenta como «habitual» al comparar). */
+  experiment_id?: string | null;
 };
 
 /** Fecha local «AAAA-MM-DD». */

@@ -114,7 +114,7 @@ const Stepper: React.FC<{ value: number | null; step: number; unit: string; labe
 
 /* ── Workout Focus ────────────────────────────────────────────────────────────────── */
 
-export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void; /** Lo que elegiste en «¿Cómo llegas?» (ej. menos series), visible todo el entreno. */ hint?: string }> = ({ r, version, api, onClose, hint }) => {
+export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void; /** Lo que elegiste en «¿Cómo llegas?» (ej. menos series), visible todo el entreno. */ hint?: string; /** MOD 07: entreno de un experimento. */ experimentId?: string; onSaved?: (logId: string | null) => void }> = ({ r, version, api, onClose, hint, experimentId, onSaved }) => {
   const confirm = useConfirm();
   usePlanCtx();
   const [{ s: initial, resumed }] = useState(() => loadSession(r, version, api));
@@ -427,11 +427,13 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
               } catch {}
               onClose();
             }}
-            onDone={() => {
+            experimentId={experimentId}
+            onDone={(logId) => {
               try {
                 localStorage.removeItem(KEY(r.id));
               } catch {}
               onClose();
+              onSaved?.(logId ?? null);
             }}
           />
         )}
@@ -442,7 +444,7 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
 
 /* ── Terminar: resumen, «¿cómo te fue?» y guardar ─────────────────────────────────── */
 
-const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minutes: number; api: WorkoutApi; onCancel: () => void; onDiscard: () => void; onDone: () => void }> = ({ r, s, list, minutes, api, onCancel, onDiscard, onDone }) => {
+const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minutes: number; api: WorkoutApi; experimentId?: string; onCancel: () => void; onDiscard: () => void; onDone: (logId?: string | null) => void }> = ({ r, s, list, minutes, api, experimentId, onCancel, onDiscard, onDone }) => {
   const [feel, setFeel] = useState<Feel | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -460,10 +462,10 @@ const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minute
     const exercises: LoggedExercise[] = list
       .map((e) => ({ name: e.name, muscles: e.muscles, key: e.key, sets: (s.sets[e.id] ?? []).map((x) => ({ weight: x.weight, reps: x.reps, done: x.done, kind: x.kind, rir: x.rir })) }))
       .filter((e) => e.sets.some((x) => x.done));
-    const res = await api.addLog({ routine_id: r.id, day: s.day, title: r.title, core: r.core, version: s.version, exercises, quality_done: stats.keyDone, quality_total: stats.keys, minutes, feel, notes: note.trim() });
+    const res = await api.addLog({ routine_id: experimentId ? null : r.id, experiment_id: experimentId ?? null, day: s.day, title: r.title, core: r.core, version: s.version, exercises, quality_done: stats.keyDone, quality_total: stats.keys, minutes, feel, notes: note.trim() });
     setBusy(false);
     if (res.pending) setOffline(true);
-    else onDone();
+    else onDone(res.log?.id ?? null);
   };
   if (offline)
     return (
@@ -471,7 +473,7 @@ const Finish: React.FC<{ r: Routine; s: Session; list: RoutineExercise[]; minute
         <div className="w-full max-w-md space-y-3 rounded-3xl bg-[#14161b] p-5 ring-1 ring-white/10">
           <p className="text-lg font-semibold text-white">📴 Sin conexión</p>
           <p className="text-sm text-zinc-300">Tu entreno quedó guardado en este equipo y se sube solo la próxima vez que abras Workout Pro con internet.</p>
-          <button type="button" onClick={onDone} className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-[#09090b]">Entendido</button>
+          <button type="button" onClick={() => onDone(null)} className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-[#09090b]">Entendido</button>
         </div>
       </div>
     );
