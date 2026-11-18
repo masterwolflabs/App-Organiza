@@ -148,7 +148,10 @@ export type Routine = {
   notes: string;
   sort: number;
 };
-export type Version = 'completa' | 'corta';
+export type { Version } from './planData';
+import type { Version } from './planData';
+import { estimateMinutes, planOf, type PlanCtx } from './planData';
+import { activePlanCtx } from './planCtx';
 
 const xid = () => Math.random().toString(36).slice(2, 9);
 const ex = (name: string, muscles: MuscleId[], key: boolean, sets: number, reps: string, rest = 90): RoutineExercise => ({ id: xid(), name, muscles, key, sets, reps, rest, weight: null });
@@ -241,7 +244,14 @@ export const DEFAULT_ROUTINES: Seed[] = [
 ];
 
 /** La versión corta = solo los ⭐ clave. */
-export const exercisesOf = (r: Pick<Routine, 'exercises'>, v: Version) => (v === 'corta' ? r.exercises.filter((e) => e.key) : r.exercises);
+/** La versión `v` de una rutina (MOD 06: calculada, la rutina no cambia). Usa el contexto de la evaluación si no se pasa uno. */
+export const exercisesOf = (r: Pick<Routine, 'exercises'>, v: Version, ctx: PlanCtx = activePlanCtx) => planOf(r.exercises, v, ctx);
+/** Minutos de una versión: la estimación del motor escalada a los minutos que le pusiste a la completa (MOD 06). */
+export const minutesFor = (r: Pick<Routine, 'exercises' | 'full_minutes'>, v: Version) => {
+  const full = estimateMinutes(exercisesOf(r, 'completa'));
+  const est = estimateMinutes(exercisesOf(r, v));
+  return Math.max(10, Math.round(((r.full_minutes ?? full) * est) / Math.max(1, full) / 5) * 5);
+};
 
 /* ── La semana: modalidades ───────────────────────────────────────────────────────── */
 

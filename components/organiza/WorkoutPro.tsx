@@ -7,6 +7,9 @@ import { AssessmentModal } from '@/components/organiza/Assessment';
 import { TrainMode } from '@/components/organiza/WorkoutFocus';
 import { ProgressCenter } from '@/components/organiza/ProgressCenter';
 import { GoalsBlock } from '@/components/organiza/Goals';
+import { diffText, versionLabel, VERSIONS, type Version as PlanVersion } from '@/components/organiza/planData';
+import { activePlanCtx, usePlanCtx } from '@/components/organiza/planCtx';
+import { WeekSuggest } from '@/components/organiza/WeekSuggest';
 import { CheckinModal, RecoveryBlock, useRecovery } from '@/components/organiza/Recovery';
 import type { Option } from '@/components/organiza/recoveryData';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
@@ -19,7 +22,7 @@ import dynamic from 'next/dynamic';
 const BodyMap3D = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.BodyMap3D), { ssr: false, loading: () => <div className="h-[440px]" /> });
 const MuscleCover = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.MuscleCover), { ssr: false, loading: () => <span className="absolute inset-0 animate-pulse bg-white/[0.03]" /> });
 import {
-  exercisesOf, isoDay, LIBRARY, MODES, PLACES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
+  exercisesOf, minutesFor, isoDay, LIBRARY, MODES, PLACES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
   type DayPlan, type Place, type Mode, type MuscleId, type Routine, type RoutineExercise, type Version, type WorkoutApi,
 } from '@/components/organiza/workoutData';
 
@@ -33,7 +36,8 @@ const SHORT = WEEK.map((w) => w.slice(0, 3));
 const field = 'w-full rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-red-400/50';
 const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(Math.round(s)) % 60).padStart(2, '0')}`;
 const xid = () => Math.random().toString(36).slice(2, 9);
-const minutesOf = (r: Routine, v: Version) => (v === 'corta' ? r.short_minutes ?? 30 : r.full_minutes ?? 60);
+const minutesOf = (r: Routine, v: Version) => minutesFor(r, v);
+const vLabel = (v: Version) => `${versionLabel(v).emoji} ${versionLabel(v).label}`;
 /** Músculos de una rutina (para su portada con el mono). */
 const routineMuscles = (r: Routine, v?: Version) => [...new Set((v ? exercisesOf(r, v) : r.exercises).flatMap((e) => e.muscles))];
 const kg = (n: number) => `${String(n).replace('.', ',')} kg`;
@@ -128,17 +132,21 @@ const WeekBlock: React.FC<{
   onMode: (m: Mode) => void;
   onDay: (wd: number) => void;
   onTrain: (r: Routine, v: Version, wd: number) => void;
-}> = ({ api, week, today, monday, status, doneOn, onMode, onDay, onTrain }) => (
+  onSuggest: () => void;
+}> = ({ api, week, today, monday, status, doneOn, onMode, onDay, onTrain, onSuggest }) => (
   <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
     <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-3">
       <div className="min-w-0 flex-1">
         <h2 className="font-display text-xl font-semibold text-white">🗓️ Tu semana</h2>
         <p className={`mt-0.5 text-xs font-semibold ${status.met ? 'text-emerald-300' : 'text-zinc-400'}`}>{status.text}</p>
       </div>
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-white/[0.04] p-1 ring-1 ring-white/10">
-        {MODES.map((m) => (
-          <button key={m.id} type="button" data-help={m.help} onClick={() => onMode(m.id)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] shadow' : 'text-zinc-400 hover:text-zinc-100'}`}>{m.emoji} {m.label}</button>
-        ))}
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        <button type="button" onClick={onSuggest} data-help="La IA propone qué rutina y versión va cada día; tú decides si la aplicas" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-3 py-1.5 text-xs font-bold text-red-100 ring-1 ring-red-400/40 hover:bg-red-500/25">✨ Sugerir semana</button>
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-white/[0.04] p-1 ring-1 ring-white/10">
+          {MODES.map((m) => (
+            <button key={m.id} type="button" data-help={m.help} onClick={() => onMode(m.id)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${api.training.mode === m.id ? 'bg-red-500 text-[#fff] shadow' : 'text-zinc-400 hover:text-zinc-100'}`}>{m.emoji} {m.label}</button>
+          ))}
+        </div>
       </div>
     </div>
     <div className="-mx-3 -my-2 grid snap-x auto-cols-[minmax(138px,1fr)] grid-flow-col gap-2.5 overflow-x-auto px-3 py-3">
@@ -165,7 +173,7 @@ const WeekBlock: React.FC<{
               </div>
               <div className="flex-1 px-2.5 py-2">
                 <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{r ? r.title : 'Descanso'}</p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">{r ? `${p.version === 'corta' ? '⚡ Corta' : 'Completa'} · ${minutesOf(r, p.version)} min` : done ? 'Igual entrenaste 💪' : 'Recupera'}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">{r ? `${vLabel(p.version)} · ${minutesOf(r, p.version)} min` : done ? 'Igual entrenaste 💪' : 'Recupera'}</p>
               </div>
             </button>
             {r ? (
@@ -200,12 +208,14 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const [progressOpen, setProgressOpen] = useState(false);
   const today = weekdayOf(new Date());
   const week = api.training.week ?? {};
+  usePlanCtx(); // MOD 06: prioridades, experiencia y equipo de la evaluación (para las versiones)
   // 🔋 Recuperación (MOD 05): la rutina de hoy pasa primero por «¿Cómo llegas?» (se puede saltar).
   const rec = useRecovery();
   const todayPlan = week[String(today)];
   const todayRoutine = api.routines.find((x) => x.id === todayPlan?.routine) ?? null;
   const [checkin, setCheckin] = useState<{ r: Routine | null; v: Version } | null>(null);
   const [restNote, setRestNote] = useState('');
+  const [suggest, setSuggest] = useState(false);
   // Con una señal de alerta registrada hoy, no se entra directo: se vuelve a preguntar (seguridad > comodidad).
   const startTrain = (r: Routine, v: Version, wd: number) => (wd === today && (!rec.todayCheck || rec.todayCheck.level === 'alerta') ? setCheckin({ r, v }) : setTrain({ r, v }));
   const decide = (o: Option, r: Routine | null, v: Version) => {
@@ -213,10 +223,13 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
     setRestNote('');
     if (o === 'cambiar') return setDayOpen(today);
     if (o === 'descanso') return setRestNote('🌿 Hoy descansas. Recuperarse también es entrenar.');
-    if (o === 'movilidad') return setRestNote('🧘 Hoy algo suave: movilidad, caminar o estirar. Si quieres, abre la versión corta y hazla muy liviana.');
+    if (o === 'movilidad') {
+      if (r) return setTrain({ r, v: 'recuperacion', hint: 'Versión recuperación: pocos ejercicios, liviano y lejos del fallo.' });
+      return setRestNote('🧘 Hoy algo suave: movilidad, caminar o estirar.');
+    }
     if (!r) return;
     if (o === 'corta') return setTrain({ r, v: 'corta' });
-    if (o === 'menos_series') return setTrain({ r, v, hint: 'Hoy con menos volumen: haz cerca de un tercio menos de series (puedes quitarlas con 🗑️).' });
+    if (o === 'menos_series') return setTrain({ r, v: 'reducida', hint: 'Versión reducida por cómo llegas hoy (menos complementarios y series).' });
     setTrain({ r, v });
   };
   const planned = Object.values(week).filter((d) => d.routine).length;
@@ -256,6 +269,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
         onMode={setMode}
         onDay={setDayOpen}
         onTrain={startTrain}
+        onSuggest={() => setSuggest(true)}
       />
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -329,6 +343,7 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
       {editingRoutine && <RoutineEditor r={editingRoutine} api={api} onTrain={(v) => { setEditing(null); setTrain({ r: editingRoutine, v }); }} onClose={() => setEditing(null)} />}
       {progressOpen && <ProgressCenter api={api} onClose={() => setProgressOpen(false)} />}
       {personalize && <AssessmentModal place={api.training.place ?? null} onPlace={(p) => PLACES.some((x) => x.id === p) && api.saveTraining({ ...api.training, place: p as Place })} onClose={() => setPersonalize(false)} />}
+      {suggest && <WeekSuggest api={api} todayNote={rec.todayCheck ? `nivel ${rec.todayCheck.level}, eligió ${rec.todayCheck.decision}` : ''} onClose={() => setSuggest(false)} />}
       {checkin && <CheckinModal api={rec} logs={api.logs} routine={checkin.r} muscles={checkin.r ? [...new Set(checkin.r.exercises.flatMap((e) => e.muscles))] : []} onDecide={(o) => decide(o, checkin.r, checkin.v)} onSkip={checkin.r && rec.todayCheck?.level !== 'alerta' ? () => { const c = checkin; setCheckin(null); setTrain({ r: c.r!, v: c.v }); } : undefined} onClose={() => setCheckin(null)} />}
       {train && <TrainMode r={train.r} version={train.v} hint={train.hint} api={api} onClose={() => setTrain(null)} />}
     </div>
@@ -354,15 +369,18 @@ const DayChooser: React.FC<{ wd: number; api: WorkoutApi; plan: DayPlan; onSave:
             ))}
           </div>
           {routine && (
-            <div className="flex gap-2">
-              {(['completa', 'corta'] as Version[]).map((v) => {
-                const r = api.routines.find((x) => x.id === routine)!;
-                return (
-                  <button key={v} type="button" onClick={() => setVersion(v)} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 ${version === v ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15'}`}>
-                    {v === 'completa' ? '🏋️ Completa' : '⚡ Corta'} <span className="block text-[11px] font-normal opacity-80">~{minutesOf(r, v)} min · {exercisesOf(r, v).length} ejercicios</span>
-                  </button>
-                );
-              })}
+            <div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {VERSIONS.map(({ id: v }) => {
+                  const r = api.routines.find((x) => x.id === routine)!;
+                  return (
+                    <button key={v} type="button" onClick={() => setVersion(v)} className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ring-1 ${version === v ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15 hover:bg-white/[0.04]'}`}>
+                      {vLabel(v)} <span className="block text-[11px] font-normal opacity-80">~{minutesOf(r, v)} min · {exercisesOf(r, v).length} ejerc.</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-400">{versionLabel(version).help} {diffText(api.routines.find((x) => x.id === routine)!.exercises, version, activePlanCtx)}</p>
             </div>
           )}
           <div className="flex gap-2 pt-1">
@@ -373,6 +391,49 @@ const DayChooser: React.FC<{ wd: number; api: WorkoutApi; plan: DayPlan; onSave:
         </div>
       </div>
     </BodyPortal>
+  );
+};
+
+/* ── 🧩 Versiones de una rutina (MOD 06): ver, entrenar o guardar como rutina NUEVA ───── */
+
+const VersionsPanel: React.FC<{ r: Routine; api: WorkoutApi; onTrain: (v: Version) => void }> = ({ r, api, onTrain }) => {
+  const confirm = useConfirm();
+  const [v, setV] = useState<PlanVersion>('reducida');
+  const [saved, setSaved] = useState('');
+  const plan = exercisesOf(r, v);
+  const saveAsNew = async () => {
+    const label = versionLabel(v).label;
+    if (!(await confirm({ title: `¿Guardar «${r.title} (${label})» como rutina nueva?`, message: 'Tu rutina original queda igual. La nueva aparece en Tus rutinas y la puedes editar.', confirmLabel: 'Guardar como nueva' }))) return;
+    const made = await api.addRoutine({ title: `${r.title} (${label})`, emoji: r.emoji, kind: r.kind, core: false, code: '', exercises: plan.map(({ role: _r, why: _w, baseSets: _b, intensity: _i, warn: _x, ...e }) => ({ ...e, id: Math.random().toString(36).slice(2, 9) })), full_minutes: minutesOf(r, v), short_minutes: minutesOf(r, 'corta'), notes: `Versión ${label.toLowerCase()} de «${r.title}».` });
+    setSaved(made ? `Guardada como «${made.title}».` : 'No se pudo guardar.');
+  };
+  return (
+    <div className="space-y-2 rounded-2xl bg-white/[0.03] p-3 ring-1 ring-white/10">
+      <p className="text-sm font-semibold text-white">🧩 Versiones de esta rutina</p>
+      <p className="text-[11px] text-zinc-500">Se calculan con tus ⭐, tus prioridades, tu equipo y tu experiencia. Mirarlas no cambia tu rutina.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {VERSIONS.map((x) => <button key={x.id} type="button" onClick={() => { setV(x.id); setSaved(''); }} className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${v === x.id ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-300 ring-white/15'}`}>{x.emoji} {x.label}</button>)}
+      </div>
+      <p className="text-xs text-zinc-300">{versionLabel(v).help} <span className="text-zinc-500">~{minutesOf(r, v)} min · {diffText(r.exercises, v, activePlanCtx)}</span></p>
+      <ul className="space-y-1">
+        {plan.map((e) => (
+          <li key={e.id} className="rounded-xl bg-black/20 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full px-1.5 py-px text-[9px] font-bold ${e.role === 'principal' ? 'bg-red-500/25 text-red-100' : 'bg-white/10 text-zinc-300'}`}>{e.role === 'principal' ? 'PRINCIPAL' : 'COMPLEMENTO'}</span>
+              <span className="min-w-0 flex-1 truncate font-semibold text-zinc-100">{e.name}</span>
+              <span className="tabular-nums text-zinc-300">{e.sets} × {e.reps}{e.sets !== e.baseSets ? <span className="text-zinc-500"> (antes {e.baseSets})</span> : null}</span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-zinc-500">{e.why}{e.intensity ? ` · ${e.intensity}` : ''}</p>
+            {e.warn && <p className="mt-0.5 text-[11px] text-amber-300">⚠️ {e.warn}</p>}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onTrain(v)} className="inline-flex items-center gap-1 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-[#fff] hover:bg-red-400"><Play className="h-3.5 w-3.5" /> Entrenar esta versión</button>
+        {v !== 'completa' && <button type="button" onClick={saveAsNew} className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/[0.14]">Guardar como rutina nueva</button>}
+        {saved && <span className="self-center text-[11px] text-emerald-300">{saved}</span>}
+      </div>
+    </div>
   );
 };
 
@@ -457,9 +518,11 @@ const RoutineEditor: React.FC<{ r: Routine; api: WorkoutApi; onTrain: (v: Versio
               </div>
             </div>
 
+            <VersionsPanel r={r} api={api} onTrain={onTrain} />
+
             <div className="flex flex-wrap gap-2 pt-1">
               <button type="button" onClick={() => onTrain('completa')} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 text-sm font-bold text-[#fff] hover:bg-red-400"><Play className="h-4 w-4" /> Entrenar completa</button>
-              <button type="button" onClick={() => onTrain('corta')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.08] px-3 py-2 text-sm font-bold text-[#fff] hover:bg-white/[0.14]">⚡ Entrenar corta</button>
+              <button type="button" onClick={() => onTrain('corta')} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.08] px-3 py-2 text-sm font-bold text-[#fff] hover:bg-white/[0.14]">⚡ Entrenar express</button>
               <button type="button" onClick={async () => { if (await confirm({ title: `¿Borrar la rutina «${r.title}»?`, message: 'Los días que la tenían quedan en descanso. Tus entrenos anotados no se borran.', confirmLabel: 'Borrar', tone: 'danger' })) { await api.removeRoutine(r.id); onClose(); } }} className="ml-auto rounded-xl px-3 py-2 text-sm text-zinc-500 hover:text-rose-300">Borrar rutina</button>
             </div>
           </div>
@@ -490,7 +553,7 @@ export const WorkoutOfDay: React.FC<{ weekdays: number[] }> = ({ weekdays }) => 
         </div>
       )}
       {r && p ? (
-        <div className="max-w-xs"><RoutineCard r={r} version={p.version} sub={`${p.version === 'corta' ? '⚡ Corta' : '🏋️ Completa'} · ~${minutesOf(r, p.version)} min`} onOpen={() => setTrain({ r, v: p.version })} onTrain={() => setTrain({ r, v: p.version })} /></div>
+        <div className="max-w-xs"><RoutineCard r={r} version={p.version} sub={`${vLabel(p.version)} · ~${minutesOf(r, p.version)} min`} onOpen={() => setTrain({ r, v: p.version })} onTrain={() => setTrain({ r, v: p.version })} /></div>
       ) : (
         <p className="text-sm text-zinc-500">🌿 El {WEEK[day].toLowerCase()} es de descanso en tu plan.</p>
       )}

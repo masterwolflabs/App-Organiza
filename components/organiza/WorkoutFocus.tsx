@@ -7,8 +7,10 @@ import { useConfirm } from '@/components/ui/confirm';
 import { MediaPanel } from '@/components/organiza/Recipes';
 import { playOnce } from '@/components/organiza/sounds';
 import { notify } from '@/components/organiza/notify';
+import { VERSIONS } from '@/components/organiza/planData';
+import { usePlanCtx } from '@/components/organiza/planCtx';
 import {
-  exercisesOf, isoDay, lastTime, muscleLabel,
+  exercisesOf, isoDay, lastTime, minutesFor, muscleLabel,
   type Feel, type LoggedExercise, type Routine, type RoutineExercise, type SetKind, type Version, type WorkoutApi,
 } from '@/components/organiza/workoutData';
 
@@ -53,10 +55,13 @@ const RIR = [
   { v: 4, label: '4+' },
 ];
 
-function freshSets(r: Routine, api: WorkoutApi): Record<string, FSet[]> {
+function freshSets(r: Routine, api: WorkoutApi, version: Version = 'completa'): Record<string, FSet[]> {
   let firstKey = true;
+  // MOD 06: las series salen de la versión elegida (los ejercicios fuera de la versión quedan con sus series base).
+  const planned = new Map(exercisesOf(r, version).map((e) => [e.id, e]));
   return Object.fromEntries(
-    r.exercises.map((e) => {
+    r.exercises.map((base) => {
+      const e = planned.get(base.id) ?? base;
       const ref = lastTime(api.logs, e.name);
       const target = Number.parseInt(e.reps, 10) || null;
       const work: FSet[] = Array.from({ length: Math.max(1, e.sets) }, (_, i) => {
@@ -81,7 +86,7 @@ function loadSession(r: Routine, version: Version, api: WorkoutApi): { s: Sessio
       return { s: { ...saved, sets: { ...base, ...saved.sets } }, resumed: true };
     }
   } catch {}
-  return { s: { routineId: r.id, version, day: isoDay(), startedAt: Date.now(), pausedMs: 0, pausedAt: null, current: 0, sets: freshSets(r, api), rest: null }, resumed: false };
+  return { s: { routineId: r.id, version, day: isoDay(), startedAt: Date.now(), pausedMs: 0, pausedAt: null, current: 0, sets: freshSets(r, api, version), rest: null }, resumed: false };
 }
 
 /* ── Controles ────────────────────────────────────────────────────────────────────── */
@@ -111,6 +116,7 @@ const Stepper: React.FC<{ value: number | null; step: number; unit: string; labe
 
 export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void; /** Lo que elegiste en «¿Cómo llegas?» (ej. menos series), visible todo el entreno. */ hint?: string }> = ({ r, version, api, onClose, hint }) => {
   const confirm = useConfirm();
+  usePlanCtx();
   const [{ s: initial, resumed }] = useState(() => loadSession(r, version, api));
   const [s, setS] = useState<Session>(initial);
   const [now, setNow] = useState(Date.now());
@@ -245,16 +251,26 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
           <div className="flex items-center gap-2">
             <Dumbbell className="h-5 w-5 shrink-0 text-red-300" />
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{r.title}</p>
-            <div className="flex rounded-lg bg-white/[0.05] p-0.5 text-[11px]">
-              {(['completa', 'corta'] as Version[]).map((v) => <button key={v} type="button" onClick={() => update((x) => ({ ...x, version: v, current: 0 }))} className={`rounded-md px-2 py-1 font-semibold ${s.version === v ? 'bg-red-500 text-[#fff]' : 'text-zinc-400'}`}>{v === 'completa' ? 'Completa' : '⚡ Corta'}</button>)}
-            </div>
+            <select
+              value={s.version}
+              aria-label="Versión de la rutina"
+              onChange={(ev) => {
+                const v = ev.target.value as Version;
+                const fresh = freshSets(r, api, v);
+                // Los ejercicios que aún no empiezas toman las series de la nueva versión; lo ya anotado se respeta.
+                update((x) => ({ ...x, version: v, current: 0, sets: Object.fromEntries(Object.entries(x.sets).map(([id, l]) => [id, l.some((y) => y.done) ? l : fresh[id] ?? l])) }));
+              }}
+              className="rounded-lg bg-white/[0.06] px-2 py-1.5 text-xs font-semibold text-zinc-100 outline-none ring-1 ring-white/10"
+            >
+              {VERSIONS.map((v) => <option key={v.id} value={v.id}>{v.emoji} {v.label}</option>)}
+            </select>
             <button type="button" onClick={() => setMusic((m) => !m)} aria-label="Música y video" aria-pressed={music} className={`rounded-lg p-2 md:hidden ${music ? 'bg-white/15 text-white' : 'text-zinc-300 hover:bg-white/10'}`}><Music2 className="h-5 w-5" /></button>
             <button type="button" onClick={exit} aria-label="Salir (tu entreno queda guardado)" data-help="Salir: tu entreno queda guardado para seguir después" className="rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
           </div>
           <div className="mt-2 flex items-center gap-3">
             <p className={`font-display text-4xl font-semibold tabular-nums ${paused ? 'text-zinc-500' : 'text-[#fff]'}`}>{mmss(elapsed)}</p>
             <div className="min-w-0 flex-1">
-              <div className="flex justify-between text-[11px] text-zinc-400"><span>{workDone} de {workAll.length} series efectivas</span><span>~{s.version === 'corta' ? r.short_minutes ?? 30 : r.full_minutes ?? 60} min</span></div>
+              <div className="flex justify-between text-[11px] text-zinc-400"><span>{workDone} de {workAll.length} series efectivas</span><span>~{minutesFor(r, s.version)} min</span></div>
               <span className="mt-1 block h-2 overflow-hidden rounded-full bg-white/10"><span className="block h-full rounded-full bg-gradient-to-r from-red-500 to-orange-400 transition-all" style={{ width: `${workAll.length ? (workDone / workAll.length) * 100 : 0}%` }} /></span>
             </div>
             <button type="button" onClick={togglePause} aria-label={paused ? 'Seguir' : 'Pausar'} className={`flex h-12 w-12 items-center justify-center rounded-2xl ${paused ? 'bg-red-500 text-[#fff]' : 'bg-white/10 text-[#fff] hover:bg-white/15'}`}>{paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}</button>
@@ -304,7 +320,9 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
                   {e.key && <Star className="mt-1 h-5 w-5 shrink-0 text-amber-300" fill="currentColor" />}
                   <div className="min-w-0 flex-1">
                     <h2 className="font-display text-2xl font-semibold leading-tight text-white">{e.name}</h2>
-                    <p className="mt-0.5 text-xs text-zinc-400">{e.sets} × {e.reps}{e.rest ? ` · descanso ~${e.rest} s` : ''}{e.muscles.length ? ` · ${e.muscles.map(muscleLabel).join(', ')}` : ''}</p>
+                    <p className="mt-0.5 text-xs text-zinc-400"><span className={`mr-1.5 rounded-full px-1.5 py-px text-[9px] font-bold ${e.role === 'principal' ? 'bg-red-500/25 text-red-100' : 'bg-white/10 text-zinc-300'}`}>{e.role === 'principal' ? 'PRINCIPAL' : 'COMPLEMENTO'}</span>{e.sets} × {e.reps}{e.rest ? ` · descanso ~${e.rest} s` : ''}{e.muscles.length ? ` · ${e.muscles.map(muscleLabel).join(', ')}` : ''}</p>
+                    {e.intensity && <p className="mt-0.5 text-[11px] text-sky-300">🎚️ {e.intensity}</p>}
+                    {e.warn && <p className="mt-0.5 text-[11px] text-amber-300">⚠️ {e.warn}</p>}
                   </div>
                   {e.video && <a href={e.video} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-sky-300 hover:bg-white/10">▶ Técnica</a>}
                 </div>
