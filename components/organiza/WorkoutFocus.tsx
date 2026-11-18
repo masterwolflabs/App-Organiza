@@ -109,7 +109,7 @@ const Stepper: React.FC<{ value: number | null; step: number; unit: string; labe
 
 /* ── Workout Focus ────────────────────────────────────────────────────────────────── */
 
-export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void }> = ({ r, version, api, onClose }) => {
+export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void; /** Lo que elegiste en «¿Cómo llegas?» (ej. menos series), visible todo el entreno. */ hint?: string }> = ({ r, version, api, onClose, hint }) => {
   const confirm = useConfirm();
   const [{ s: initial, resumed }] = useState(() => loadSession(r, version, api));
   const [s, setS] = useState<Session>(initial);
@@ -279,6 +279,7 @@ export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi
         <div className="flex min-h-0 flex-1">
           {/* Ejercicio actual */}
           <main className="min-w-0 flex-1 overflow-y-auto px-4 py-4">
+            {hint && <p className="mb-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 ring-1 ring-amber-400/30">🔋 {hint}</p>}
             {notice && <p className="mb-3 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-zinc-300">{notice}</p>}
             {paused && <p className="mb-3 rounded-xl bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200 ring-1 ring-amber-400/30">⏸️ En pausa: el tiempo y el descanso están congelados.</p>}
 

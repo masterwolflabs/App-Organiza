@@ -7,6 +7,8 @@ import { AssessmentModal } from '@/components/organiza/Assessment';
 import { TrainMode } from '@/components/organiza/WorkoutFocus';
 import { ProgressCenter } from '@/components/organiza/ProgressCenter';
 import { GoalsBlock } from '@/components/organiza/Goals';
+import { CheckinModal, RecoveryBlock, useRecovery } from '@/components/organiza/Recovery';
+import type { Option } from '@/components/organiza/recoveryData';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
@@ -125,7 +127,7 @@ const WeekBlock: React.FC<{
   doneOn: (wd: number) => boolean;
   onMode: (m: Mode) => void;
   onDay: (wd: number) => void;
-  onTrain: (r: Routine, v: Version) => void;
+  onTrain: (r: Routine, v: Version, wd: number) => void;
 }> = ({ api, week, today, monday, status, doneOn, onMode, onDay, onTrain }) => (
   <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
     <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-3">
@@ -167,7 +169,7 @@ const WeekBlock: React.FC<{
               </div>
             </button>
             {r ? (
-              <button type="button" onClick={() => onTrain(r, p.version)} className={`flex items-center justify-center gap-1 border-t border-white/10 py-1.5 text-[11px] font-bold ${isToday ? 'bg-red-500 text-[#fff] hover:bg-red-400' : 'text-red-200 hover:bg-red-500/15'}`}>
+              <button type="button" onClick={() => onTrain(r, p.version, wd)} className={`flex items-center justify-center gap-1 border-t border-white/10 py-1.5 text-[11px] font-bold ${isToday ? 'bg-red-500 text-[#fff] hover:bg-red-400' : 'text-red-200 hover:bg-red-500/15'}`}>
                 <Play className="h-3 w-3" /> Entrenar
               </button>
             ) : (
@@ -192,12 +194,31 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
   const confirm = useConfirm();
   const [editing, setEditing] = useState<string | null>(null);
   const [dayOpen, setDayOpen] = useState<number | null>(null);
-  const [train, setTrain] = useState<{ r: Routine; v: Version } | null>(null);
+  const [train, setTrain] = useState<{ r: Routine; v: Version; hint?: string } | null>(null);
   const [muscle, setMuscle] = useState<MuscleId | null>(null);
   const [personalize, setPersonalize] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const today = weekdayOf(new Date());
   const week = api.training.week ?? {};
+  // 🔋 Recuperación (MOD 05): la rutina de hoy pasa primero por «¿Cómo llegas?» (se puede saltar).
+  const rec = useRecovery();
+  const todayPlan = week[String(today)];
+  const todayRoutine = api.routines.find((x) => x.id === todayPlan?.routine) ?? null;
+  const [checkin, setCheckin] = useState<{ r: Routine | null; v: Version } | null>(null);
+  const [restNote, setRestNote] = useState('');
+  // Con una señal de alerta registrada hoy, no se entra directo: se vuelve a preguntar (seguridad > comodidad).
+  const startTrain = (r: Routine, v: Version, wd: number) => (wd === today && (!rec.todayCheck || rec.todayCheck.level === 'alerta') ? setCheckin({ r, v }) : setTrain({ r, v }));
+  const decide = (o: Option, r: Routine | null, v: Version) => {
+    setCheckin(null);
+    setRestNote('');
+    if (o === 'cambiar') return setDayOpen(today);
+    if (o === 'descanso') return setRestNote('🌿 Hoy descansas. Recuperarse también es entrenar.');
+    if (o === 'movilidad') return setRestNote('🧘 Hoy algo suave: movilidad, caminar o estirar. Si quieres, abre la versión corta y hazla muy liviana.');
+    if (!r) return;
+    if (o === 'corta') return setTrain({ r, v: 'corta' });
+    if (o === 'menos_series') return setTrain({ r, v, hint: 'Hoy con menos volumen: haz cerca de un tercio menos de series (puedes quitarlas con 🗑️).' });
+    setTrain({ r, v });
+  };
   const planned = Object.values(week).filter((d) => d.routine).length;
   const status = weekStatus(api.logs, api.training.mode, planned);
   const monday = useMemo(() => {
@@ -234,11 +255,13 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
         doneOn={doneOn}
         onMode={setMode}
         onDay={setDayOpen}
-        onTrain={(r, v) => setTrain({ r, v })}
+        onTrain={startTrain}
       />
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
+          {restNote && <p className="rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-100 ring-1 ring-sky-400/30">{restNote}</p>}
+          <RecoveryBlock api={rec} logs={api.logs} routine={todayRoutine} version={todayPlan?.version ?? 'completa'} onCheckin={() => setCheckin({ r: todayRoutine, v: todayPlan?.version ?? 'completa' })} />
           <GoalsBlock workout={api} />
           <section className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10 sm:p-5">
             <div className="mb-3 flex items-center gap-3">
@@ -306,7 +329,8 @@ export const WorkoutProScreen: React.FC<{ api: WorkoutApi }> = ({ api }) => {
       {editingRoutine && <RoutineEditor r={editingRoutine} api={api} onTrain={(v) => { setEditing(null); setTrain({ r: editingRoutine, v }); }} onClose={() => setEditing(null)} />}
       {progressOpen && <ProgressCenter api={api} onClose={() => setProgressOpen(false)} />}
       {personalize && <AssessmentModal place={api.training.place ?? null} onPlace={(p) => PLACES.some((x) => x.id === p) && api.saveTraining({ ...api.training, place: p as Place })} onClose={() => setPersonalize(false)} />}
-      {train && <TrainMode r={train.r} version={train.v} api={api} onClose={() => setTrain(null)} />}
+      {checkin && <CheckinModal api={rec} logs={api.logs} routine={checkin.r} muscles={checkin.r ? [...new Set(checkin.r.exercises.flatMap((e) => e.muscles))] : []} onDecide={(o) => decide(o, checkin.r, checkin.v)} onSkip={checkin.r && rec.todayCheck?.level !== 'alerta' ? () => { const c = checkin; setCheckin(null); setTrain({ r: c.r!, v: c.v }); } : undefined} onClose={() => setCheckin(null)} />}
+      {train && <TrainMode r={train.r} version={train.v} hint={train.hint} api={api} onClose={() => setTrain(null)} />}
     </div>
   );
 };
