@@ -1,24 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, ChevronRight, Dumbbell, Pause, Play, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Check, ChevronRight, Play, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { AssessmentModal } from '@/components/organiza/Assessment';
+import { TrainMode } from '@/components/organiza/WorkoutFocus';
 import { BodyProfileBlock } from '@/components/organiza/BodyProfile';
 import { useConfirm } from '@/components/ui/confirm';
 import { CoverPicker } from '@/components/organiza/CoverPicker';
 import { coverCss, WEEK, weekdayOf } from '@/components/organiza/model';
-import { MediaPanel } from '@/components/organiza/Recipes';
 import dynamic from 'next/dynamic';
 
 // El mono 3D (three.js, ~600 KB) se baja solo al abrir Workout Pro, no con el resto de la app.
 const BodyMap3D = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.BodyMap3D), { ssr: false, loading: () => <div className="h-[440px]" /> });
 const MuscleCover = dynamic(() => import('@/components/organiza/BodyMap3D').then((m) => m.MuscleCover), { ssr: false, loading: () => <span className="absolute inset-0 animate-pulse bg-white/[0.03]" /> });
-import { playOnce } from '@/components/organiza/sounds';
-import { notify } from '@/components/organiza/notify';
 import {
   exercisesOf, isoDay, LIBRARY, MODES, PLACES, MUSCLES, muscleLabel, strength, weekFor, weekStatus, useWorkoutPro,
-  type DayPlan, type Feel, type Place, type LoggedExercise, type Mode, type MuscleId, type Routine, type RoutineExercise, type Version, type WorkoutApi,
+  type DayPlan, type Place, type Mode, type MuscleId, type Routine, type RoutineExercise, type Version, type WorkoutApi,
 } from '@/components/organiza/workoutData';
 
 /**
@@ -439,166 +437,7 @@ const RoutineEditor: React.FC<{ r: Routine; api: WorkoutApi; onTrain: (v: Versio
   );
 };
 
-/* ── Modo entreno ─────────────────────────────────────────────────────────────────── */
-
-export const TrainMode: React.FC<{ r: Routine; version: Version; api: WorkoutApi; onClose: () => void }> = ({ r, version: initial, api, onClose }) => {
-  const [version, setVersion] = useState<Version>(initial);
-  const list = exercisesOf(r, version);
-  const [log, setLog] = useState<Record<string, { weight: number | null; reps: number | null; done: boolean }[]>>(() =>
-    Object.fromEntries(r.exercises.map((e) => [e.id, Array.from({ length: Math.max(1, e.sets) }, () => ({ weight: e.weight ?? null, reps: Number.parseInt(e.reps, 10) || null, done: false }))])),
-  );
-  const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(true);
-  const [rest, setRest] = useState<{ until: number; total: number; name: string } | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const [review, setReview] = useState(false);
-  const rang = useRef(false);
-  useEffect(() => {
-    const t = setInterval(() => {
-      setNow(Date.now());
-      if (running) setElapsed((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [running]);
-  // El descanso suena al terminar (una vez).
-  useEffect(() => {
-    if (!rest || rang.current || now < rest.until) return;
-    rang.current = true;
-    playOnce('alarma');
-    void notify('💪 ¡A la siguiente serie!', rest.name);
-  }, [now, rest]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !review && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, review]);
-  const mark = (e: RoutineExercise, i: number) => {
-    const sets = log[e.id];
-    const done = !sets[i].done;
-    setLog((l) => ({ ...l, [e.id]: l[e.id].map((s, k) => (k === i ? { ...s, done } : s)) }));
-    if (done && e.rest > 0) {
-      rang.current = false;
-      setRest({ until: Date.now() + e.rest * 1000, total: e.rest, name: e.name });
-    }
-  };
-  const setSet = (id: string, i: number, p: Partial<{ weight: number | null; reps: number | null }>) => setLog((l) => ({ ...l, [id]: l[id].map((s, k) => (k === i ? { ...s, ...p } : s)) }));
-  const keys = list.filter((e) => e.key);
-  const keyDone = keys.filter((e) => log[e.id]?.some((s) => s.done)).length;
-  const left = rest ? Math.ceil((rest.until - now) / 1000) : 0;
-  return (
-    <BodyPortal>
-      <div role="dialog" aria-label={`Modo entreno: ${r.title}`} className="theme-fixed fixed inset-0 z-[96] flex flex-col bg-[#0b0c0f] text-left">
-        <header className="flex flex-wrap items-center gap-3 border-b border-white/10 px-4 py-2.5">
-          <Dumbbell className="h-5 w-5 text-red-300" />
-          <p className="min-w-0 flex-1 truncate font-semibold text-white">{r.emoji} {r.title}</p>
-          <div className="flex rounded-lg bg-white/[0.05] p-0.5 text-xs">
-            {(['completa', 'corta'] as Version[]).map((v) => <button key={v} type="button" onClick={() => setVersion(v)} className={`rounded-md px-2.5 py-1 font-semibold ${version === v ? 'bg-red-500 text-[#fff]' : 'text-zinc-400'}`}>{v === 'completa' ? 'Completa' : '⚡ Corta'}</button>)}
-          </div>
-          <button type="button" onClick={onClose} aria-label="Salir del modo entreno" className="rounded-lg p-2 text-zinc-300 hover:bg-white/10"><X className="h-5 w-5" /></button>
-        </header>
-        <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto md:flex-row md:overflow-hidden">
-          <div className="min-w-0 p-4 md:h-full md:basis-1/2 md:overflow-y-auto">
-            <MediaPanel doing="mientras entrenas" store="mp-entreno-video" />
-          </div>
-          <div className="space-y-4 border-white/10 p-4 md:h-full md:min-w-[400px] md:basis-1/2 md:overflow-y-auto md:border-l">
-            <div className="flex items-center gap-3">
-              <p className="font-display text-4xl font-semibold tabular-nums text-[#fff]">{mmss(elapsed)}</p>
-              <span className="text-xs text-zinc-500">de ~{minutesOf(r, version)} min · ⭐ {keyDone}/{keys.length}</span>
-              <div className="ml-auto flex gap-2">
-                <button type="button" onClick={() => setRunning((v) => !v)} aria-label={running ? 'Pausar' : 'Seguir'} className="rounded-xl bg-white/10 p-2 text-[#fff]">{running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
-                <button type="button" onClick={() => { setRunning(false); setReview(true); }} className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-bold text-[#09090b] hover:bg-emerald-400">Terminé</button>
-              </div>
-            </div>
-            {rest && (
-              <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ring-1 ${left > 0 ? 'bg-sky-500/10 ring-sky-400/40' : 'animate-pulse bg-emerald-500/15 ring-emerald-400/50'}`}>
-                <span className="font-display text-3xl font-semibold tabular-nums text-[#fff]">{left > 0 ? mmss(left) : '¡Vamos!'}</span>
-                <span className="min-w-0 flex-1 text-xs text-zinc-300">{left > 0 ? `Descanso · ${rest.name}` : 'A la siguiente serie'}</span>
-                {left > 0 && <button type="button" onClick={() => setRest((x) => (x ? { ...x, until: x.until + 15000 } : x))} className="rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-[#fff]">+15 s</button>}
-                <button type="button" onClick={() => setRest(null)} className="rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-[#fff]">{left > 0 ? 'Saltar' : 'OK'}</button>
-              </div>
-            )}
-            <ul className="space-y-3">
-              {list.map((e) => {
-                const sets = log[e.id] ?? [];
-                const all = sets.every((s) => s.done);
-                return (
-                  <li key={e.id} className={`rounded-2xl p-3 ring-1 ${all ? 'bg-emerald-500/[0.07] ring-emerald-400/30' : 'bg-white/[0.03] ring-white/10'}`}>
-                    <div className="flex items-start gap-2">
-                      {e.key && <Star className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" fill="currentColor" />}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-white">{e.name}</p>
-                        <p className="text-[11px] text-zinc-500">{e.sets} × {e.reps}{e.rest ? ` · descanso ${e.rest} s` : ''}{e.muscles.length ? ` · ${e.muscles.map(muscleLabel).join(', ')}` : ''}</p>
-                      </div>
-                      {e.video && <a href={e.video} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-semibold text-sky-300 hover:text-sky-200">▶ Técnica</a>}
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      {sets.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <button type="button" aria-label={`Serie ${i + 1} ${s.done ? 'hecha' : 'pendiente'}`} onClick={() => mark(e, i)} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-2 ${s.done ? 'bg-emerald-500 ring-emerald-400' : 'ring-white/30 hover:ring-white/60'}`}>{s.done ? <Check className="h-4 w-4 text-[#fff]" /> : <span className="text-[11px] font-bold text-zinc-300">{i + 1}</span>}</button>
-                          <input type="number" inputMode="decimal" min={0} step={0.5} value={s.weight ?? ''} placeholder="kg" onChange={(x) => setSet(e.id, i, { weight: x.target.value === '' ? null : Number(x.target.value) })} aria-label="Peso" className="w-20 rounded-lg bg-white/[0.06] px-2 py-1 text-center text-sm text-white outline-none ring-1 ring-white/10" />
-                          <span className="text-xs text-zinc-500">kg ×</span>
-                          <input type="number" inputMode="numeric" min={0} value={s.reps ?? ''} placeholder="reps" onChange={(x) => setSet(e.id, i, { reps: x.target.value === '' ? null : Number(x.target.value) })} aria-label="Repeticiones" className="w-16 rounded-lg bg-white/[0.06] px-2 py-1 text-center text-sm text-white outline-none ring-1 ring-white/10" />
-                          <span className="text-xs text-zinc-500">reps</span>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => setLog((l) => ({ ...l, [e.id]: [...l[e.id], { ...(l[e.id].at(-1) ?? { weight: null, reps: null }), done: false }] }))} className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-300">＋ otra serie</button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-        {review && <HowItWent r={r} version={version} list={list} log={log} minutes={Math.max(1, Math.round(elapsed / 60))} api={api} onCancel={() => { setReview(false); setRunning(true); }} onDone={onClose} />}
-      </div>
-    </BodyPortal>
-  );
-};
-
-/** Al terminar: calidad (clave hechos), «¿cómo te fue?» y el peso para la próxima. */
-const HowItWent: React.FC<{ r: Routine; version: Version; list: RoutineExercise[]; log: Record<string, { weight: number | null; reps: number | null; done: boolean }[]>; minutes: number; api: WorkoutApi; onCancel: () => void; onDone: () => void }> = ({ r, version, list, log, minutes, api, onCancel, onDone }) => {
-  const [feel, setFeel] = useState<Feel | null>(null);
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const keys = list.filter((e) => e.key);
-  const keyDone = keys.filter((e) => log[e.id]?.some((s) => s.done)).length;
-  const anyDone = list.some((e) => log[e.id]?.some((s) => s.done));
-  const save = async () => {
-    setBusy(true);
-    const exercises: LoggedExercise[] = list.map((e) => ({ name: e.name, muscles: e.muscles, key: e.key, sets: (log[e.id] ?? []).map((s) => ({ weight: s.weight, reps: s.reps, done: s.done })) }));
-    await api.addLog({ routine_id: r.id, day: isoDay(), title: r.title, core: r.core, version, exercises, quality_done: keyDone, quality_total: keys.length, minutes, feel, notes: note.trim() });
-    // El peso para la próxima: el mejor de hoy (+2,5 kg si estuvo fácil).
-    const next = r.exercises.map((e) => {
-      const top = Math.max(0, ...(log[e.id] ?? []).filter((s) => s.done && s.weight).map((s) => s.weight ?? 0));
-      return top ? { ...e, weight: feel === 'facil' ? top + 2.5 : top } : e;
-    });
-    await api.patchRoutine(r.id, { exercises: next });
-    setBusy(false);
-    onDone();
-  };
-  return (
-    <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-2xl bg-[#14161b] p-5 ring-1 ring-white/10">
-        <p className="text-lg font-semibold text-white">🏁 ¿Cómo te fue?</p>
-        <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-zinc-200">
-          <p className="font-semibold">⭐ Calidad {keyDone} de {keys.length}</p>
-          <p className="text-xs text-zinc-400">{keyDone === keys.length && keys.length ? 'Hiciste todo lo clave: entreno de calidad. 💯' : keyDone ? 'Bien: lo que hiciste cuenta. La próxima suma uno más.' : 'Moverte ya cuenta. La próxima, parte por los ⭐.'} · {minutes} min</p>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {([['facil', '😌', 'Fácil', 'subo peso'], ['bien', '💪', 'Bien', 'igual'], ['duro', '🥵', 'Duro', 'me cuesta']] as const).map(([id, e, label, sub]) => (
-            <button key={id} type="button" onClick={() => setFeel(id)} className={`rounded-xl px-2 py-2 text-sm font-semibold ring-1 ${feel === id ? 'bg-red-500 text-[#fff] ring-red-400' : 'text-zinc-200 ring-white/15'}`}>{e} {label}<span className="block text-[10px] font-normal opacity-75">{sub}</span></button>
-          ))}
-        </div>
-        {feel === 'facil' && <p className="text-xs text-emerald-300">La próxima vez cada ejercicio parte con +2,5 kg.</p>}
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="¿Algo que anotar? (molestias, máquina ocupada…)" className={field} />
-        <div className="flex gap-2">
-          <button type="button" disabled={busy || !anyDone} onClick={save} className="flex-1 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-bold text-[#09090b] hover:bg-emerald-400 disabled:opacity-50">{busy ? 'Guardando…' : anyDone ? 'Guardar entreno' : 'Marca al menos una serie'}</button>
-          <button type="button" onClick={onCancel} className="rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/[0.1]">Seguir</button>
-        </div>
-      </div>
-    </div>
-  );
-};
+/* ── Modo entreno: Workout Focus 2.0 vive en WorkoutFocus.tsx (TrainMode) ─────────────── */
 
 /* ── En una acción del Horario («Entrenar») ───────────────────────────────────────── */
 

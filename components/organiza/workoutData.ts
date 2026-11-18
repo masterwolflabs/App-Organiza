@@ -283,7 +283,14 @@ export function weekFor(mode: Mode, routines: Routine[]): Record<string, DayPlan
 
 /* ── Registro: cada entreno terminado ─────────────────────────────────────────────── */
 
-export type LoggedSet = { weight: number | null; reps: number | null; done: boolean };
+/**
+ * Una serie anotada. `kind` (Workout Focus 2.0, 18 nov): 'warmup' = aproximación (no cuenta para músculos ni
+ * fuerza), 'work' = efectiva (por defecto, también en registros antiguos), 'drop' = descarga / bajada de peso.
+ * `rir` = repeticiones que quedaban en reserva (0 = al fallo). Todo opcional: los registros viejos siguen valiendo.
+ */
+export type SetKind = 'warmup' | 'work' | 'drop';
+export type LoggedSet = { weight: number | null; reps: number | null; done: boolean; kind?: SetKind; rir?: number | null };
+export const isWork = (s: LoggedSet) => s.kind !== 'warmup';
 export type LoggedExercise = { name: string; muscles: MuscleId[]; key: boolean; sets: LoggedSet[] };
 export type Feel = 'facil' | 'bien' | 'duro';
 export type WorkoutLog = {
@@ -315,7 +322,7 @@ export function muscleCounts(logs: WorkoutLog[], today = new Date()): Record<str
   for (const l of logs) {
     if (l.day < from || l.day > to) continue;
     const hit = new Set<string>();
-    for (const e of l.exercises) if (e.sets.some((s) => s.done)) e.muscles.forEach((m) => hit.add(m));
+    for (const e of l.exercises) if (e.sets.some((s) => s.done && isWork(s))) e.muscles.forEach((m) => hit.add(m));
     hit.forEach((m) => (out[m] = (out[m] ?? 0) + 1));
   }
   return out;
@@ -339,7 +346,7 @@ export function strength(logs: WorkoutLog[], today = new Date()) {
   const best = new Map<string, { now: number; before: number; reps: number }>();
   for (const l of logs) {
     for (const e of l.exercises) {
-      const top = Math.max(0, ...e.sets.filter((s) => s.done && s.weight).map((s) => s.weight ?? 0));
+      const top = Math.max(0, ...e.sets.filter((s) => s.done && s.weight && isWork(s)).map((s) => s.weight ?? 0));
       if (!top) continue;
       const b = best.get(e.name) ?? { now: 0, before: 0, reps: 0 };
       if (l.day >= from) {
@@ -352,7 +359,35 @@ export function strength(logs: WorkoutLog[], today = new Date()) {
   return [...best.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => (b.now - b.before) - (a.now - a.before) || a.name.localeCompare(b.name, 'es'));
 }
 
+/** 🔁 La última vez que hiciste este ejercicio (para mostrarlo como referencia; nunca sube el peso solo). */
+export function lastTime(logs: WorkoutLog[], name: string, before?: string): { day: string; sets: LoggedSet[] } | null {
+  const key = name.trim().toLowerCase();
+  for (const l of logs) {
+    if (before && l.day > before) continue;
+    const e = l.exercises.find((x) => x.name.trim().toLowerCase() === key);
+    const sets = e?.sets.filter((s) => s.done && s.kind !== 'warmup') ?? [];
+    if (sets.length) return { day: l.day, sets };
+  }
+  return null;
+}
+
 /* ── Datos ─────────────────────────────────────────────────────────────────────────── */
+
+/** Entrenos que no se pudieron subir (sin conexión): quedan en el equipo y se suben solos al volver. */
+const PENDING = (uid: string, space: string) => `wp-pending-logs:${uid}:${space}`;
+const readPending = (k: string): Omit<WorkoutLog, 'id'>[] => {
+  try {
+    return JSON.parse(localStorage.getItem(k) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+const writePending = (k: string, v: Omit<WorkoutLog, 'id'>[]) => {
+  try {
+    if (v.length) localStorage.setItem(k, JSON.stringify(v));
+    else localStorage.removeItem(k);
+  } catch {}
+};
 
 const SEEDED = (space: string) => `workout-pro-de-fabrica:${space}`;
 // Si dos pantallas abren Workout Pro a la vez la primera vez, el plan de fábrica se crea UNA sola vez.
@@ -369,6 +404,14 @@ export function useWorkoutPro() {
   const [ready, setReady] = useState(false);
 
   const load = useCallback(async () => {
+    // Primero sube lo que quedó pendiente sin conexión.
+    const pk = PENDING(uid, space);
+    const waiting = readPending(pk);
+    if (waiting.length) {
+      const still: Omit<WorkoutLog, 'id'>[] = [];
+      for (const p of waiting) if (!(await db.insert<WorkoutLog>('organiza_workout_logs', { ...p, space }))[0]) still.push(p);
+      writePending(pk, still);
+    }
     let r = await db.select<Routine>('organiza_routines', { space });
     let seeded = false;
     try {
@@ -422,11 +465,18 @@ export function useWorkoutPro() {
     await saveTraining({ ...training, week });
   }, [db, saveTraining, training]);
 
-  const addLog = useCallback(async (p: Omit<WorkoutLog, 'id'>) => {
-    const [made] = await db.insert<WorkoutLog>('organiza_workout_logs', { ...p, space });
-    if (made) setLogs((l) => [made, ...l]);
-    return made ?? null;
-  }, [db, space]);
+  /** Guarda un entreno. Sin conexión queda en el equipo (`pending: true`) y se sube solo la próxima vez. */
+  const addLog = useCallback(async (p: Omit<WorkoutLog, 'id'>): Promise<{ log: WorkoutLog | null; pending: boolean }> => {
+    const [made] = await db.insert<WorkoutLog>('organiza_workout_logs', { ...p, space }).catch(() => [] as WorkoutLog[]);
+    if (made) {
+      setLogs((l) => [made, ...l]);
+      return { log: made, pending: false };
+    }
+    const pk = PENDING(uid, space);
+    writePending(pk, [...readPending(pk), p]);
+    setLogs((l) => [{ ...p, id: `pendiente-${Date.now()}` } as WorkoutLog, ...l]);
+    return { log: null, pending: true };
+  }, [db, space, uid]);
 
   const removeLog = useCallback(async (id: string) => {
     setLogs((l) => l.filter((x) => x.id !== id));
