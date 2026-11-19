@@ -4,20 +4,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Plus, Send, Sparkles, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ChatMarkdown } from '@/components/ai/ChatMarkdown';
-import { loadMessages, sendAIMessage, type AIMessage } from '@/lib/aiClient';
+import { fetchAvailableEngines, loadMessages, sendAIMessage, type AIMessage } from '@/lib/aiClient';
+import { ENGINE_OPTIONS } from '@/utils/aiCatalog';
 import { useConfirm } from '@/components/ui/confirm';
 import { MicButton } from '@/components/organiza/DayAdjust';
 import { marksFromActions, setMarks } from '@/components/organiza/aiMarks';
 import { runAIActions } from '@/components/organiza/aiExecutor';
 import type { useHorario } from '@/components/organiza/useHorario';
 import type { useCalendar } from '@/components/calendar/useCalendar';
+import { jarvisScreen, readEngine, readJarvisConv, resultsOf, saveActionResults, writeJarvisConv } from '@/components/organiza/jarvis';
 
 /**
  * La IA al lado del Horario (Emanuel, 2026-11-04): conversas y lo que pide se hace en vivo en la
  * pantalla de al lado (crear, editar, mover, reacomodar, eventos del calendario…). Borrar pregunta antes
  * y todo lo de una respuesta se deshace con ↶.
  */
-const CONV_KEY = 'organiza-ai-panel-conv';
 const IDEAS = [
   '¿Qué tareas de mi horario no tienen categoría?',
   'Agrega «Leer» de lunes a viernes a las 22:00 por 30 min',
@@ -25,14 +26,9 @@ const IDEAS = [
   'Agenda una cena el viernes de 21:00 a 22:00',
 ];
 
-export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<ReturnType<typeof useCalendar>, 'save' | 'remove' | 'events'>; /** A message to send as soon as it opens (the schedule hint). */ initial?: string | null; onClose: () => void }> = ({ h, cal, initial, onClose }) => {
-  const [convId, setConvId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(CONV_KEY);
-    } catch {
-      return null;
-    }
-  });
+export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<ReturnType<typeof useCalendar>, 'save' | 'remove' | 'events'>; /** A message to send as soon as it opens (the schedule hint). */ initial?: string | null; /** Desde dónde se abrió (Horario / Calendario). */ where?: string; onClose: () => void }> = ({ h, cal, initial, where = 'Horario', onClose }) => {
+  // 🤖 Jarvis: la misma conversación que la sección IA (jarvis.ts).
+  const [convId, setConvId] = useState<string | null>(() => readJarvisConv());
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [results, setResults] = useState<Record<string, string[]>>({});
   const [text, setText] = useState('');
@@ -40,12 +36,39 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
   const [error, setError] = useState('');
   const confirm = useConfirm();
   const end = useRef<HTMLDivElement>(null);
+  // Motor (OpenAI o Claude): el mismo que se elige en la sección IA; solo los que la nube permite y tiene llave.
+  const [engine, setEngine] = useState(() => readEngine());
+  const [engines, setEngines] = useState<{ id: string; label: string }[]>([]);
+  useEffect(() => {
+    fetchAvailableEngines().then((info) => {
+      if (!info) return;
+      setEngines(ENGINE_OPTIONS.filter((o) => info.allowed.includes(o.id) && info.engines.includes(o.id)).map((o) => ({ id: o.id, label: o.label })));
+    });
+  }, []);
+  const pickEngine = (id: string) => {
+    setEngine(id);
+    try {
+      localStorage.setItem('mf-ai-engine', id);
+    } catch {
+      /* modo privado */
+    }
+  };
   // Lo último de la pantalla para ejecutar (h cambia en cada render).
   const live = useRef({ h, cal });
   live.current = { h, cal };
 
+  // Solo se carga el historial al abrir (o al cambiar de conversación desde fuera): cuando la conversación nace en
+  // este panel, ya tenemos los mensajes y recargar borraría el resultado recién aplicado.
+  const ownConv = useRef<string | null>(null);
   useEffect(() => {
-    if (convId) loadMessages(convId).then((m) => setMessages(m.slice(-30))).catch(() => {});
+    if (convId && convId !== ownConv.current)
+      loadMessages(convId)
+        .then((m) => {
+          const last = m.slice(-30);
+          setMessages(last);
+          setResults(Object.fromEntries(last.filter((x) => resultsOf(x).length).map((x) => [x.id, resultsOf(x)])));
+        })
+        .catch(() => {});
   }, [convId]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end', behavior: 'instant' as ScrollBehavior });
@@ -67,11 +90,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     setConvId(null);
     setMessages([]);
     setResults({});
-    try {
-      localStorage.removeItem(CONV_KEY);
-    } catch {
-      /* modo privado */
-    }
+    writeJarvisConv(null);
   };
 
   const send = async (raw?: string) => {
@@ -82,23 +101,18 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
     setBusy(true);
     const temp: AIMessage = { id: `tmp-${Date.now()}`, conversation_id: convId ?? '', role: 'user', content: msg, attachments: [], metadata: {}, created_at: new Date().toISOString() };
     setMessages((m) => [...m, temp]);
-    const now = new Date();
-    const screen = [
-      `Ahora es ${now.toLocaleString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Hoy es ${now.toLocaleDateString('sv-SE')}.`,
-      `La persona está en Master Planner viendo el Horario «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
+    const screen = jarvisScreen(`el panel de Jarvis al lado del ${where} (aquí puede aplicar cambios del Horario y del Calendario en vivo)`, [
+      `Horario abierto: «${h.active?.name ?? 'sin horario'}»${h.active ? ` (${h.active.status})` : ''}. Horarios: ${h.schedules.map((s) => `${s.name} (${s.status})`).join(', ') || 'ninguno'}.`,
       'Si cuenta algo grande que cambia sus días (viaje, enfermedad, un familiar enfermo, mudanza, una catástrofe) o que su semana se está moviendo mucho, ofrécele dos caminos simples: cambiar su horario de verdad (horario_editar_tareas) o un horario provisorio por unos días (horarios_gestionar con accion «provisorio», dias y motivo: copia el horario solo para esos días y después vuelve solo el normal). Pregunta cuál prefiere antes de hacerlo.',
-      'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en vivo en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
-    ].join('\n');
+      'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
+    ]);
     try {
-      const res = await sendAIMessage({ conversationId: convId, text: msg, engine: 'auto', screen });
+      const res = await sendAIMessage({ conversationId: convId, text: msg, engine, screen });
       const id = res.conversation.id;
       if (id !== convId) {
+        ownConv.current = id;
         setConvId(id);
-        try {
-          localStorage.setItem(CONV_KEY, id);
-        } catch {
-          /* modo privado */
-        }
+        writeJarvisConv(id);
       }
       setMessages((m) => [...m.filter((x) => x.id !== temp.id), ...(res.userMessage ? [res.userMessage] : [temp]), res.assistantMessage]);
       const actions = res.assistantMessage.metadata?.actions;
@@ -107,6 +121,8 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
       const lines = await runAIActions(actions, { ...live.current, confirm });
       if (lines.length) {
         setResults((r) => ({ ...r, [res.assistantMessage.id]: lines }));
+        // Lo que pasó de verdad queda en el mensaje: Jarvis lo lee en el turno siguiente.
+        saveActionResults(res.assistantMessage, lines).catch(() => {});
         // Las otras pantallas abiertas (ej. el calendario) se recargan solas al «volver el foco».
         window.dispatchEvent(new Event('focus'));
       }
@@ -121,13 +137,18 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
 
   return (
     <BodyPortal>
-      <aside role="dialog" aria-label="IA de Master Planner" className="fixed inset-y-0 right-0 z-[90] flex w-full flex-col border-l border-white/10 bg-[#111317]/95 shadow-2xl backdrop-blur-xl sm:w-[400px]">
+      <aside role="dialog" aria-label="Jarvis" className="fixed inset-y-0 right-0 z-[90] flex w-full flex-col border-l border-white/10 bg-[#111317]/95 shadow-2xl backdrop-blur-xl sm:w-[400px]">
         <header className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600"><Sparkles className="h-4 w-4 text-[#fff]" /></span>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-white">IA de Master Planner</p>
-            <p className="text-xs text-zinc-400">Lo que pidas se hace en vivo · ↶ para deshacer</p>
+            <p className="font-semibold text-white">Jarvis</p>
+            <p className="text-xs text-zinc-400">Lo que pidas se aplica en vivo · ↶ para deshacer</p>
           </div>
+          {engines.length > 1 && (
+            <select value={engine} onChange={(e) => pickEngine(e.target.value)} aria-label="Motor de IA" data-help="Motor de IA (OpenAI o Claude): mismo Jarvis, mismas herramientas" className="max-w-[110px] rounded-lg bg-white/[0.06] px-1.5 py-1 text-[11px] font-semibold text-zinc-200 outline-none ring-1 ring-white/10">
+              {engines.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          )}
           <button type="button" onClick={fresh} data-help="Conversación nueva" aria-label="Conversación nueva" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /></button>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
         </header>

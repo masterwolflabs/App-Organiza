@@ -9,6 +9,10 @@
  */
 
 import { goToHorario, MARK_COLORS, marksFromActions, setMarks } from '@/components/organiza/aiMarks';
+// 🤖 Jarvis (Master Planner): mismo cerebro y conversación que el panel del Horario; las acciones se aplican de verdad.
+import { isLiveAction } from '@/components/organiza/aiExecutor';
+import { JarvisRunner } from '@/components/organiza/JarvisRunner';
+import { jarvisScreen, resultsOf, saveActionResults, writeJarvisConv } from '@/components/organiza/jarvis';
 import { FILE_DROP, takeDroppedFile } from '@/utils/fileDrop';
 import { SupportErrorAction } from '@/components/support/SupportErrorAction';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -236,10 +240,20 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
     writePref('mf-ai-sidebar', open ? '1' : '0');
   };
 
+  // Jarvis: acciones por aplicar (las ejecuta JarvisRunner con las funciones del Horario y del Calendario).
+  const [toRun, setToRun] = useState<AIMessage | null>(null);
+  const [applied, setApplied] = useState<Record<string, string[]>>({});
+  const [undoable, setUndoable] = useState<{ id: string; undo: () => Promise<unknown> } | null>(null);
   const applyResult = (res: { conversation: AIConversation; assistantMessage?: AIMessage }) => {
     // Organiza: si la IA marcó o propuso cambios en el Horario, quedan listos para verse allá.
     const marks = marksFromActions(res.assistantMessage?.metadata?.actions);
     if (marks) setMarks(marks);
+    const acts = res.assistantMessage?.metadata?.actions;
+    if (res.assistantMessage && Array.isArray(acts) && acts.some(isLiveAction)) {
+      setUndoable(null);
+      setToRun(res.assistantMessage);
+    }
+    writeJarvisConv(res.conversation.id);
     const conv = { ...res.conversation, last_activity_at: new Date().toISOString() };
     setConversation(conv);
     store.upsertLocal(conv);
@@ -283,6 +297,7 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
         engine,
         agent,
         editMessageId: opts.editMessageId ?? null,
+        screen: jarvisScreen('la sección IA (chat grande). Aquí también puede crear, editar o borrar en su Horario y Calendario: la app lo aplica y muestra el resultado'),
       });
       setMessages((prev) => [...prev.filter((m) => m.id !== tempId), ...(res.userMessage ? [res.userMessage] : []), res.assistantMessage]);
       setAnimatingId(res.assistantMessage.id);
@@ -309,7 +324,7 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
     setMessages((prev) => prev.slice(0, -1));
     setLoading(true);
     try {
-      const res = await sendAIMessage({ conversationId: conversation.id, text: '', engine, regenerate: true });
+      const res = await sendAIMessage({ conversationId: conversation.id, text: '', engine, regenerate: true, screen: jarvisScreen('la sección IA (chat grande)') });
       setMessages((prev) => [...prev, res.assistantMessage]);
       setAnimatingId(res.assistantMessage.id);
       applyResult(res);
@@ -505,6 +520,17 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
 
   return (
     <section className="fixed inset-0 z-50 flex bg-[#0b0c0f] text-white">
+      {toRun && (
+        <JarvisRunner
+          key={toRun.id}
+          actions={toRun.metadata?.actions}
+          onDone={(lines, undo) => {
+            setApplied((a) => ({ ...a, [toRun.id]: lines }));
+            saveActionResults(toRun, lines).catch(() => {});
+            if (lines.some((l) => !l.startsWith('⚠️') && !l.startsWith('↩️'))) setUndoable({ id: toRun.id, undo });
+          }}
+        />
+      )}
       {sidebarOpen && (
         <div className="hidden lg:block">
           <ChatSidebar
@@ -715,6 +741,28 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
                     <div className="text-[15px] leading-7 text-zinc-200">
                       <AssistantBody text={m.content} animate={animate} onDone={() => setAnimatingId((id) => (id === m.id ? null : id))} />
                     </div>
+                    {!animate && (applied[m.id] ?? resultsOf(m)).length > 0 && (
+                      <div className="mt-3 space-y-0.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100 ring-1 ring-emerald-400/25">
+                        {(applied[m.id] ?? resultsOf(m)).map((l, k) => <p key={k}>{l}</p>)}
+                        {undoable?.id === m.id && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const u = undoable;
+                              setUndoable(null);
+                              await u.undo();
+                              const lines = [...(applied[m.id] ?? []), '↶ Deshiciste estos cambios.'];
+                              setApplied((a) => ({ ...a, [m.id]: lines }));
+                              saveActionResults(m, lines).catch(() => {});
+                            }}
+                            className="mt-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/15"
+                          >
+                            ↶ Deshacer
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {toRun?.id === m.id && !applied[m.id] && <p className="mt-2 text-xs text-zinc-400">⏳ Aplicando en tu Horario y Calendario…</p>}
                     {!animate && marksFromActions(m.metadata?.actions) && (() => {
                       const mk = marksFromActions(m.metadata?.actions)!;
                       return (

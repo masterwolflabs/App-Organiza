@@ -17,7 +17,7 @@ const CalendarAI: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [from, to] = useMemo(() => [addDays(new Date(), -90), addDays(new Date(), 400)], []);
   const cal = useCalendar(from, to);
   const h = useHorario();
-  return <AIPanel h={h} cal={cal} onClose={onClose} />;
+  return <AIPanel h={h} cal={cal} where="Calendario" onClose={onClose} />;
 };
 
 /** Todas las fechas: el calendario maestro de la nube, solo con lo de esta app. */
