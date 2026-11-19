@@ -5,6 +5,8 @@ import { Loader2, Mic, MicOff, PhoneOff, Sparkles, X } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
 import { APP } from '@/app.config';
 import { cloudAI } from '@/lib/aiClient';
+// Jarvis (Master Planner): la voz continúa la misma conversación escrita.
+import { readJarvisConv } from '@/components/organiza/jarvis';
 
 /**
  * Plantilla: copia de components/ai/VoiceAssistant.tsx de Finance. Diferencias:
@@ -205,7 +207,7 @@ export const VoiceAssistant = forwardRef<
     setSaid('');
     setStatus('connecting');
     try {
-      const res = await authFetch(cloudAI('/api/ai/voice/session'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: APP.slug, sections }) });
+      const res = await authFetch(cloudAI('/api/ai/voice/session'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: APP.slug, sections, conversationId: readJarvisConv() }) });
       const s = (await res.json().catch(() => ({}))) as { value?: string; instructions?: string; tools?: unknown[]; error?: string };
       if (!res.ok || !s.value) throw new Error(s.error ?? 'No se pudo iniciar la voz.');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {

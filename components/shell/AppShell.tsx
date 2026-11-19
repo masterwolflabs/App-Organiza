@@ -21,6 +21,7 @@ import { ChatProvider, ChatView, useChat } from '@/components/community/ChatSyst
 import { NotesProvider, NotesView } from '@/components/notes/NotesSystem';
 import { IAHome } from '@/components/ai/IAHome';
 import { VoiceAssistant } from '@/components/ai/VoiceAssistant';
+import { JarvisDock } from '@/components/organiza/JarvisDock';
 import { CalculatorWidget, CalculatorWidgetHandle } from '@/components/calculator/CalculatorWidget';
 import { HelpTips } from '@/components/ui/HelpTips';
 import { SearchItem } from '@/utils/globalSearch';
@@ -343,6 +344,8 @@ export function AppShell({ session }: { session: Session }) {
       {/* Ayuda de 2 segundos: cualquier elemento con data-help (como en Finance). */}
       <HelpTips />
 
+      {/* 🤖 Jarvis: saludo, botón, avisos según su modo (components/organiza/JarvisDock.tsx). */}
+      <JarvisDock userName={displayName} where={sectionLabel} hidden={section === 'chat' || (section === 'ia' && iaChatOpen) || fullScreen} />
       {/* Asistente de voz en tiempo real (por App Master Cloud): en todas partes menos en los chats a pantalla completa. */}
       {section !== 'chat' && !(section === 'ia' && iaChatOpen) && !fullScreen && (
         <VoiceAssistant

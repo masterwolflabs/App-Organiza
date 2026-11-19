@@ -84,6 +84,8 @@ export interface SendAIParams {
   editMessageId?: string | null;
   /** Lo que la persona ve en pantalla (Organiza: fecha/hora local, horario abierto). */
   screen?: string;
+  /** Jarvis: módulo desde donde habla (general, horario, calendario…): elige qué memoria usa la nube. */
+  module?: string;
 }
 
 export const sendAIMessage = (p: SendAIParams, signal?: AbortSignal) =>

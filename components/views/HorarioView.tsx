@@ -17,7 +17,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import { ImportHorario } from '@/components/organiza/ImportHorario';
 import { ItemPanel } from '@/components/organiza/ItemPanel';
 import { UnsavedScope, useGuardedClose, useUnsaved } from '@/components/organiza/UnsavedGuard';
-import { morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Extra, type Moves } from '@/components/organiza/dayPlan';
+import { clashes, morningConflict, overlaps, proposeDay, toTime, type DayPlan, type Extra, type Moves } from '@/components/organiza/dayPlan';
 import { AdjustBox, adjustDayAI, type Line } from '@/components/organiza/DayAdjust';
 import { byTime, coverCss, daysOf, LABEL_COLORS, scheduleLabel, type Sleep, stageOf, TEMPLATES, toMinutes, WEEK, weekdayOf, xpOf, rankOf, type Item, type Label, type Schedule, emojiFor, iso, refOf, streakOf } from '@/components/organiza/model';
 import { useChecks, useHorario } from '@/components/organiza/useHorario';
@@ -749,11 +749,6 @@ const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 type ViewProps = { items: Item[]; labels: Label[]; onOpen: (id: string) => void };
 
 /** Eventos del calendario que se cruzan con un bloque de ese día. */
-const clashes = (i: Item, day: Occurrence[]) => {
-  const a = toMinutes(i.time);
-  const b = a + i.minutes;
-  return day.filter((o) => !o.ev.all_day && minutesOf(o.start) < b && (sameDay(o.start, o.end) ? minutesOf(o.end) : 1440) > a);
-};
 
 /** Un evento del calendario dentro del tablero (borde punteado con su color). */
 /**

@@ -298,6 +298,7 @@ export const AIChatView: React.FC<FinanceChatViewProps> = ({
         agent,
         editMessageId: opts.editMessageId ?? null,
         screen: jarvisScreen('la sección IA (chat grande). Aquí también puede crear, editar o borrar en su Horario y Calendario: la app lo aplica y muestra el resultado'),
+        module: 'general',
       });
       setMessages((prev) => [...prev.filter((m) => m.id !== tempId), ...(res.userMessage ? [res.userMessage] : []), res.assistantMessage]);
       setAnimatingId(res.assistantMessage.id);

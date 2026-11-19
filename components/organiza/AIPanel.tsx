@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Plus, Send, Sparkles, X } from 'lucide-react';
+import { Loader2, Plus, Send, Settings2, Sparkles, X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ChatMarkdown } from '@/components/ai/ChatMarkdown';
 import { fetchAvailableEngines, loadMessages, sendAIMessage, type AIMessage } from '@/lib/aiClient';
 import { ENGINE_OPTIONS } from '@/utils/aiCatalog';
+import { toggleCommand, useJarvisSettings } from '@/components/organiza/jarvisSettings';
+import { JarvisSettingsModal } from '@/components/organiza/JarvisSettingsModal';
 import { useConfirm } from '@/components/ui/confirm';
 import { MicButton } from '@/components/organiza/DayAdjust';
 import { marksFromActions, setMarks } from '@/components/organiza/aiMarks';
@@ -36,6 +38,8 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
   const [error, setError] = useState('');
   const confirm = useConfirm();
   const end = useRef<HTMLDivElement>(null);
+  const jarvis = useJarvisSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Motor (OpenAI o Claude): el mismo que se elige en la sección IA; solo los que la nube permite y tiene llave.
   const [engine, setEngine] = useState(() => readEngine());
   const [engines, setEngines] = useState<{ id: string; label: string }[]>([]);
@@ -96,6 +100,16 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
   const send = async (raw?: string) => {
     const msg = (raw ?? text).trim();
     if (!msg || busy) return;
+    // «Jarvis, desactívate / actívate»: lo resuelve el código (sin gastar IA).
+    const toggle = toggleCommand(msg);
+    if (toggle !== null) {
+      setText('');
+      await jarvis.save({ enabled: toggle });
+      const now = new Date().toISOString();
+      setMessages((m) => [...m, { id: `u-${now}`, conversation_id: convId ?? '', role: 'user', content: msg, attachments: [], metadata: {}, created_at: now }, { id: `a-${now}`, conversation_id: convId ?? '', role: 'assistant', content: toggle ? '¡Aquí estoy! 🙌' : 'Listo, me apago. Cuando me necesites, toca el botón de Jarvis.', attachments: [], metadata: {}, created_at: now }]);
+      if (!toggle) setTimeout(onClose, 1200);
+      return;
+    }
     setText('');
     setError('');
     setBusy(true);
@@ -107,7 +121,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
       'Lo que pida, HAZLO con tus herramientas (horario_crear_tareas, horario_editar_tareas, dia_reacomodar, calendario_guardar_evento, etc.): se aplica en su pantalla y lo puede deshacer. Antes de editar o borrar, lee con get_horario o get_calendario. Responde corto y en tuteo.',
     ]);
     try {
-      const res = await sendAIMessage({ conversationId: convId, text: msg, engine, screen });
+      const res = await sendAIMessage({ conversationId: convId, text: msg, engine, screen, module: where === 'Calendario' ? 'calendario' : 'horario' });
       const id = res.conversation.id;
       if (id !== convId) {
         ownConv.current = id;
@@ -149,6 +163,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
               {engines.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
           )}
+          <button type="button" onClick={() => setSettingsOpen(true)} data-help="Ajustes de Jarvis: modo, permisos y memoria" aria-label="Ajustes de Jarvis" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><Settings2 className="h-4 w-4" /></button>
           <button type="button" onClick={fresh} data-help="Conversación nueva" aria-label="Conversación nueva" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /></button>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
         </header>
@@ -196,6 +211,7 @@ export const AIPanel: React.FC<{ h: ReturnType<typeof useHorario>; cal: Pick<Ret
           </div>
         </form>
       </aside>
+      {settingsOpen && <JarvisSettingsModal onClose={() => setSettingsOpen(false)} />}
     </BodyPortal>
   );
 };

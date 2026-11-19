@@ -139,6 +139,15 @@ export function morningConflict(dayItems: Item[], events: Occ[], plan: DayPlan |
   return { event: first, items: list, moves: list.map((i) => ({ item: i, to: toTime(Math.max(0, toMinutes(i.time) + shift)) })) };
 }
 
+/** Eventos del calendario (con hora) que se cruzan con una acción del día. Lo usan el Horario y Jarvis. */
+export const clashes = <O extends Occ>(i: Pick<Item, 'time' | 'minutes'>, day: O[]): O[] => {
+  const a = toMinutes(i.time);
+  const b = a + i.minutes;
+  const mins = (d: Date) => d.getHours() * 60 + d.getMinutes();
+  const same = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+  return day.filter((o) => !o.ev.all_day && mins(o.start) < b && (same(o.start, o.end) ? mins(o.end) : 1440) > a);
+};
+
 export function proposeDay(dayItems: Item[], events: Occ[], plan: DayPlan | null) {
   const moves: Moves = { ...plan?.moves };
   const lines: { text: string; tone: 'move' | 'off' | 'lock' }[] = [];
